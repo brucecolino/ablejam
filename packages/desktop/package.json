@@ -1,6 +1,6 @@
 {
   "name": "@ablejam/desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "AbleJam desktop window (Electron) — boots the host in-process and shows the UI.",
   "main": "dist/main.cjs",
@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "dist": "pnpm run build && electron-builder",
     "dist:win": "pnpm run build && electron-builder --win",
-    "dist:mac": "pnpm run build && electron-builder --mac"
+    "dist:mac": "pnpm run build && electron-builder --mac --x64 --arm64"
   },
   "dependencies": {
     "@julusian/midi": "^3.6.1",
