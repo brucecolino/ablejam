@@ -619,3 +619,96 @@ button { font-family: inherit; }
 .cue-presets { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
 .cue-presets button { padding: 4px 9px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); border-radius: 999px; cursor: pointer; font-size: 12px; }
 .cue-presets button:hover { border-color: var(--accent); color: var(--accent); }
+
+/* =========================================================================
+   Responsive — phone + tablet (operator can drive everything from a device).
+   Desktop is untouched: every rule lives inside a media query. Breakpoints:
+   coarse-pointer = touch sizing (incl. iPad); 900px = tablet; 600px = phone.
+   ========================================================================= */
+
+/* Touch sizing on any coarse-pointer device (phones AND tablets/iPad). */
+@media (pointer: coarse) {
+  .act { width: 40px; height: 40px; }
+  .gear { width: auto; min-width: 40px; height: 36px; padding: 0 11px; }
+  .tab { padding: 12px 16px; }
+  .row-main { padding: 15px 16px; }
+  .ctl, .pt { height: 76px; }
+  .rm, .link, .lyr-btn, .le-rowbtn, .le-time, .cp-swatch { min-height: 38px; }
+  .setting { min-height: 50px; }
+  .ui-range { height: 18px; background-size: 100% 6px; background-position: 0 center; background-repeat: no-repeat; }
+}
+
+/* Tablet / narrow window: trim the fixed metadata column so controls get room. */
+@media (max-width: 900px) {
+  .meta { flex: 0 1 220px; }
+  .list-title { max-width: 38%; }
+}
+
+/* ---- Phone ---- */
+@media (max-width: 600px) {
+  /* Topbar reflows to two rows: brand + status on top, the 3 view tabs as a
+     full-width segmented control below. */
+  .topbar { flex-wrap: wrap; height: auto; min-height: 48px; padding: 8px 10px; gap: 8px 10px; }
+  .brand { flex: 1 1 auto; }
+  .brand-name { font-size: 12px; }
+  .status { flex: 0 0 auto; gap: 6px; }
+  /* Declutter: clock, the connected-pedals chip and the LAN-address chip are for
+     configuring OTHER devices / live in Settings — hide them on the phone itself. */
+  .status .clock, .status .bt-chip, .status .remote-chip { display: none; }
+  .tabs { order: 2; flex: 1 0 100%; gap: 6px; align-self: stretch; }
+  .tab { flex: 1; text-align: center; border: 1px solid var(--border); border-radius: 9px; padding: 12px 4px; margin-bottom: 0; font-size: 12px; letter-spacing: 0.5px; }
+  .tab.on { border-color: var(--accent); }
+
+  /* Setlist: let the action bar wrap; drop the absolutely-centred preset title
+     (it overlaps the buttons on a narrow bar). */
+  .list-actions { flex-wrap: wrap; gap: 6px; padding: 8px 10px; }
+  .list-title { display: none; }
+  .count { margin-left: auto; }
+  .editor-toolbar { flex-wrap: wrap; }
+
+  /* Transport: song meta on its own line above the big touch controls. */
+  .transport { flex-wrap: wrap; gap: 8px; padding: 10px; }
+  .meta { flex: 1 0 100%; order: -1; }
+  .controls { flex: 1 0 100%; gap: 6px; }
+  .refresh { flex: 0 0 56px; width: 56px; }
+  .perf-transport { padding: 10px; gap: 6px; }
+
+  /* Performance: a touch smaller so the hero + bar fit a phone screen. */
+  .perf-hero { padding: 14px 16px; gap: 12px; }
+  .perf-head { height: clamp(120px, 26vh, 240px); }
+  .pill { font-size: 15px; padding: 7px 12px; }
+
+  /* Overlays become full-screen sheets so dense panels are usable on a phone. */
+  .overlay { padding: 0; align-items: stretch; }
+  .modal, .settings-modal, .info-modal, .lyrics-editor, .lyrics-import, .print-modal {
+    width: 100%; max-width: 100%; height: 100%; max-height: 100%; margin: 0;
+    border-radius: 0; border-left: 0; border-right: 0;
+  }
+  .modal { overflow-y: auto; padding: 16px 14px; }
+  .settings-modal { padding: 16px 14px; }
+  .settings-grid { column-count: 1; }
+  .lang-row { grid-template-columns: 1fr; }
+  /* Popover menus: keep them on-screen. */
+  .save-menu, .recents-menu { left: auto; right: 0; max-width: 84vw; }
+
+  /* Never let anything force a horizontal scroll on a phone. */
+  html, body, #root, .app, .body { max-width: 100vw; overflow-x: hidden; }
+  .setlist, .rows, .row, .row-main, .row-text, .transport, .meta, .controls { min-width: 0; }
+  .rows { overflow-x: hidden; }
+  .transport .meta, .transport .controls { flex: 1 1 100%; }
+
+  /* Edit rows have the most controls — tighten the columns and let the trailing
+     ♪ / 🔗 buttons wrap to a second line so they stay reachable, never clipped. */
+  .rows.editing .row { flex-wrap: wrap; align-items: center; padding-bottom: 2px; }
+  .rows.editing .row-num { width: auto; min-width: 24px; padding: 0 4px 0 10px; }
+  .rows.editing .grip { padding: 0 7px; }
+  .rows.editing .rm { width: 32px; }
+  .rows.editing .row-main { flex: 1 1 140px; }
+  .rows.editing .dur { display: none; } /* in edit you reorder/colour/link — the title gets the room */
+
+  /* iPhone safe areas (notch / home indicator) — viewport-fit=cover lets content go
+     under them, so pad the top bar and the docked transport out of the way. */
+  .topbar { padding-top: max(8px, env(safe-area-inset-top)); }
+  .transport, .perf-transport, .stage-transport { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+  .stage { padding-bottom: max(3vh, env(safe-area-inset-bottom)); }
+}
