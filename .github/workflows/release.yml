@@ -1,0 +1,64 @@
+name: Release installers
+
+# Build the AbleJam desktop installers on real Windows + macOS runners and attach them
+# to a GitHub Release. Trigger by pushing a tag like `v0.1.0`, or run manually.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.0)"
+        required: true
+        default: v0.1.0
+
+permissions:
+  contents: write # create the release + upload assets
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+            script: dist:desktop:win
+          - os: macos-latest
+            name: macos
+            script: dist:desktop:mac
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build installer
+        run: pnpm ${{ matrix.script }}
+        env:
+          # Unsigned build — never try to auto-discover a signing identity on the runner.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Attach installers to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: AbleJam ${{ github.event.inputs.tag || github.ref_name }}
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: false
+          files: |
+            packages/desktop/release/*.exe
+            packages/desktop/release/*.dmg
+            packages/desktop/release/*.zip
