@@ -678,6 +678,27 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
   const productParts = tr("settings.product").split("APICE"); // APICE rendered as a styled brand span
   const [showStopDetails, setShowStopDetails] = useState(false);
   const setBool = (key: keyof Settings, v: boolean) => send({ type: "command", command: "setSetting", key, value: v });
+  // Lyrics backup: download the whole project's lyrics (text + timing) to a JSON file, and
+  // restore it later (after an update, or on another computer) — survives data-dir changes.
+  const exportLyrics = () => {
+    const proj = (state.abletonProject || "ablejam").replace(/[^\w.-]+/g, "_") || "ablejam";
+    const blob = new Blob([JSON.stringify(state.lyrics)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `ablejam-lyrics-${proj}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const importLyricsBackup = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      let parsed: unknown;
+      try { parsed = JSON.parse(String(reader.result)); } catch { return; }
+      const lines = (Array.isArray(parsed) ? parsed : []).map((l) => ({ text: String((l as { text?: unknown })?.text ?? ""), start: Number((l as { start?: unknown })?.start) || 0, end: Number((l as { end?: unknown })?.end) || 0 }));
+      if (lines.length && confirm(tr("lyrics.import.confirm"))) send({ type: "command", command: "setLyrics", lines });
+    };
+    reader.readAsText(file);
+  };
   const row = (k: keyof Settings, labelKey: string, descKey: string) => (
     <label className="setting" key={k}>
       <input type="checkbox" checked={Boolean(s[k])} onChange={(e) => setBool(k, e.target.checked)} />
@@ -766,6 +787,13 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
             </div>
             <div className="settings-desc-small">{tr("lyricsImport.desc")}</div>
             <button className="settings-btn" onClick={() => { if (confirm(tr("lyricsImport.confirm"))) send({ type: "command", command: "writeLyricsClips", lines: state.lyrics }); }}>✚ {tr("lyricsImport.btn")}</button>
+            <div className="settings-desc-small" style={{ marginTop: 12 }}>{tr("lyrics.backup.desc")}</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button className="settings-btn" disabled={!state.lyrics.length} onClick={exportLyrics}>⬇ {tr("lyrics.export.btn")}</button>
+              <label className="settings-btn" style={{ cursor: "pointer" }}>⬆ {tr("lyrics.import.btn")}
+                <input type="file" accept=".json,application/json" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) importLyricsBackup(f); e.currentTarget.value = ""; }} />
+              </label>
+            </div>
           </section>
 
           <section className="settings-card">
