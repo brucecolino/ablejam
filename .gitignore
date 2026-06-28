@@ -13,3 +13,6 @@ Thumbs.db
 __pycache__/
 *.pyc
 .ablejam-data/
+
+# Claude Code local (machine-specific) settings
+.claude/settings.local.json
