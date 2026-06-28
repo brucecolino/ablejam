@@ -6,6 +6,10 @@ directories:
   buildResources: build        # build/icon.ico + build/icon.icns auto-picked once added
 
 asar: true
+# @julusian/midi ships ABI-stable N-API v7 prebuilds — do NOT rebuild it from source
+# (node-gyp needs Visual Studio on Windows / distutils on macOS, which CI runners lack).
+# The prebuilt .node is used as-is and asarUnpacked below.
+npmRebuild: false
 # Native N-API addon must stay on disk so pkg-prebuilds can dlopen() it from app.asar.unpacked.
 asarUnpack:
   - "**/*.node"

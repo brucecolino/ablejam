@@ -15,8 +15,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "dist": "pnpm run build && electron-builder",
     "dist:win": "pnpm run build && electron-builder --win",
-    "dist:mac": "pnpm run build && electron-builder --mac",
-    "postinstall": "electron-builder install-app-deps || true"
+    "dist:mac": "pnpm run build && electron-builder --mac"
   },
   "dependencies": {
     "@julusian/midi": "^3.6.1",
