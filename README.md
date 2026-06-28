@@ -4,6 +4,9 @@ Setlist manager for Ableton Live — inspired by AbleSet, built clean-room as ou
 own. See [PLAN.md](PLAN.md) (architecture + roadmap), [SPEC.md](SPEC.md)
 (functional spec), and [bridge/README.md](bridge/README.md).
 
+> **Installare l'app (Windows `.exe` / macOS `.dmg`) → [INSTALL.md](INSTALL.md).**
+> Quella guida è per gli utenti finali; quanto segue è per lo sviluppo.
+
 ## Architecture
 
 ```
