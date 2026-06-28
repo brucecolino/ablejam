@@ -1,0 +1,19 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="AbleJam">
+  <defs>
+    <linearGradient id="bgC" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1c1c1f"/>
+      <stop offset="1" stop-color="#0b0b0c"/>
+    </linearGradient>
+    <linearGradient id="jC" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff9a3a"/>
+      <stop offset="1" stop-color="#ff5a00"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="62" height="62" rx="15" fill="url(#bgC)" stroke="#2a2a2e"/>
+  <!-- A -->
+  <path d="M12.5 50 L22 14 L31.5 50 M15.6 39 L28.4 39"
+        stroke="#f2f2f3" stroke-width="5.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- J (the "Jam") -->
+  <path d="M50 14 L50 40 C50 47 43.5 50.5 37.5 46.5"
+        stroke="url(#jC)" stroke-width="5.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

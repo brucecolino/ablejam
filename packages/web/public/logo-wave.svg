@@ -1,0 +1,17 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="AbleJam">
+  <defs>
+    <linearGradient id="bgB" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1c1c1f"/>
+      <stop offset="1" stop-color="#0b0b0c"/>
+    </linearGradient>
+    <linearGradient id="waveB" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff9a3a"/>
+      <stop offset="1" stop-color="#ff5a00"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="62" height="62" rx="15" fill="url(#bgB)" stroke="#2a2a2e"/>
+  <path d="M9 32 C 15 12, 22 12, 28 32 C 33 49, 40 49, 45 32 C 48 22, 52 23, 55 30"
+        stroke="#3a3a40" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M9 32 C 15 12, 22 12, 28 32 C 33 49, 40 49, 45 32 C 48 22, 52 23, 55 30"
+        stroke="url(#waveB)" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

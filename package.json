@@ -1,0 +1,26 @@
+{
+  "name": "ablejam",
+  "version": "0.0.0-m0",
+  "private": true,
+  "description": "Setlist manager for Ableton Live — inspired by AbleSet, made our own.",
+  "packageManager": "pnpm@10.33.0",
+  "engines": { "node": ">=20" },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "electron"]
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "dev:host": "pnpm --filter @ablejam/host run dev",
+    "dev:web": "pnpm --filter @ablejam/web run dev",
+    "mock": "pnpm --filter @ablejam/host run mock",
+    "build:web": "pnpm --filter @ablejam/web run build",
+    "live": "pnpm --filter @ablejam/web run build && pnpm --filter @ablejam/host run start",
+    "build": "pnpm -r run build",
+    "dev:desktop": "pnpm --filter @ablejam/desktop run dev",
+    "dist:desktop": "pnpm --filter @ablejam/desktop run dist",
+    "dist:desktop:win": "pnpm --filter @ablejam/desktop run dist:win",
+    "dist:desktop:mac": "pnpm --filter @ablejam/desktop run dist:mac",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm --filter @ablejam/host exec tsx ../../packages/shared/test/notation.test.ts && pnpm --filter @ablejam/host exec tsx ../../packages/host/test/setlist.test.ts"
+  }
+}

@@ -1,0 +1,936 @@
+import os from "node:os";
+import { pathToFileURL } from "node:url";
+import { BridgeLink } from "./bridge";
+import { Server } from "./server";
+import { SetlistManager } from "./setlist";
+import { listSetlists, saveSetlist, loadSetlist, saveSession, loadSession, loadRecents, saveRecents, setlistPath, saveImportOriginal, importOriginalPath, readImportOriginal, namesWithOriginal, importsDir, deleteSetlist, clearSetlists, saveLyricsDoc, loadLyricsDoc, deleteLyricsDoc, lyricsImportFile, readLyricsImport, type SavedItem } from "./persist";
+import { watch, type FSWatcher } from "node:fs";
+import { exec as execChild } from "node:child_process";
+import { extractText, textToTitles } from "./import";
+import { listOutputs, sendNote as sendMidiNote, isAvailable as midiAvailable, closeOutput } from "./midiout";
+import { listBluetooth, openBluetoothSettings } from "./bluetooth";
+import { readAbleton } from "./ableton";
+import {
+  ADDR,
+  PORTS,
+  bestMatch,
+  buildSetlist,
+  locateCurrent,
+  schemeHex,
+  translate,
+  defaultSettings,
+  initialTransport,
+  type AppState,
+  type ClientCommand,
+  type LyricLine,
+  type RawCue,
+  type Settings,
+  type Transport,
+} from "@ablejam/shared";
+
+const bridge = new BridgeLink();
+const mgr = new SetlistManager();
+const transport: Transport = { ...initialTransport };
+const settings: Settings = { ...defaultSettings };
+// Restore persisted settings (emergency, automation, toggles, shortcuts, pedals) across
+// restarts AND updates. Deep-merge so nested maps (shortcuts/pedals) keep any NEW default
+// keys a newer build adds while still honouring every value the user saved.
+const restoredSession = loadSession();
+if (restoredSession?.settings && typeof restoredSession.settings === "object") {
+  const saved = restoredSession.settings as Record<string, unknown>;
+  const target = settings as unknown as Record<string, unknown>;
+  for (const k of Object.keys(saved)) {
+    const sv = saved[k];
+    const bv = target[k];
+    if (sv && typeof sv === "object" && !Array.isArray(sv) && bv && typeof bv === "object" && !Array.isArray(bv)) {
+      Object.assign(bv as object, sv); // merge shortcuts/pedals onto the defaults
+    } else if (sv !== undefined) {
+      target[k] = sv;
+    }
+  }
+}
+// The persisted working setlist (order + medleys + keys + COLOURS). It is re-mapped onto the
+// library the first time the bridge sends the project's markers (see buildLibrary), then cleared.
+let pendingRestoreItems: SavedItem[] | null =
+  Array.isArray(restoredSession?.items) && restoredSession.items.length > 0
+    ? (restoredSession.items as SavedItem[])
+    : null;
+const pendingRestoreAuto = restoredSession?.auto ?? true;
+let currentSetlistName = restoredSession?.name ?? ""; // loaded/saved/imported setlist name
+/** Open a file in the OS default program (e.g. a .docx opens in Word). */
+function openInDefaultApp(file: string): void {
+  const p = os.platform();
+  if (p === "win32") execChild(`cmd /c start "" "${file}"`, { windowsHide: true }, () => {});
+  else if (p === "darwin") execChild(`open "${file}"`, () => {});
+  else execChild(`xdg-open "${file}"`, () => {});
+}
+/** Show the MODERN Windows "Open with" chooser (app list + "Always use this app") so the user
+ * picks the program. Uses OpenWith.exe — the native picker — because the old rundll32
+ * OpenAs_RunDLL shows a broken/empty legacy popup on Windows 10/11. macOS has no chooser CLI
+ * → reveal in Finder so the user can right-click → Open With. */
+function openWithPicker(file: string): void {
+  const p = os.platform();
+  if (p === "win32") execChild(`OpenWith.exe "${file}"`, { windowsHide: true }, () => {});
+  else if (p === "darwin") execChild(`open -R "${file}"`, () => {});
+  else execChild(`xdg-open "${file}"`, () => {});
+}
+
+// Re-import a setlist from its stored original (.docx/.pdf/.txt). `auto` = triggered by a file
+// save (quieter on failure, friendlier toast on success).
+function doReimport(name: string, auto = false): void {
+  const orig = readImportOriginal(name);
+  if (!orig) { if (!auto) toast("error", tr("host.reimport.none")); return; }
+  extractText(orig.path, orig.base64)
+    .then((text) => {
+      const r = mgr.applyTitles(textToTitles(text), !settings.splitMedleysOnImport);
+      if (r.matched) { if (settings.colorOnImport) mgr.autoColor(settings.setlistColorScheme || "rainbow"); rememberImport(name); }
+      if (r.matched || !auto) {
+        toast(r.matched ? "info" : "error", auto ? tr("host.reimport.auto", { matched: r.matched, total: r.total }) : tr("host.import.file", { file: name, matched: r.matched, total: r.total }));
+      }
+      changed();
+      server.broadcastMessage({ type: "importResult", result: r });
+    })
+    .catch((e: Error) => { if (!auto) toast("error", tr("host.import.failed", { msg: e.message })); });
+}
+
+// After the user opens an original to edit it, watch the imports folder and AUTO re-import that
+// setlist whenever the file is saved (Word writes via a temp+rename, so we watch the dir and
+// debounce). Only one file is watched at a time — the last one opened for editing.
+let editWatch: { watcher: FSWatcher; clearTimer: () => void } | null = null;
+function stopEditWatch(): void {
+  if (!editWatch) return;
+  try { editWatch.watcher.close(); } catch { /* ignore */ }
+  editWatch.clearTimer();
+  editWatch = null;
+}
+function watchOriginalForReimport(name: string, origPath: string): void {
+  stopEditWatch();
+  const target = origPath.split(/[\\/]/).pop() ?? "";
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let watcher: FSWatcher;
+  try {
+    watcher = watch(importsDir(), (_event, fname) => {
+      if (fname !== target) return; // ignore Word's lock/temp files — only the real original
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => doReimport(name, true), 1200); // let the multi-step save settle
+    });
+  } catch { return; }
+  editWatch = { watcher, clearTimer: () => { if (timer) clearTimeout(timer); } };
+}
+/** First non-internal IPv4 — the address a tablet on the same WiFi uses to reach us. */
+function detectLanIp(): string {
+  for (const list of Object.values(os.networkInterfaces())) {
+    for (const ni of list ?? []) {
+      if (ni.family === "IPv4" && !ni.internal) return ni.address;
+    }
+  }
+  return "";
+}
+const lanIp = detectLanIp();
+let bridgeConnected = false;
+let startupClickDone = false; // one-shot guard for "click on at AbleJam startup"
+let stageMessage = ""; // operator cue shown on STAGE views
+let bridgeVersion = 0;
+let tracks: string[] = [];
+let midiTracks: string[] = [];
+let midiOutPorts: string[] = listOutputs();
+let savedSetlists = listSetlists();
+let recentSetlists = loadRecents();
+function bumpRecent(name: string): void {
+  recentSetlists = [name, ...recentSetlists.filter((n) => n !== name)].slice(0, 8);
+  saveRecents(recentSetlists);
+}
+/** Auto-save an imported setlist (so it's reloadable from Recenti / Apri), keyed by the
+ * file name (or "Importata" for pasted text). Preserves medley links via serialize(). */
+function rememberImport(rawName = ""): void {
+  const name = rawName.replace(/\.[^.]+$/, "").trim() || tr("host.import.defaultName");
+  saveSetlist(name, mgr.serialize());
+  savedSetlists = listSetlists();
+  bumpRecent(name);
+  currentSetlistName = name;
+}
+
+let rawCues: RawCue[] = [];
+let stopPoints: number[] = []; // arrangement beats of MIDI "stop" notes (project-based)
+let lyricsFromClips: LyricLine[] = []; // lyrics lines read from the lyrics track's clips
+let lyricsDoc: LyricLine[] | null = null; // AbleJam-edited lyrics doc (authoritative when present)
+const effectiveLyrics = (): LyricLine[] => lyricsDoc ?? lyricsFromClips;
+let stopDiag = ""; // raw STOP-clip reading values (debug)
+let bluetooth: string[] = []; // connected Bluetooth peripherals (host machine)
+function refreshBT(): void {
+  listBluetooth().then((list) => {
+    if (list.length !== bluetooth.length || list.some((d, i) => d !== bluetooth[i])) {
+      bluetooth = list;
+      broadcastState();
+    }
+  }).catch(() => {});
+}
+let abletonProject = ""; // open Live Set name (from the Ableton window title)
+let abletonVersion = ""; // Ableton edition + version in use
+function refreshAbleton(): void {
+  readAbleton().then((info) => {
+    const project = info?.project ?? "";
+    const version = info?.version ?? "";
+    if (project !== abletonProject || version !== abletonVersion) {
+      const projectChanged = project !== abletonProject;
+      abletonProject = project;
+      abletonVersion = version;
+      if (projectChanged) lyricsDoc = (loadLyricsDoc(project) as LyricLine[] | null); // this project's edited lyrics, if any
+      broadcastState();
+    }
+  }).catch(() => {});
+}
+let lastSig = "";
+let lastTempo = 120;
+let pendingRebuild = false;
+let prevTime = 0;
+
+function snapshot(): AppState {
+  return {
+    bridgeConnected,
+    bridgeVersion,
+    library: mgr.library,
+    setlist: mgr.entries,
+    currentEntryIndex: mgr.currentEntry,
+    transport,
+    settings,
+    savedSetlists,
+    recentSetlists,
+    tracks,
+    midiTracks,
+    midiOutPorts,
+    lanIp,
+    stopPoints,
+    stopDiag,
+    bluetooth,
+    abletonProject,
+    abletonVersion,
+    currentSetlistName,
+    recentOriginals: namesWithOriginal(recentSetlists),
+    canUndo: mgr.canUndo(),
+    canRedo: mgr.canRedo(),
+    stageMessage,
+    lyrics: effectiveLyrics(),
+    lyricsEdited: lyricsDoc != null,
+  };
+}
+
+/** Push the configured stop track + note to the bridge so it knows which MIDI notes
+ * mark song endings (re-sent on every connect and whenever the setting changes). */
+function sendStopConfig(): void {
+  bridge.send(ADDR.cmdStopConfig, [settings.stopTrack, settings.stopNote]);
+}
+/** Tell the bridge which track holds the lyrics clips (re-sent on connect + on setting change). */
+function sendLyricsConfig(): void {
+  bridge.send(ADDR.cmdLyricsConfig, [settings.lyricsTrack]);
+}
+/** Write the edited lyrics TEXT back onto the lyrics-track clips, matched by position (the bridge
+ * pairs each clip with the nearest line). Timing can't be written — Live's API can't move
+ * arrangement clips — so it stays in the AbleJam doc. */
+function renameLyricClips(doc: LyricLine[]): void {
+  bridge.send(ADDR.cmdRenameLyrics, [JSON.stringify(doc.map((l) => ({ s: l.start, t: l.text })))]);
+}
+/** Create clips on the lyrics track for the doc lines that DON'T already have a clip (so songs
+ * imported from notes get real .als clips). Only lines with no clip near their start are sent —
+ * existing clips are never duplicated, sidestepping the (impossible) delete/move of arrangement clips. */
+/** Parse a drop-in lyrics file (`#Song` headers + lines), match each block to a library song, spread
+ * its lines across that song's beat range, merge into the AbleJam doc, persist + broadcast. */
+function importLyricsText(text: string): void {
+  const lib = mgr.library;
+  if (!lib.length || !text.trim()) return;
+  const titles = lib.map((s) => s.title);
+  const lowered = titles.map((t) => t.toLowerCase());
+  const blocks: { title: string; lines: string[] }[] = [];
+  let cur: { title: string; lines: string[] } | null = null;
+  for (const raw of text.split(/\r?\n/)) {
+    const m = raw.match(/^\s*#\s*(.+?)\s*$/) || raw.match(/^\s*\[(.+?)\]\s*$/);
+    const tl = raw.trim();
+    const header = m ? m[1]!.trim() : (tl && lowered.includes(tl.toLowerCase()) ? tl : null);
+    if (header != null) { cur = { title: header, lines: [] }; blocks.push(cur); }
+    else if (cur && tl) cur.lines.push(tl);
+  }
+  let doc: LyricLine[] = (lyricsDoc ?? lyricsFromClips).map((l) => ({ ...l }));
+  let matched = 0;
+  for (const b of blocks) {
+    const mm = bestMatch(b.title, titles, 0.5);
+    if (!mm || !b.lines.length) continue;
+    const song = lib[mm.index]!;
+    const s = song.startBeat;
+    const e = song.endBeat ?? song.startBeat + 64;
+    const n = b.lines.length;
+    const nl: LyricLine[] = b.lines.map((tx, i) => ({ text: tx, start: s + (i / n) * (e - s), end: s + ((i + 1) / n) * (e - s) }));
+    doc = doc.filter((l) => !(l.start < e - 1e-6 && l.end > s + 1e-6)).concat(nl);
+    matched++;
+  }
+  if (!matched) return;
+  doc.sort((a, b) => a.start - b.start);
+  lyricsDoc = doc;
+  saveLyricsDoc(abletonProject, lyricsDoc);
+  renameLyricClips(lyricsDoc);
+  broadcastState();
+  toast("info", tr("host.lyrics.imported", { n: matched }));
+}
+/** Watch the drop-in lyrics file: on a real change, import the songs AND lay them down as clips in
+ * Ableton (positioned in each matched song, like the user did by hand for RUSH). */
+let lastLyricsImport = "";
+function watchLyricsImport(): FSWatcher | undefined {
+  const file = lyricsImportFile();
+  const run = () => {
+    const t = readLyricsImport();
+    if (!t.trim() || t === lastLyricsImport || !mgr.library.length) return; // unchanged / library not ready
+    lastLyricsImport = t;
+    importLyricsText(t); // assign pasted/dropped lyrics to songs (the AbleJam doc) — clips are
+                         // created only on demand via Settings → "Import lyrics into project".
+  };
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return watch(file, () => { if (timer) clearTimeout(timer); timer = setTimeout(run, 700); });
+  } catch { return undefined; /* file not watchable yet */ }
+}
+
+function writeLyricsClips(): void {
+  if (!lyricsDoc || !lyricsDoc.length) { toast("error", tr("host.lyrics.writeNothing")); return; }
+  const clipStarts = lyricsFromClips.map((l) => l.start);
+  const toCreate = lyricsDoc.filter((l) => l.text.trim() && !clipStarts.some((cs) => Math.abs(cs - l.start) < 0.25));
+  if (!toCreate.length) { toast("info", tr("host.lyrics.writeNothing")); return; } // every line already has a clip
+  bridge.send(ADDR.cmdWriteLyrics, [JSON.stringify(toCreate.map((l) => ({ s: l.start, t: l.text })))]);
+}
+
+let colorizeNonce = 0; // only advanced for the "random" scheme, so re-pressing reshuffles
+/** Tell the bridge to paint each song's arrangement clips, one colour per timeline song,
+ * using the configured colour scheme (default "contrast" = adjacent songs maximally
+ * distinct). Each song spans [startBeat, NEXT song's startBeat) — the first starts at 0,
+ * the last extends to the end — so EVERY clip gets a colour. The bridge reports the count. */
+function colorizeAbleton(): void {
+  const songs = mgr.library;
+  if (songs.length === 0) { toast("error", tr("host.colorize.noSongs")); return; }
+  const scheme = settings.colorScheme || "contrast";
+  if (scheme === "random") colorizeNonce++;
+  const ranges = songs.map((s, i) => ({
+    s: i === 0 ? 0 : s.startBeat,
+    e: i + 1 < songs.length ? songs[i + 1]!.startBeat : (s.endBeat ?? s.startBeat + 1e9), // older bridge (<=v34) still needs it
+    c: parseInt(schemeHex(scheme, i, songs.length, colorizeNonce).slice(1), 16),
+  }));
+  bridge.send(ADDR.cmdColorize, [JSON.stringify(ranges)]);
+}
+
+/** Rename every arrangement clip "<Song> - <Track>" for a tidy project. Each clip is matched to the
+ * song whose [startBeat, NEXT startBeat) range contains it; the lyrics track is skipped (its clip
+ * names ARE the lyrics). The bridge does the renaming and reports the count. */
+function cleanProjectClips(): void {
+  const songs = mgr.library;
+  if (songs.length === 0) { toast("error", tr("host.clean.noSongs")); return; }
+  const ranges = songs.map((s, i) => ({
+    s: i === 0 ? 0 : s.startBeat,
+    e: i + 1 < songs.length ? songs[i + 1]!.startBeat : (s.endBeat ?? s.startBeat + 1e9),
+    t: s.title,
+  }));
+  bridge.send(ADDR.cmdCleanClips, [JSON.stringify({ songs: ranges, skipTrack: settings.lyricsTrack })]);
+}
+
+/** When "colour on import" is on, colour the active setlist at EVERY (re)load — but don't
+ * clobber a setlist that already carries colours (manual or saved). */
+function ensureColoredIfSet(): void {
+  if (settings.colorOnImport && !mgr.entries.some((e) => e.active && e.color)) {
+    mgr.autoColor(settings.setlistColorScheme || "rainbow");
+  }
+}
+
+/** Insert a musical key into a raw locator name, BEFORE any trailing medley "/" (or "-"):
+ * "BAD BOYS" -> "BAD BOYS (Am)";  "GET BUSY /" -> "GET BUSY (Fm) /". */
+function insertKeyInName(raw: string, key: string): string {
+  const trimmed = raw.replace(/\s+$/, "");
+  if (/[/-]$/.test(trimmed) && trimmed.length > 1) {
+    return trimmed.slice(0, -1).replace(/\s+$/, "") + ` (${key}) ` + trimmed.slice(-1);
+  }
+  return trimmed + ` (${key})`;
+}
+/** Write the keys AbleJam knows (parsed from an import) into the Ableton locator names, so
+ * Ableton becomes the source of truth. Only songs WITHOUT an existing marker key get one. */
+function writeKeysToMarkers(): void {
+  const keyForSong = new Map<number, string>();
+  for (const e of mgr.entries) {
+    const song = mgr.library[e.libIndex];
+    if (song && !song.key && e.key && !keyForSong.has(e.libIndex)) keyForSong.set(e.libIndex, e.key);
+  }
+  const renames: { time: number; name: string }[] = [];
+  mgr.library.forEach((song, i) => {
+    const key = keyForSong.get(i);
+    if (!key) return;
+    const cue = rawCues.find((c) => Math.abs(c.time - song.startBeat) < 0.01);
+    if (!cue) return;
+    const name = insertKeyInName(cue.name, key);
+    if (name !== cue.name) renames.push({ time: cue.time, name });
+  });
+  if (renames.length === 0) { toast("info", tr("host.keys.none")); return; }
+  bridge.send(ADDR.cmdRenameCues, [JSON.stringify(renames)]);
+}
+
+const server = new Server(snapshot);
+function broadcastState(): void {
+  server.broadcast(snapshot());
+}
+function broadcastTransport(): void {
+  server.broadcastMessage({ type: "transport", transport, currentEntryIndex: mgr.currentEntry, bridgeConnected });
+}
+function toast(level: "info" | "error", message: string): void {
+  server.broadcastMessage({ type: "toast", level, message });
+}
+/** Translate a toast in the user's chosen interface language. */
+function tr(key: string, params?: Record<string, string | number>): string {
+  return translate(settings.language, key, params);
+}
+
+function buildLibrary(): void {
+  const lib = buildSetlist(rawCues, lastTempo);
+  // Signature on STRUCTURE (song start beats), NOT titles: a pure marker RENAME keeps
+  // the same structure, so we refreshLibrary (updates the displayed names while keeping
+  // the user's order + medley). A structural change (add/remove/move of markers) used to
+  // reset everything — losing medley links, keys and order. Instead, PRESERVE the user's
+  // setlist by re-mapping it onto the new library by title.
+  const sig = lib.map((s) => s.startBeat.toFixed(3)).join("|");
+  if (sig === lastSig) {
+    mgr.refreshLibrary(lib);
+    return;
+  }
+  // First build after a (re)start: re-map the PERSISTED session (colours + order + medleys +
+  // keys) onto the library. Subsequent rebuilds re-map the live in-memory setlist instead.
+  const fromDisk = pendingRestoreItems != null;
+  const saved = fromDisk ? pendingRestoreItems! : mgr.serialize();
+  const wasAuto = fromDisk ? pendingRestoreAuto : mgr.medleysAreAuto; // restore/keep the auto flag
+  pendingRestoreItems = null; // consume the disk snapshot once
+  mgr.setLibrary(lib);
+  if (saved.length > 0) mgr.restoreFromSession(saved); // re-map onto the new library
+  mgr.medleysAreAuto = wasAuto;
+  mgr.autoDetectMedleys(); // on a fresh/auto setlist, derive medleys from the `-` locator marks
+  ensureColoredIfSet(); // colour the (re)built setlist if "colour on import" is on
+  lastSig = sig;
+}
+
+function persistSession(): void {
+  saveSession(lastSig, mgr.serialize(), settings, mgr.medleysAreAuto, currentSetlistName);
+}
+/** Setlist changed: persist it (survives restarts) and broadcast. */
+function changed(): void {
+  persistSession();
+  broadcastState();
+}
+
+function doJumpToEntry(i: number): void {
+  if (i < 0 || i >= mgr.entries.length) return;
+  mgr.setCurrentEntry(i);
+  const beat = mgr.jumpBeatForEntry(i);
+  if (beat != null) bridge.send(ADDR.cmdJumpToTime, [beat]);
+  if (settings.reenableAutomationOnSongStart) bridge.send(ADDR.cmdReenableAutomation);
+  broadcastTransport();
+}
+
+/** Turn Live's metronome (click) ON at playback start, when the setting is enabled. */
+function startClickIfSet(): void {
+  if (settings.clickOnAtStart) bridge.send(ADDR.cmdMetronome, [1]);
+}
+/** Explicit user navigation — honours the autoplay setting. */
+function userJumpToEntry(i: number): void {
+  doJumpToEntry(i);
+  if (settings.autoplay && !transport.isPlaying) { bridge.send(ADDR.cmdPlay); startClickIfSet(); }
+}
+
+/** Send the panic note out the configured MIDI port. Plan B: the host sends it itself.
+ * We fall back to the bridge's control-surface output ONLY when the native MIDI lib
+ * isn't available at all — never just because no port resolved (that would leak the
+ * note out as control-surface MIDI to the Windows GM synth — a surprise piano). */
+function firePanicNote(): void {
+  const port = sendMidiNote(settings.emergencyPort, settings.emergencyNote);
+  if (!port && !midiAvailable()) bridge.send(ADDR.cmdSendNote, [settings.emergencyNote]);
+}
+/** Stop playback and park the cursor at the START of the shown song (stays stopped).
+ * Always returns to the song marker, even if a rehearsal seek point was set. */
+/** Stop and park the cursor at the start of `entryIndex`'s song. ALWAYS sends cmdStop
+ * first (every bridge version understands it, so playback always stops); cmdStopToStart
+ * (v24+) then atomically parks the cursor. Neither re-arms play, so there is no race. */
+function stopAtEntry(entryIndex: number): void {
+  bridge.send(ADDR.cmdStop);
+  const s = mgr.songOf(entryIndex);
+  if (s) bridge.send(ADDR.cmdStopToStart, [s.startBeat]);
+}
+/** PULL UP: park at the start of the CURRENTLY SHOWN song (within a medley, the song
+ * in execution — not the medley start). */
+function stopToSongStart(): void {
+  stopAtEntry(mgr.currentEntry);
+}
+/** STOP: in a medley, park at the start of the medley (its FIRST song) and show it, so
+ * Play restarts the whole medley; for a standalone song it's just the current song. */
+function stopToMedleyStart(): void {
+  const start = mgr.medleyStartEntry(mgr.currentEntry);
+  if (start >= 0 && start !== mgr.currentEntry) {
+    mgr.setCurrentEntry(start);
+    broadcastTransport();
+  }
+  stopAtEntry(mgr.currentEntry);
+}
+
+let lastArmedStop: number | null = null;
+/** Arm (or clear) the bridge's precise stop beat — only re-sent when it changes. The bridge
+ * halts EXACTLY at this beat via its fast playhead listener, so there is no 10 Hz detection
+ * lag and no OSC round-trip: the song stops right on the note instead of a few clicks past. */
+function armStop(beat: number | null): void {
+  if (beat === lastArmedStop) return;
+  lastArmedStop = beat;
+  bridge.send(ADDR.cmdArmStop, [beat == null ? -1 : beat]);
+}
+
+/** A song just stopped (at its MIDI note or its end): advance the selection to the next
+ * song and park the cursor there (no auto-play). Shared by the bridge's precise stop
+ * notification AND the host-side crossing fallback — debounced so the two never advance
+ * twice (skip a song) when both fire within a beat of each other. */
+let lastStopAdvanceMs = 0;
+function prepareNextAfterStop(fromEntry: number): void {
+  const now = Date.now();
+  if (now - lastStopAdvanceMs < 500) return; // bridge notify + host fallback -> one advance
+  lastStopAdvanceMs = now;
+  const next = mgr.nextActiveAfter(fromEntry);
+  if (next >= 0) {
+    mgr.setCurrentEntry(next);
+    const nb = mgr.jumpBeatForEntry(next);
+    bridge.send(ADDR.cmdStopToStart, [nb ?? 0]); // atomic stop + park at next, no play re-arm
+    if (settings.reenableAutomationOnSongStart) bridge.send(ADDR.cmdReenableAutomation);
+  } else {
+    bridge.send(ADDR.cmdStop); // last song: just stop
+  }
+  lastArmedStop = null; // force a fresh arm for the new song once it plays
+  broadcastTransport();
+}
+
+/** Auto behaviour at the end of a song. Run BEFORE re-syncing the current entry
+ * to the playhead, so it sees the song that is actually ending. */
+function handleAuto(time: number, isPlaying: boolean): void {
+  if (!isPlaying) { armStop(null); return; }
+  const ce = mgr.currentEntry;
+  if (ce < 0) { armStop(null); return; }
+  const s = mgr.songOf(ce);
+  if (!s || s.endBeat == null) { armStop(null); return; }
+  if (prevTime < s.startBeat - 1e-6) return; // playhead not inside this song yet
+
+  const next = mgr.nextActiveAfter(ce);
+  const linked = !!mgr.entries[ce]?.linkedNext && next >= 0; // medley: continuous
+  const songEnd = s.endBeat;
+  // A MIDI "stop" note inside this song stops it precisely. ARM the bridge to halt exactly
+  // at that beat (bridge-side, no latency); it notifies us (/ablejam/midistop) to advance.
+  // Ignored inside a medley (which continues).
+  const midiStop = linked ? undefined : stopPoints.find((p) => p > s.startBeat + 1e-6 && p <= songEnd + 1e-6);
+  armStop(midiStop ?? null);
+
+  // Host-side crossing: for a MIDI-note song this stops AT the note (a few clicks late at
+  // 10 Hz) as a SAFETY NET — the bridge (v32+) stops tight on the note first and the debounce
+  // drops this one; an OLDER bridge that ignores the arm still stops at the note here instead
+  // of overrunning to the song end. Songs WITHOUT a note stop/continue at the end as usual.
+  const stopAt = midiStop !== undefined ? midiStop : songEnd;
+  const continuePlaying = midiStop === undefined && !settings.alwaysStop && (linked || (settings.autoContinue && !s.stopAfter));
+  if (!(prevTime < stopAt && time >= stopAt)) return; // hasn't reached the stop point
+  if (continuePlaying && next >= 0) {
+    doJumpToEntry(next); // roll into the next song (medley / auto-continue)
+  } else {
+    prepareNextAfterStop(ce);
+  }
+}
+
+bridge.on("error", (err) => console.error("[host] bridge socket error:", err));
+
+bridge.on("osc", (address: string, args: (number | string)[]) => {
+  if (!bridgeConnected) {
+    bridgeConnected = true;
+    // "Click on at AbleJam startup": fire once, the first time we reach Ableton this run.
+    if (settings.clickOnStartup && !startupClickDone) { startupClickDone = true; bridge.send(ADDR.cmdMetronome, [1]); }
+    broadcastState();
+  }
+  switch (address) {
+    case ADDR.hello:
+      // hello carries the version (also re-sent on refresh, so a host restart
+      // doesn't get stuck at v0). Don't request a refresh here — that would loop.
+      bridgeVersion = Number(args[1] ?? 0);
+      console.log(`[host] bridge: ${args[0]} (v${bridgeVersion})`);
+      sendStopConfig(); // let the (re)connected bridge know which track/note marks stops
+      sendLyricsConfig(); // and which track holds the lyrics clips
+      broadcastState();
+      break;
+    case ADDR.setlist:
+      try {
+        rawCues = JSON.parse(String(args[0] ?? "[]")) as RawCue[];
+        buildLibrary();
+        pendingRebuild = true;
+        broadcastState();
+      } catch (e) {
+        console.error("[host] bad setlist payload", e);
+      }
+      break;
+    case ADDR.tracks:
+      try {
+        tracks = JSON.parse(String(args[0] ?? "[]")) as string[];
+        broadcastState();
+      } catch {
+        // ignore
+      }
+      break;
+    case ADDR.midiTracks:
+      try {
+        midiTracks = JSON.parse(String(args[0] ?? "[]")) as string[];
+        broadcastState();
+      } catch {
+        // ignore
+      }
+      break;
+    case ADDR.midiStop:
+      // The bridge halted precisely on a MIDI stop note. Advance to the next song.
+      prepareNextAfterStop(mgr.currentEntry);
+      break;
+    case ADDR.stopDiag: {
+      const d = String(args[0] ?? "");
+      if (d !== stopDiag) { stopDiag = d; broadcastState(); }
+      break;
+    }
+    case ADDR.colorized: {
+      const n = Number(args[0] ?? 0);
+      const total = Number(args[1] ?? n);
+      toast(n > 0 ? "info" : "error", n > 0 ? tr("host.colorize.done", { n, total }) : tr("host.colorize.empty"));
+      break;
+    }
+    case ADDR.cleaned: {
+      const n = Number(args[0] ?? 0);
+      const total = Number(args[1] ?? n);
+      toast(n > 0 ? "info" : "error", n > 0 ? tr("host.clean.done", { n, total }) : tr("host.clean.empty"));
+      break;
+    }
+    case ADDR.beat:
+      server.broadcastMessage({ type: "beat", beat: Number(args[0] ?? 0) }); // tight metronome beat → CLICK visual
+      break;
+    case ADDR.renamed: {
+      const n = Number(args[0] ?? 0);
+      const total = Number(args[1] ?? n);
+      toast(n > 0 ? "info" : "error", n > 0 ? tr("host.keys.done", { n, total }) : tr("host.keys.unsupported"));
+      break;
+    }
+    case ADDR.autotuneDiag:
+      console.log("[host] AUTOTUNE diag:", String(args[0] ?? ""));
+      break;
+    case ADDR.lyricsWrite: {
+      const n = Number(args[0] ?? 0);
+      const total = Number(args[1] ?? n);
+      const reason = String(args[2] ?? "");
+      if (n > 0) toast("info", tr("host.lyrics.written", { n, total }));
+      else if (reason === "notrack" || reason === "empty") toast("error", tr("host.lyrics.writeFail"));
+      else toast("info", tr("host.lyrics.writeNothing")); // items sent but all positions already had a clip
+      break;
+    }
+    case ADDR.lyrics:
+      try {
+        const next = (JSON.parse(String(args[0] ?? "[]")) as LyricLine[]).filter((l) => l && typeof l.text === "string");
+        const changed = next.length !== lyricsFromClips.length || next.some((l, i) => l.text !== lyricsFromClips[i]?.text || l.start !== lyricsFromClips[i]?.start || l.end !== lyricsFromClips[i]?.end);
+        const firstLoad = next.length > 0 && lyricsFromClips.length === 0;
+        lyricsFromClips = next;
+        // An AbleJam-edited doc is authoritative — clip changes don't override it; we only broadcast
+        // when the EFFECTIVE lyrics (doc ?? clips) actually changed.
+        if (changed && lyricsDoc == null) { if (firstLoad) toast("info", tr("host.lyrics.read", { n: next.length })); broadcastState(); }
+      } catch {
+        // ignore
+      }
+      break;
+    case ADDR.stopPoints:
+      try {
+        const next = (JSON.parse(String(args[0] ?? "[]")) as unknown[]).map(Number).filter((n) => Number.isFinite(n));
+        const changed = next.length !== stopPoints.length || next.some((p, i) => p !== stopPoints[i]);
+        if (next.length !== stopPoints.length) toast("info", tr("host.stop.read", { n: next.length }));
+        stopPoints = next;
+        if (changed) broadcastState();
+      } catch {
+        // ignore
+      }
+      break;
+    case ADDR.transport: {
+      const [playing, time, tempo, sn, sd, , metro] = args;
+      lastTempo = Number(tempo) || lastTempo;
+      if (pendingRebuild) {
+        pendingRebuild = false;
+        buildLibrary();
+      }
+      const tnum = Number(time);
+      const isPlaying = Number(playing) !== 0;
+      handleAuto(tnum, isPlaying); // before syncing the current entry
+      const { songIndex, sectionIndex } = locateCurrent(mgr.library, tnum);
+      mgr.syncFromPlayhead(songIndex, isPlaying);
+      transport.isPlaying = isPlaying;
+      transport.time = tnum;
+      transport.tempo = lastTempo;
+      transport.sigNumerator = Number(sn);
+      transport.sigDenominator = Number(sd);
+      transport.metronome = Number(metro) !== 0;
+      transport.currentSongIndex = songIndex;
+      transport.currentSectionIndex = sectionIndex;
+      prevTime = tnum;
+      broadcastTransport();
+      break;
+    }
+    default:
+      break;
+  }
+});
+
+function applySetting(key: keyof Settings, value: boolean | string | number): void {
+  const target = settings as unknown as Record<string, boolean | string | number>;
+  if (key === "emergencyNote" || key === "stopNote") target[key] = Number(value);
+  else if (key === "emergencyPort" || key === "stopTrack" || key === "lyricsTrack" || key === "colorScheme" || key === "setlistColorScheme" || key === "panicLabel" || key === "panicColor" || key === "language" || key === "medleyDisplay" || key === "clickIndicator") target[key] = String(value);
+  else target[key] = Boolean(value);
+}
+
+// Manual editor edits that participate in undo/redo. Bulk load/import/reset-from-Ableton are NOT
+// here — those clear the history inside the manager (their old snapshots reference a stale library).
+const EDITOR_EDITS = new Set(["reorder", "moveBlock", "setActive", "toggleLink", "setEntryColor", "autoColorSetlist", "addSong", "clear", "addAll", "resetToTimeline", "sortAZ"]);
+
+server.onCommand = (c: ClientCommand) => {
+  const navBlocked = settings.safeMode && transport.isPlaying;
+  if (EDITOR_EDITS.has(c.command)) mgr.pushHistory(); // record state BEFORE applying the edit
+  switch (c.command) {
+    case "undo": if (mgr.undo()) changed(); break;
+    case "redo": if (mgr.redo()) changed(); break;
+    case "setStageMessage": stageMessage = c.text.slice(0, 200); broadcastState(); break;
+    case "setLyrics":
+      lyricsDoc = c.lines.map((l) => ({ text: String(l.text ?? ""), start: Number(l.start) || 0, end: Number(l.end) || 0 }));
+      saveLyricsDoc(abletonProject, lyricsDoc);
+      renameLyricClips(lyricsDoc); // user opted in: keep the .als clip names in sync (position-matched)
+      broadcastState();
+      break;
+    case "clearLyrics":
+      lyricsDoc = null;
+      deleteLyricsDoc(abletonProject);
+      broadcastState(); // fall back to the raw clips
+      break;
+    case "writeLyricsClips":
+      // Carry the editor's exact lines so the write never races the debounced setLyrics / a stale doc.
+      if (c.lines && c.lines.length) {
+        lyricsDoc = c.lines.map((l) => ({ text: String(l.text ?? ""), start: Number(l.start) || 0, end: Number(l.end) || 0 }));
+        saveLyricsDoc(abletonProject, lyricsDoc);
+        broadcastState();
+      }
+      writeLyricsClips();
+      break;
+    case "play": {
+      // PLAY plays the song SHOWN in the UI. If the playhead is already inside that song
+      // — at its start (just navigated) OR at a rehearsal seek point set by clicking the
+      // progress bar — we trust the bridge's selected position. Only when the playhead
+      // has drifted OUTSIDE the shown song do we force it onto the song's start.
+      const i = mgr.currentEntry;
+      const s = mgr.songOf(i);
+      if (s) {
+        const end = s.endBeat ?? Number.POSITIVE_INFINITY;
+        const inside = transport.time >= s.startBeat - 0.5 && transport.time < end - 0.05;
+        if (!inside) bridge.send(ADDR.cmdJumpToTime, [s.startBeat]);
+        mgr.setCurrentEntry(i); // re-arm the reconciliation guard
+      }
+      bridge.send(ADDR.cmdPlay);
+      startClickIfSet();
+      break;
+    }
+    case "pause":
+      if (settings.stopInsteadOfPause) stopToMedleyStart();
+      else bridge.send(ADDR.cmdPause);
+      break;
+    case "stop": stopToMedleyStart(); break; // medley -> first song; else current song. NEVER MIDI
+    case "panic":
+      // PULL UP: stop first, then fire the note a moment LATER so the transport has
+      // settled — a monitored track then reliably hears it every time (no more
+      // "once yes once no"). The note is independent of the stop.
+      stopToSongStart();
+      setTimeout(firePanicNote, 150);
+      break;
+    case "seek": bridge.send(ADDR.cmdJumpToTime, [c.beat]); break; // click the bar to set a start point
+    case "setShortcut": settings.shortcuts[c.action] = c.key; changed(); break;
+    case "setPedal": settings.pedals[c.action] = c.key; changed(); break;
+    case "refresh": bridge.send(ADDR.cmdRefresh); break;
+    case "next": if (!navBlocked) { const n = mgr.nextActiveAfter(mgr.currentEntry); if (n >= 0) userJumpToEntry(n); } break;
+    case "prev":
+      if (!navBlocked) {
+        const cur = mgr.currentEntry;
+        const s = mgr.songOf(cur);
+        if (settings.restartBeforeJumpBack && transport.isPlaying && s && transport.time > s.startBeat + 2) {
+          userJumpToEntry(cur); // restart the current song first
+        } else {
+          const p = mgr.prevActiveBefore(cur < 0 ? mgr.entries.length : cur);
+          if (p >= 0) userJumpToEntry(p);
+        }
+      }
+      break;
+    case "jumpToEntry": if (!navBlocked) userJumpToEntry(c.index); break;
+    case "reorder": mgr.reorder(c.from, c.to); changed(); break;
+    case "moveBlock": mgr.moveBlock(c.from, c.count, c.to); changed(); break;
+    case "setActive": mgr.setActive(c.index, c.active); changed(); break;
+    case "toggleLink": mgr.toggleLink(c.index); changed(); break;
+    case "setEntryColor": mgr.setEntryColor(c.index, c.color); changed(); break;
+    case "autoColorSetlist": mgr.autoColor(settings.setlistColorScheme || "rainbow"); changed(); break;
+    case "addSong": mgr.addSong(c.libIndex, c.at); changed(); break;
+    case "clear": mgr.clear(); changed(); break;
+    case "addAll": mgr.addAll(); changed(); break;
+    case "resetToTimeline":
+      mgr.resetToTimeline(); // back to timeline order; entries unlinked, medleysAreAuto = true
+      if (settings.splitMedleysOnImport) mgr.medleysAreAuto = false; // honor "split medleys" → keep them separate
+      else mgr.autoDetectMedleys(); // otherwise derive medleys from the `/` locators now
+      if (settings.colorOnImport) mgr.autoColor(settings.setlistColorScheme || "rainbow"); // honor "color"
+      currentSetlistName = "";
+      changed();
+      break;
+    case "sortAZ": mgr.sortAZ(); changed(); break;
+    case "saveSetlist":
+      saveSetlist(c.name, mgr.serialize());
+      savedSetlists = listSetlists();
+      bumpRecent(c.name);
+      currentSetlistName = c.name;
+      toast("info", tr("host.setlist.saved", { name: c.name }));
+      broadcastState();
+      break;
+    case "editSetlistFile": {
+      const orig = importOriginalPath(c.name); // the real source (.docx/.pdf/.txt) we imported from
+      if (orig) { openInDefaultApp(orig); watchOriginalForReimport(c.name, orig); } // edit in Word + auto re-import on save
+      else openWithPicker(setlistPath(c.name)); // no original (pasted/manual) → the .json, chooser
+      break;
+    }
+    case "reimportSetlist": doReimport(c.name); break;
+    case "removeRecent":
+      recentSetlists = recentSetlists.filter((n) => n !== c.name);
+      saveRecents(recentSetlists);
+      broadcastState();
+      break;
+    case "clearRecents":
+      recentSetlists = [];
+      saveRecents(recentSetlists);
+      broadcastState();
+      break;
+    case "deleteSetlist":
+      deleteSetlist(c.name);
+      savedSetlists = listSetlists();
+      recentSetlists = recentSetlists.filter((n) => n !== c.name);
+      saveRecents(recentSetlists);
+      broadcastState();
+      break;
+    case "clearSetlists":
+      clearSetlists();
+      savedSetlists = listSetlists();
+      recentSetlists = [];
+      saveRecents(recentSetlists);
+      broadcastState();
+      break;
+    case "loadSetlist": {
+      const items = loadSetlist(c.name);
+      if (items) {
+        const r = mgr.restoreFromSession(items);
+        mgr.medleysAreAuto = false; // a loaded setlist carries its own medleys
+        ensureColoredIfSet(); // colour it on load if "colour on import" is on and it has no colours
+        bumpRecent(c.name);
+        currentSetlistName = c.name;
+        toast("info", tr("host.setlist.loaded", { name: c.name, matched: r.matched, total: r.total }));
+        changed();
+        server.broadcastMessage({ type: "importResult", result: { matched: r.matched, total: r.total, unmatched: [] } });
+      } else {
+        toast("error", tr("host.setlist.notFound", { name: c.name }));
+      }
+      break;
+    }
+    case "importText": {
+      const r = mgr.applyTitles(textToTitles(c.text), !settings.splitMedleysOnImport);
+      if (r.matched) { if (settings.colorOnImport) mgr.autoColor(settings.setlistColorScheme || "rainbow"); rememberImport(); }
+      toast(r.matched ? "info" : "error", tr("host.import.result", { matched: r.matched, total: r.total, extra: r.unmatched.length ? tr("host.import.result.extra", { u: r.unmatched.length }) : "" }));
+      changed();
+      server.broadcastMessage({ type: "importResult", result: r });
+      break;
+    }
+    case "importFile":
+      extractText(c.filename, c.dataBase64)
+        .then((text) => {
+          const r = mgr.applyTitles(textToTitles(text), !settings.splitMedleysOnImport);
+          if (r.matched) {
+            if (settings.colorOnImport) mgr.autoColor(settings.setlistColorScheme || "rainbow");
+            rememberImport(c.filename);
+            saveImportOriginal(currentSetlistName, c.filename, c.dataBase64); // keep the source for edit / re-import
+          }
+          toast(r.matched ? "info" : "error", tr("host.import.file", { file: c.filename, matched: r.matched, total: r.total }));
+          changed();
+          server.broadcastMessage({ type: "importResult", result: r });
+        })
+        .catch((e: Error) => toast("error", tr("host.import.failed", { msg: e.message })));
+      break;
+    case "colorizeAbleton": colorizeAbleton(); break;
+    case "cleanProjectClips": cleanProjectClips(); break;
+    case "writeKeysToMarkers": writeKeysToMarkers(); break;
+    case "setMetronome": bridge.send(ADDR.cmdMetronome, [c.on ? 1 : 0]); break;
+    case "refreshBluetooth": refreshBT(); break;
+    case "openBluetoothSettings": openBluetoothSettings(); break;
+    case "setSetting":
+      applySetting(c.key, c.value);
+      if (c.key === "stopTrack" || c.key === "stopNote") sendStopConfig(); // re-read with the new track/note
+      if (c.key === "lyricsTrack") sendLyricsConfig(); // re-read lyrics from the new track
+      changed();
+      break;
+  }
+};
+
+// ---- Lifecycle ---------------------------------------------------------------------
+// All runtime side effects live in startHost() so the Electron wrapper can boot the host
+// AFTER setting ABLEJAM_DATA_DIR / ABLEJAM_WEB_DIST, and tear it down cleanly on quit.
+// Run standalone (tsx src/index.ts / pnpm start / pnpm live), the guard at the bottom of
+// the file calls it — preserving the original behaviour exactly.
+let scanId: ReturnType<typeof setInterval> | undefined;
+let btId: ReturnType<typeof setInterval> | undefined;
+let abletonId: ReturnType<typeof setInterval> | undefined;
+let lyricsWatcher: FSWatcher | undefined;
+
+export function startHost(): { ready: Promise<void>; close: () => Promise<void> } {
+  lyricsWatcher = watchLyricsImport(); // drop-in lyrics file watcher (capturable for teardown)
+
+  scanId = setInterval(() => {
+    const c = bridge.isConnected();
+    if (c !== bridgeConnected) {
+      bridgeConnected = c;
+      if (c) refreshAbleton(); // bridge just connected -> read the open Set name promptly
+      broadcastState();
+    }
+    // Re-scan MIDI ports so a freshly-installed loopMIDI appears without a restart.
+    const ports = listOutputs();
+    if (ports.length !== midiOutPorts.length || ports.some((p, i) => p !== midiOutPorts[i])) {
+      midiOutPorts = ports;
+      broadcastState();
+    }
+  }, 1000);
+
+  // ready resolves the instant the HTTP+WS listener is accepting on :3700 — the Electron
+  // wrapper awaits this before pointing its window at http://127.0.0.1:3700 (race-free).
+  let resolveReady!: () => void;
+  const ready = new Promise<void>((r) => { resolveReady = r; });
+  server.listen(() => resolveReady());
+  if (lanIp) console.log(`[host] tablet/iPad (stessa WiFi) -> apri  http://${lanIp}:${PORTS.http}  (dopo 'pnpm build:web')`);
+  bridge.send(ADDR.cmdRefresh);
+  refreshBT();
+  btId = setInterval(refreshBT, 20000); // keep the connected-Bluetooth list fresh
+  refreshAbleton();
+  abletonId = setInterval(refreshAbleton, 3000); // fast enough that the unsaved "*" clears right after a save
+  console.log("[host] AbleJam host started — waiting for the bridge (Ableton or mock)...");
+
+  return { ready, close };
+}
+
+/** Release everything startHost() acquired: the 3 timers, the lyrics + edit watchers, the
+ * cached MIDI out port, the UDP socket (39062) and the http+ws listener (3700). Called by
+ * the Electron wrapper before quit so a relaunch never hits a held port. */
+async function close(): Promise<void> {
+  if (scanId) { clearInterval(scanId); scanId = undefined; }
+  if (btId) { clearInterval(btId); btId = undefined; }
+  if (abletonId) { clearInterval(abletonId); abletonId = undefined; }
+  try { lyricsWatcher?.close(); } catch { /* ignore */ }
+  lyricsWatcher = undefined;
+  stopEditWatch();
+  try { closeOutput(); } catch { /* ignore */ }
+  try { bridge.close(); } catch { /* ignore */ }
+  await server.close();
+}
+
+// Standalone run (tsx src/index.ts / pnpm start / pnpm live / pnpm dev:host): boot directly.
+// Skipped when imported as a module — the Electron main process calls startHost() itself.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  startHost();
+}

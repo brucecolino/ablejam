@@ -1,0 +1,38 @@
+{
+  "name": "@ablejam/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "AbleJam desktop window (Electron) — boots the host in-process and shows the UI.",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build:web": "pnpm --filter @ablejam/web run build",
+    "build:host": "node build-host.mjs",
+    "build:main": "node build-main.mjs",
+    "make:icon": "node make-icon.mjs",
+    "copy:assets": "node copy-assets.mjs",
+    "build": "pnpm run make:icon && pnpm run build:web && pnpm run build:host && pnpm run build:main && pnpm run copy:assets",
+    "dev": "node build-host.mjs && node build-main.mjs && node copy-assets.mjs && electron .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "dist": "pnpm run build && electron-builder",
+    "dist:win": "pnpm run build && electron-builder --win",
+    "dist:mac": "pnpm run build && electron-builder --mac",
+    "postinstall": "electron-builder install-app-deps || true"
+  },
+  "dependencies": {
+    "@julusian/midi": "^3.6.1",
+    "mammoth": "^1.8.0",
+    "pdf-parse": "^1.1.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@ablejam/host": "workspace:*",
+    "@ablejam/shared": "workspace:*",
+    "@types/node": "^22.0.0",
+    "electron": "^31.7.7",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.23.1",
+    "png-to-ico": "^3.0.1",
+    "sharp": "^0.35.2",
+    "typescript": "^5.6.0"
+  }
+}

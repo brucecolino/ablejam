@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+release*/
+*.log
+.DS_Store
+Thumbs.db
+
+# Local reference material (regenerable from the source video / YouTube)
+.ui-analysis/
+
+# Python
+__pycache__/
+*.pyc
+.ablejam-data/

@@ -1,0 +1,19 @@
+# Normalize line endings cross-platform so the same checkout works on Windows and macOS.
+* text=auto eol=lf
+
+# Shell scripts MUST stay LF — CRLF breaks the shebang / execution on macOS & Linux.
+*.command text eol=lf
+*.sh      text eol=lf
+
+# Windows-only scripts keep CRLF.
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binary assets — never touch line endings or diff them.
+*.exe   binary
+*.node  binary
+*.png   binary
+*.ico   binary
+*.icns  binary
+*.pdf   binary

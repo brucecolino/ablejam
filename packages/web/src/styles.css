@@ -1,0 +1,621 @@
+/* AbleJam — design tokens from PLAN.md §9 */
+:root {
+  --bg: #0b0b0c;
+  --surface: #151517;
+  --elevated: #1c1c1f;
+  --border: #2a2a2e;
+  --text: #f2f2f3;
+  --text-muted: #9a9aa0;
+  --accent: #ff7a1a;
+  --playing: #34c77b;
+  --pill-bg: #28303b;
+  --pill-text: #9fc0e6;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button { font-family: inherit; }
+
+.app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+.body { display: flex; flex-direction: column; min-height: 0; }
+
+/* Top bar */
+.topbar { display: flex; align-items: center; gap: 12px; padding: 0 14px; height: 48px; background: var(--elevated); border-bottom: 1px solid var(--border); }
+.brand { display: flex; flex: 1; align-items: center; gap: 9px; white-space: nowrap; cursor: default; }
+.brand-mark { display: block; flex: none; }
+.brand-name { font-weight: 600; font-size: 13px; letter-spacing: 1px; text-transform: uppercase; }
+.brand-name .jam { color: var(--accent); }
+.badge { font-size: 11px; font-weight: 700; color: var(--bg); background: var(--accent); border-radius: 6px; padding: 2px 6px; margin-left: 6px; }
+/* Tabs sit at the BOTTOM of the topbar and read like folder tabs: rounded top corners,
+   no bottom edge, and the active one overlaps the topbar border (margin-bottom:-1px) so it
+   joins the content area below. */
+.tabs { display: flex; gap: 4px; align-self: flex-end; }
+.tab { background: transparent; border: 1px solid transparent; border-bottom: none; color: var(--text-muted); border-radius: 9px 9px 0 0; padding: 8px 18px; margin-bottom: -1px; font-size: 13px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; }
+.tab:hover { color: var(--text); background: color-mix(in srgb, var(--surface) 60%, transparent); }
+.tab.on { color: var(--accent); background: var(--surface); border-color: var(--border); }
+.status { display: flex; flex: 1; gap: 8px; justify-content: flex-end; align-items: center; }
+/* "Live": RED when Ableton/bridge is disconnected, GREEN when connected. */
+.dot { font-size: 11px; font-weight: 700; color: #e2503b; border: 1px solid color-mix(in srgb, #e2503b 50%, transparent); border-radius: 999px; padding: 2px 10px; }
+.dot.ok { color: var(--playing); border-color: color-mix(in srgb, var(--playing) 50%, transparent); font-weight: 600; }
+.toggle { font-size: 11px; font-weight: 600; color: var(--text-muted); background: transparent; border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.toggle.on { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+
+/* Setlist */
+.setlist { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.rows { flex: 1; overflow-y: auto; padding: 6px 0; }
+.list-actions { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface); position: relative; }
+.act { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; background: transparent; border: 1px solid var(--border); color: var(--text); border-radius: 8px; cursor: pointer; }
+.act:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.act:disabled { opacity: 0.32; cursor: default; }
+.act.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.recents { position: relative; }
+.recents > summary { list-style: none; }
+.recents > summary::-webkit-details-marker { display: none; }
+.savemenu { position: relative; }
+.savemenu > summary { list-style: none; }
+.savemenu > summary::-webkit-details-marker { display: none; }
+.save-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; min-width: 200px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 4px; display: flex; flex-direction: column; gap: 2px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45); }
+.save-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; background: transparent; border: none; color: var(--text); border-radius: 6px; padding: 8px 10px; cursor: pointer; font-size: 13px; }
+.save-opt:hover:not(:disabled) { background: var(--bg); }
+.save-opt:disabled { opacity: 0.4; cursor: default; }
+.save-opt .so-sub { font-size: 11px; color: var(--text-muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recents-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; min-width: 210px; max-height: 340px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 4px; display: flex; flex-direction: column; gap: 2px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45); }
+.recents-menu button { text-align: left; background: transparent; border: none; color: var(--text); border-radius: 6px; padding: 8px 10px; cursor: pointer; font-size: 13px; }
+.recents-menu button:hover { background: var(--bg); }
+.recents-empty { color: var(--text-muted); padding: 8px 10px; font-size: 13px; }
+.count { margin-left: auto; color: var(--text-muted); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Absolutely centered in the bar (window), independent of the side controls' widths. */
+.list-title { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 52%; display: flex; gap: 18px; align-items: center; justify-content: center; overflow: hidden; white-space: nowrap; font-size: 13px; }
+.list-title .lt-item { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text); font-weight: 700; }
+.list-title .lt-set { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: transparent; border: none; padding: 0; font: inherit; font-weight: 700; color: var(--text); cursor: pointer; }
+.list-title .lt-set:hover { color: var(--accent); }
+.list-title .lt-k { color: var(--text-muted); font-weight: 600; margin-right: 5px; }
+.recents-row { display: flex; align-items: center; }
+.recents-menu .recents-load { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recents-menu .recents-edit { flex: none; width: 30px; padding: 7px 0; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); }
+.recents-menu .recents-edit:hover { color: var(--accent); }
+.recents-menu .recents-del { flex: none; width: 28px; padding: 7px 0; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 14px; }
+.recents-menu .recents-del:hover { color: #e2503b; }
+.recents-menu .recents-clear { text-align: center; color: var(--text-muted); border-top: 1px solid var(--border); border-radius: 0; margin-top: 4px; font-size: 12px; }
+.recents-menu .recents-clear:hover { color: #e2503b; }
+.empty { color: var(--text-muted); text-align: center; margin-top: 40px; padding: 0 24px; }
+.row { border-bottom: 1px solid var(--border); }
+.row.current { background: color-mix(in srgb, var(--playing) 14%, transparent); }
+.row.nosong .title { color: var(--text-muted); font-style: italic; }
+.row-main { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; background: transparent; border: 0; color: var(--text); text-align: left; font-size: 16px; padding: 12px 16px; cursor: pointer; }
+.row-main:hover { background: var(--surface); }
+.bar { width: 4px; align-self: stretch; border-radius: 0 2px 2px 0; }
+.idx { color: var(--text-muted); width: 28px; text-align: right; font-variant-numeric: tabular-nums; }
+.row-text { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A medley row shows ALL its songs: the title wraps to as many lines as needed (never
+   truncates / never pushes the layout wider), so the interface stays fully visible. */
+.medley-row .title { white-space: normal; overflow: visible; text-overflow: clip; word-break: break-word; }
+.row.current .title { color: var(--playing); font-weight: 600; }
+.desc { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Fixed width + right-aligned so the duration column lines up and the medley icon before it
+   stays at a constant x even when a (medley) duration is wider, e.g. "12:11" vs "3:03". */
+.dur { color: var(--text-muted); font-variant-numeric: tabular-nums; padding-right: 16px; min-width: 58px; text-align: right; flex: none; }
+.row.current .dur { color: var(--playing); }
+.sections { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 12px 44px; }
+.chip { font-size: 12px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.chip.on { color: var(--text); background: var(--surface); border-color: var(--accent); }
+
+/* Editor rows */
+.row { display: flex; align-items: stretch; }
+.row.current { background: color-mix(in srgb, var(--playing) 14%, transparent); }
+.row.removed { opacity: 0.42; }
+.grip { display: flex; align-items: center; padding: 0 8px 0 12px; color: var(--text-muted); cursor: grab; user-select: none; }
+/* A locked medley is one draggable block: a left accent + a translucent orange tint group its
+   rows. The playing row keeps its green highlight (:not(.current)). */
+.row.medley-locked, .row.medley-grouped { box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+.row.medley-locked:not(.current), .row.medley-grouped:not(.current) { background: color-mix(in srgb, var(--accent) 11%, transparent); }
+.rm { width: 34px; background: transparent; border: 0; color: var(--text-muted); font-size: 16px; cursor: pointer; }
+.row-num { align-self: center; flex: none; width: 54px; text-align: right; padding-left: 16px; padding-right: 16px; color: var(--text); font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+/* In-app colour picker (replaces the native OS dialog). */
+.cp { position: relative; align-self: center; flex: none; display: flex; align-items: center; padding-left: 4px; padding-right: 14px; }
+.cp-swatch { width: 22px; height: 22px; padding: 0; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+.cp-swatch:hover { border-color: var(--accent); }
+.cp-backdrop { position: fixed; inset: 0; z-index: 30; }
+.cp-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 31; background: var(--elevated); border: 1px solid var(--border); border-radius: 10px; padding: 9px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55); }
+.cp-grid { display: grid; grid-template-columns: repeat(8, 20px); gap: 5px; }
+.cp-cell { width: 20px; height: 20px; border-radius: 5px; border: 1px solid rgba(255, 255, 255, 0.18); cursor: pointer; padding: 0; }
+.cp-cell:hover { transform: scale(1.12); }
+.cp-cell.on { outline: 2px solid var(--text); outline-offset: 1px; }
+.cp-custom { display: flex; align-items: center; gap: 6px; margin-top: 9px; }
+.cp-label { font-size: 11px; color: var(--text-muted); }
+.cp-preview { width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--border); flex: none; }
+.cp-hex { width: 88px; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 3px 6px; font-size: 12px; }
+.rm:hover { color: var(--accent); }
+
+/* Editor toolbar */
+.editor-toolbar { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-top: 1px solid var(--border); background: var(--surface); }
+.add-box { position: relative; flex: 1; }
+.add-input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 8px 10px; font-size: 14px; }
+.add-input:focus { outline: none; border-color: var(--accent); }
+.add-results { position: absolute; bottom: calc(100% + 4px); left: 0; right: 0; background: var(--elevated); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; max-height: 260px; overflow-y: auto; z-index: 5; }
+.add-results button { display: block; width: 100%; text-align: left; background: transparent; border: 0; border-bottom: 1px solid var(--border); color: var(--text); padding: 8px 12px; cursor: pointer; }
+.add-results button:hover { background: var(--surface); }
+.tools { display: flex; gap: 6px; }
+.tools button { background: transparent; border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 7px 12px; font-size: 13px; cursor: pointer; }
+.tools button:hover { border-color: var(--accent); }
+
+/* Modal / panels */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 20; }
+.modal { width: min(560px, 100%); background: var(--elevated); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+.modal h3 { margin: 0 0 8px; }
+.hint { color: var(--text-muted); font-size: 13px; margin: 0 0 12px; }
+.import-text { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 10px; font-family: inherit; font-size: 14px; resize: vertical; }
+.modal-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+.modal-actions .spacer { flex: 1; }
+.modal-actions button, .filebtn { background: transparent; border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 14px; font-size: 14px; cursor: pointer; }
+.modal-actions button:hover, .filebtn:hover { border-color: var(--accent); }
+.modal-actions .primary { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
+.modal-actions .primary:disabled { opacity: 0.5; cursor: default; }
+.saved-list { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+.saved-list button { text-align: left; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 10px 12px; cursor: pointer; }
+.saved-list button:hover { border-color: var(--accent); }
+.saved-row { display: flex; gap: 6px; }
+.saved-list .saved-load { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-list .saved-act { flex: none; width: 40px; display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--text-muted); }
+.saved-list .saved-act:hover { color: var(--accent); }
+.saved-list .saved-del:hover { border-color: #e2503b; color: #e2503b; }
+.modal-actions .danger { color: #e2503b; border-color: color-mix(in srgb, #e2503b 45%, transparent); }
+.modal-actions .danger:hover { border-color: #e2503b; }
+.clock { font-size: 15px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: 0.5px; padding: 0 2px; }
+
+/* Drag & drop */
+.row[draggable="true"] { cursor: grab; }
+.row.dragging { opacity: 0.5; }
+.row.dragover { box-shadow: inset 0 2px 0 0 var(--accent); }
+.grip:active { cursor: grabbing; }
+
+/* Import result log */
+.import-result { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
+.ir-summary { color: var(--playing); font-weight: 600; }
+.ir-title { color: var(--text-muted); margin-top: 8px; font-size: 13px; }
+.ir-list { margin: 6px 0 0; padding-left: 18px; max-height: 160px; overflow-y: auto; }
+.ir-list li { font-size: 14px; color: #f6c177; }
+.ir-ok { color: var(--playing); margin-top: 6px; }
+
+/* Toasts */
+.toasts { position: fixed; bottom: 84px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 30; }
+.toast { background: var(--elevated); border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 10px 16px; font-size: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.4); }
+.toast.info { border-color: color-mix(in srgb, var(--playing) 50%, transparent); }
+.toast.error { border-color: color-mix(in srgb, #ef4444 60%, transparent); }
+
+/* Settings gear */
+.gear { background: transparent; border: 1px solid var(--border); color: var(--text); border-radius: 8px; width: 32px; height: 26px; font-size: 14px; cursor: pointer; }
+.gear:hover { border-color: var(--accent); }
+.remote-chip { background: var(--surface); border: 1px solid var(--accent); color: var(--text); border-radius: 8px; padding: 0; overflow: hidden; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.remote-chip > button { background: transparent; border: 0; color: inherit; font: inherit; cursor: pointer; height: 100%; display: inline-flex; align-items: center; }
+.remote-toggle { padding: 0 10px; }
+.remote-copy { padding: 0 8px; border-left: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); font-size: 13px; }
+.remote-chip > button:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.bt-chip { display: inline-flex; align-items: center; gap: 5px; background: transparent; border: 1px solid var(--border); color: var(--text-muted); border-radius: 8px; padding: 4px 9px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bt-chip:hover { border-color: var(--accent); color: var(--text); }
+.bt-chip.on { color: #5aa9ff; border-color: color-mix(in srgb, #5aa9ff 50%, transparent); }
+/* Uniform height + corner radius for every topbar status control (BT chip, address chip, gear, Live dot). */
+.status > * { height: 28px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; }
+.bt-list { list-style: none; margin: 4px 0; padding: 0; font-size: 13px; }
+.bt-list li { display: flex; align-items: center; gap: 6px; padding: 3px 0; color: #5aa9ff; }
+
+/* Language selector */
+.lang-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 6px; }
+.lang-btn { display: inline-flex; align-items: center; gap: 9px; padding: 9px 12px; background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.flag { flex: none; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18); }
+.lang-btn:hover { border-color: var(--accent); color: var(--text); }
+.lang-btn.on { background: color-mix(in srgb, var(--accent) 22%, transparent); border-color: var(--accent); color: var(--text); }
+
+/* Medley link */
+.link { width: 36px; background: transparent; border: 0; color: var(--text-muted); font-size: 14px; cursor: pointer; opacity: 0.45; align-self: center; }
+.link.on { opacity: 1; }
+.lyr-btn { font-size: 15px; }
+/* In edit mode the duration sits next to the ♪/🔗 buttons — drop its trailing padding so the ♪
+   lands centred between the time and the link icon (instead of pushed to the right). */
+.rows.editing .dur { padding-right: 0; }
+/* The lock indicator that precedes the medley icon — monochrome, accent orange. Placing it BEFORE
+   the ⛓ keeps the medley icon glued to the duration, so toggling the lock doesn't shift it. Both the
+   lock and the ⛓ live in fixed-width slots so the lock COLUMN stays aligned even on rows with no ⛓. */
+.row-lock { flex: none; width: 22px; display: inline-flex; align-items: center; justify-content: center; color: var(--accent); }
+.row-lock svg { width: 15px; height: 15px; }
+.rows.editing .medley-mark { flex: none; width: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+/* Drag preview for a locked medley: a small stacked card of the block's titles. */
+.drag-ghost { position: fixed; top: -1000px; left: -1000px; background: var(--elevated); border: 1px solid var(--accent); border-radius: 8px; padding: 6px 14px; box-shadow: inset 4px 0 0 0 var(--accent); color: var(--text); }
+.drag-ghost > div { padding: 2px 0; font-size: 14px; font-weight: 700; white-space: nowrap; }
+.row.linked-next, .row.linked-prev { box-shadow: inset 3px 0 0 0 var(--accent); }
+
+/* Key + medley indicators */
+.key { color: var(--text-muted); font-weight: 400; font-size: 0.9em; }
+.row.current .key { color: color-mix(in srgb, var(--playing) 70%, white); }
+.medley-mark { color: var(--accent); font-size: 0.78em; line-height: 1; vertical-align: middle; padding: 0 6px; align-self: center; }
+.perf-key { font-size: clamp(20px, 3vw, 30px); color: var(--text-muted); font-weight: 700; margin-top: -4px; }
+.perf-medley { font-size: 14px; font-weight: 700; letter-spacing: 0.04em; }
+.perf-medley.cont { color: var(--accent); }
+.medley-bar { position: relative; }
+.medley-tick { position: absolute; top: 0; bottom: 0; width: 10px; margin-left: -5px; cursor: pointer; z-index: 2; }
+.medley-tick::before { content: ""; position: absolute; left: 4px; top: 0; bottom: 0; width: 2px; background: rgba(255, 255, 255, 0.85); }
+.medley-tick:hover::before { background: var(--accent); width: 3px; }
+.medley-list { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 10px; max-width: min(900px, 92%); }
+.medley-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 999px; padding: 5px 12px; cursor: pointer; font-size: 14px; }
+.medley-chip:hover { border-color: var(--accent); }
+.medley-chip.on { border-color: var(--accent); background: rgba(255, 122, 26, 0.14); }
+.mc-num { color: var(--text-muted); font-weight: 700; }
+.mc-name { font-weight: 600; }
+.mc-key { color: var(--text-muted); font-size: 12px; }
+.perf-medley.stops { color: var(--text-muted); }
+
+/* Settings panel */
+.settings-modal { width: min(940px, 96vw); max-height: 90vh; overflow-y: auto; }
+.settings-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.settings-head h3 { margin: 0; }
+.settings-close { background: transparent; border: 0; color: var(--text-muted); font-size: 18px; cursor: pointer; padding: 4px 8px; line-height: 1; }
+.settings-close:hover { color: var(--text); }
+.settings-grid { column-count: 2; column-gap: 18px; }
+@media (max-width: 760px) { .settings-grid { column-count: 1; } }
+.settings-card { break-inside: avoid; display: inline-block; width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 6px 14px 14px; margin-bottom: 16px; }
+.settings-card .settings-section:first-child { margin-top: 10px; }
+.settings-version { text-align: center; color: var(--text-muted); font-size: 12px; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--border); }
+/* Info / guide panel */
+.info-modal { width: min(720px, 96vw); max-height: 92vh; display: flex; flex-direction: column; }
+.info-body { overflow-y: auto; padding: 2px 2px 6px; }
+.info-section { margin-bottom: 18px; }
+.info-section h4 { color: var(--accent); font-size: 15px; margin: 2px 0 6px; }
+.info-section p { color: var(--text); font-size: 13.5px; line-height: 1.55; margin: 0; white-space: pre-line; }
+.info-contact { border-top: 1px solid var(--border); padding-top: 14px; }
+.info-mail { display: inline-flex; align-items: center; gap: 7px; margin-top: 8px; padding: 9px 14px; background: color-mix(in srgb, var(--accent) 16%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent); color: var(--accent); border-radius: 8px; font-weight: 700; font-size: 14px; text-decoration: none; }
+.info-mail::before { content: "✉"; font-size: 15px; }
+.info-mail:hover { background: color-mix(in srgb, var(--accent) 26%, transparent); border-color: var(--accent); }
+.settings-product { text-align: center; color: var(--text-muted); font-size: 12px; margin-top: 3px; }
+.settings-product .apice { color: var(--accent); font-weight: 800; letter-spacing: 0.06em; }
+/* Themed scrollbars (consistent with the dark UI) */
+* { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 7px; border: 3px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); background-clip: padding-box; }
+.settings-section { color: var(--accent); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin: 16px 0 4px; }
+.setting { display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 8px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+.setting input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); flex: none; }
+.setting-text { display: flex; flex-direction: column; flex: 1; }
+.setting-label { font-size: 15px; }
+.setting-desc { font-size: 12px; color: var(--text-muted); }
+.setting-select { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 7px 10px; font-size: 14px; max-width: 180px; }
+.settings-desc-small { font-size: 12px; color: #8a8a8a; margin: 4px 0 8px; line-height: 1.4; }
+.settings-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 13px; font-size: 14px; font-weight: 700; line-height: 1.2; cursor: pointer; margin-top: 8px; }
+.settings-btn:hover { border-color: var(--accent); color: var(--accent); }
+.settings-btn svg { width: 15px; height: 15px; stroke-width: 2.4; display: block; }
+.stop-diag { font-size: 12px; margin: 0 0 2px; line-height: 1.45; }
+.stop-diag-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 38px; margin-top: 8px; }
+.stop-diag-head .settings-btn { margin-top: 0; margin-left: auto; } /* status/toggle left, button right, all vertically centered */
+.stop-diag-toggle { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.stop-diag-toggle input { accent-color: var(--accent); }
+.stop-diag-list { margin-top: 6px; color: var(--accent); max-height: 200px; overflow-y: auto; }
+.lan-url { font-size: 18px; font-weight: 700; color: var(--accent); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin: 6px 0; user-select: all; text-align: center; letter-spacing: 0.5px; }
+.shortcut-btn { min-width: 120px; padding: 7px 12px; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
+.shortcut-btn:hover { border-color: var(--accent); }
+.shortcut-btn.listening { border-color: var(--accent); color: var(--accent); }
+
+/* Print setlist */
+.print-modal { background: #fff; color: #111; width: min(820px, 94%); max-height: 92vh; overflow: auto; margin: 4vh auto; border-radius: 10px; }
+.print-toolbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid #ddd; }
+.print-toolbar .hint { font-size: 12px; color: #777; }
+.print-toolbar .spacer { flex: 1; }
+.print-toolbar button { background: #f0f0f0; border: 1px solid #ccc; color: #111; border-radius: 8px; padding: 7px 14px; cursor: pointer; font-weight: 600; }
+.print-toolbar button.primary { background: #111; color: #fff; border-color: #111; }
+.print-input { background: #fff; border: 1px solid #ccc; color: #111; border-radius: 8px; padding: 7px 10px; font-size: 14px; min-width: 130px; }
+.print-input:focus { outline: none; border-color: #111; }
+.print-opts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 14px; border-bottom: 1px solid #ddd; background: #fafafa; }
+.po-head { font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-right: 2px; }
+.po-chip { background: #fff; border: 1px solid #ccc; color: #333; border-radius: 8px; padding: 6px 11px; cursor: pointer; font-size: 13px; font-weight: 600; }
+.po-chip:hover { border-color: #999; }
+.po-chip.on { background: #111; color: #fff; border-color: #111; }
+.po-field { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #333; font-weight: 600; }
+.po-select { background: #fff; border: 1px solid #ccc; color: #111; border-radius: 8px; padding: 6px 8px; cursor: pointer; font-size: 13px; }
+.print-page.colored { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.print-head-l { display: flex; flex-direction: column; gap: 2px; }
+.print-event { font-size: 0.85em; color: #333; font-weight: 600; letter-spacing: 1px; }
+.print-page { padding: 12mm 14mm; color: #000; background: #fff; display: flex; flex-direction: column; aspect-ratio: 210 / 297; }
+.print-head { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 2.5px solid #000; padding-bottom: 6px; margin-bottom: 4px; }
+.print-head h1 { font-size: 1.8em; margin: 0; letter-spacing: 4px; font-weight: 800; }
+.print-meta { font-size: 0.78em; color: #555; }
+.print-list { list-style: none; margin: 0; padding: 0; flex: 1; display: flex; flex-direction: column; }
+.print-list li { flex: 1 0 auto; display: flex; align-items: center; gap: 14px; padding: 2px 0; border-bottom: 1px solid #dcdcdc; break-inside: avoid; }
+.print-list li:last-child { border-bottom: none; }
+.pnum { width: 2.1em; text-align: right; font-weight: 800; color: #222; font-variant-numeric: tabular-nums; }
+.ptitles { flex: 1; }
+.pname { font-weight: 700; }
+.pkey { color: #777; font-weight: 400; }
+.psep { color: #c00; font-weight: 800; }
+.ptag { font-size: 0.6em; letter-spacing: 1.5px; font-weight: 800; color: #c00; white-space: nowrap; }
+.pmanual .ptag { display: none; }
+@media print {
+  @page { size: A4; margin: 0; }
+  body * { visibility: hidden !important; }
+  .print-page, .print-page * { visibility: visible !important; }
+  .print-page { position: absolute; left: 0; top: 0; width: 100%; min-height: 100vh; aspect-ratio: auto; box-sizing: border-box; }
+  .no-print { display: none !important; }
+}
+
+/* Performance view */
+.perf { position: relative; flex: 1; display: flex; flex-direction: column; min-height: 0; }
+/* Top-anchored so the progress bar + info never move vertically. The title group lives
+   in a FIXED-HEIGHT box (centered within), so a long/short title can't shift the bar. */
+.perf-hero { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; text-align: center; gap: clamp(12px, 2.5vh, 28px); padding: clamp(16px, 3vh, 40px) 24px; overflow-y: auto; }
+.perf-head { width: 100%; height: clamp(200px, 38vh, 420px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; overflow: hidden; }
+.perf-body { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+/* Short screens (tablet/iPad in landscape — the remote-control case): shrink the fixed
+   title box so the bar + info always stay visible without scrolling, still at a stable Y. */
+@media (max-height: 800px) {
+  .perf-hero { padding: 12px 20px; gap: 12px; }
+  .perf-head { height: clamp(150px, 30vh, 300px); }
+}
+.perf-wait { color: var(--text-muted); font-size: 20px; }
+.perf-pos { color: var(--text-muted); font-weight: 700; letter-spacing: 0.15em; font-variant-numeric: tabular-nums; }
+.perf-title { font-size: clamp(36px, 5vw, 72px); font-weight: 800; text-transform: uppercase; line-height: 0.98; word-break: break-word; }
+.perf-desc { color: var(--text-muted); font-size: 18px; margin-top: -4px; }
+.pills { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.pill { background: var(--pill-bg); color: var(--pill-text); border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 18px; font-variant-numeric: tabular-nums; }
+.pill.strong { color: var(--text); }
+/* CLICK toggle — neutral when OFF, PULL UP style (AbleJam orange) when ON. */
+.click-btn { flex: none; width: 72px; height: 72px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 14px; font-weight: 800; letter-spacing: 1px; cursor: pointer; }
+.click-btn:hover { border-color: var(--accent); }
+.click-btn .ck-label { font-size: 11px; color: var(--text-muted); }
+.click-btn .ck-state { font-size: 16px; }
+.click-btn.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.click-btn.on .ck-label { color: var(--accent); }
+.click-btn.on:hover { background: color-mix(in srgb, var(--accent) 26%, transparent); border-color: var(--accent); }
+.click-pill { font-family: inherit; cursor: pointer; border: 1px solid transparent; font-weight: 800; letter-spacing: 1px; }
+.click-pill:hover { border-color: var(--accent); }
+.click-pill.on { background: color-mix(in srgb, var(--accent) 34%, transparent); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+
+/* Metronome visual overlay on the CLICK button (setting clickIndicator: blink | bars). */
+.click-btn, .click-pill { position: relative; overflow: hidden; }
+.click-btn .ck-label, .click-btn .ck-state, .click-pill .ck-txt { position: relative; z-index: 1; }
+/* Stage transport reuses the SAME Performance CLICK pill, sized & centered to the transport row. */
+.stage-transport .click-pill { display: inline-flex; align-items: center; justify-content: center; text-align: center; padding: 4px 8px; line-height: 1.1; }
+.ck-blink { position: absolute; inset: 0; background: var(--accent); border-radius: inherit; pointer-events: none; z-index: 0; opacity: 0; animation: ck-flash 0.36s ease-out forwards; }
+.ck-blink.strong { animation-name: ck-flash-strong; }
+@keyframes ck-flash { from { opacity: 0.22; } to { opacity: 0; } }
+@keyframes ck-flash-strong { from { opacity: 0.52; } to { opacity: 0; } }
+.ck-bars { position: absolute; inset: 0; display: flex; gap: 3px; padding: 4px; border-radius: inherit; pointer-events: none; z-index: 0; }
+.ck-bar { flex: 1; border-radius: 3px; background: var(--accent); opacity: 0; transition: opacity 0.08s linear; }
+.ck-bar.dim { opacity: 0.28; }
+.ck-bar.on { opacity: 0.62; }
+.perf-sections { display: flex; gap: 14px; align-items: baseline; font-size: 22px; }
+.perf-sections .now { font-weight: 700; }
+.perf-sections .then { color: var(--text-muted); }
+.progress { width: min(900px, 92%); height: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+.progress.seekable { cursor: pointer; position: relative; }
+.progress.seekable:hover { border-color: var(--accent); }
+.stop-mark { position: absolute; top: -3px; bottom: -3px; width: 3px; margin-left: -1.5px; background: #ff3b3b; border-radius: 2px; z-index: 2; box-shadow: 0 0 4px #ff3b3b; }
+.progress-fill { height: 100%; transition: width 0.1s linear; }
+.next { margin-top: 8px; }
+.next-label { color: var(--text-muted); font-weight: 700; font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; }
+.next-title { font-size: clamp(24px, 4vw, 40px); color: var(--text-muted); display: flex; align-items: center; justify-content: center; gap: 0.25em; flex-wrap: wrap; }
+.next-title .next-key { font-size: 0.68em; color: inherit; font-weight: 700; }
+.perf-foot { color: var(--text-muted); font-variant-numeric: tabular-nums; text-align: center; }
+.perf-time { font-size: 14px; opacity: 0.85; margin-top: 2px; }
+
+/* Performance transport (large, dedicated) */
+.perf-transport { display: flex; align-items: stretch; gap: 10px; padding: 12px; background: var(--elevated); border-top: 1px solid var(--border); }
+.pt { flex: 1; height: 72px; font-size: 24px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 14px; cursor: pointer; }
+.pt:hover { border-color: var(--accent); }
+.pt { display: flex; align-items: center; justify-content: center; }
+.pt svg { display: block; }
+.pt.play { flex: 1.4; background: rgba(61, 220, 132, 0.16); color: #3ddc84; border-color: rgba(61, 220, 132, 0.5); }
+.pt.play:hover { border-color: #3ddc84; }
+.pt.play.on { background: rgba(61, 220, 132, 0.30); border-color: #3ddc84; color: #3ddc84; }
+.pt.pullup-btn { flex: 1; background: rgba(224, 30, 30, 0.16); color: #ff6b6b; border-color: rgba(224, 30, 30, 0.5); font-size: 15px; font-weight: 800; letter-spacing: 1px; }
+.pt.pullup-btn:hover { background: rgba(224, 30, 30, 0.30); border-color: #ff3b3b; color: #ff6b6b; }
+
+/* Song progress (above the setlist transport) */
+.song-progress { height: 5px; background: var(--surface); border-top: 1px solid var(--border); }
+.song-progress-fill { height: 100%; background: var(--playing); transition: width 0.1s linear; }
+
+/* Transport (setlist) */
+.transport { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--elevated); border-top: 1px solid var(--border); }
+.meta { flex: 0 1 320px; min-width: 0; overflow: hidden; text-align: center; }
+.meta-title { font-size: 23px; font-weight: 800; line-height: 1.2; display: flex; align-items: center; justify-content: center; gap: 7px; min-width: 0; }
+.meta-title .mt-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meta-title .medley-mark { padding: 0; align-self: center; font-size: 0.6em; }
+.meta-bpm { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.meta-next { font-size: 13px; font-weight: 700; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.controls { flex: 1; display: flex; gap: 8px; }
+.controls { flex: 1; display: flex; gap: 8px; }
+.ctl { flex: 1; min-width: 0; display: inline-flex; align-items: center; justify-content: center; height: 72px; font-size: 24px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 14px; cursor: pointer; }
+.ctl:hover { border-color: var(--accent); }
+.ctl svg { display: block; width: 26px; height: 26px; }
+/* Match the Performance footer's look: green Play, red PULL UP. */
+.ctl .ck-txt { font-size: 15px; font-weight: 800; letter-spacing: 1px; line-height: 1.1; text-align: center; }
+.ctl.play { flex: 1; background: rgba(61, 220, 132, 0.16); color: #3ddc84; border-color: rgba(61, 220, 132, 0.5); }
+.ctl.play:hover { border-color: #3ddc84; }
+.ctl.play.on { background: rgba(61, 220, 132, 0.30); border-color: #3ddc84; color: #3ddc84; }
+.ctl.pullup-btn { flex: 1; background: rgba(224, 30, 30, 0.16); color: #ff6b6b; border-color: rgba(224, 30, 30, 0.5); font-size: 15px; font-weight: 800; letter-spacing: 1px; }
+.ctl.pullup-btn:hover { background: rgba(224, 30, 30, 0.30); border-color: #ff3b3b; color: #ff6b6b; }
+.refresh { width: 48px; }
+
+/* ---- STAGE view (big-screen display: gobbo / HDMI / monitor) ---- */
+.stage { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(2vh * var(--stage-scale, 1)); padding: 3vh 4vw; text-align: center; overflow: hidden; }
+.app.kiosk { background: #000; }
+.app.kiosk .stage { padding: 2vh 3vw; }
+/* Mirror only the CONTENT for teleprompters — never the controls. */
+.stage.mirror .stage-main, .stage.mirror .stage-msg, .stage.mirror .stage-lyrics-wrap, .stage.mirror .stage-bar { transform: scaleX(-1); }
+/* Reference bar on the stage: line ticks + playhead across the current song. */
+.stage-bar { position: relative; flex: none; align-self: stretch; margin: 1.2vh 4vw 0.4vh; height: 30px; background: color-mix(in srgb, var(--text) 8%, transparent); border-radius: 8px; }
+.sb-tick { position: absolute; top: 4px; bottom: 4px; width: 2px; background: var(--text-muted); transform: translateX(-1px); cursor: ew-resize; }
+.sb-tick::before { content: ""; position: absolute; left: -5px; right: -5px; top: -4px; bottom: -4px; }
+.sb-tick:hover { background: var(--text); }
+.sb-tick.on { background: var(--accent); width: 3px; }
+.sb-tick.drag { background: var(--accent); width: 3px; }
+.sb-ph { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--playing); box-shadow: 0 0 6px var(--playing); transform: translateX(-1px); }
+/* Optional transport on the stage (toggle "Transport" in Configure screen). */
+/* align-self: stretch makes the bar span the full stage width (the .stage column centers its children),
+ * so the flex:1 buttons can grow into wide rectangles like Setlist/Performance instead of staying square. */
+.stage-transport { flex: none; align-self: stretch; display: flex; gap: 10px; justify-content: center; align-items: stretch; padding: 1.2vh 4vw 0.6vh; }
+/* Every Stage transport button is an IDENTICAL box: equal flex share, capped so they don't get huge on a
+ * very wide display, and the SAME explicit height (so the text pill can't stretch taller). */
+.stage-transport .pt, .stage-transport .click-pill { flex: 1 1 0; max-width: 200px; height: 60px; border-radius: 12px; }
+.stage-transport .pt svg { width: 30px; height: 30px; }
+.stage-transport .pt.play, .stage-transport .pt.pullup-btn { flex: 1 1 0; }
+.stage-transport .pt.pullup-btn { font-size: 16px; }
+.stage.mirror .stage-transport { transform: scaleX(-1); } /* keep controls un-mirrored */
+.stage-cfg-btn { position: absolute; top: 12px; right: 14px; width: 34px; height: 34px; border: 1px solid var(--border); background: rgba(0,0,0,0.3); color: var(--text-muted); border-radius: 8px; cursor: pointer; z-index: 3; }
+.stage-cfg-btn:hover { color: var(--accent); border-color: var(--accent); }
+.stage-main { flex: 1 1 auto; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(1.6vh * var(--stage-scale, 1)); }
+.stage-section { font-size: calc(3vw * var(--stage-scale, 1)); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.stage-title { font-size: calc(8vw * var(--stage-scale, 1)); font-weight: 800; line-height: 1.02; }
+.stage-key { font-size: calc(5vw * var(--stage-scale, 1)); font-weight: 700; opacity: 0.92; }
+.stage-remaining { font-size: calc(9vw * var(--stage-scale, 1)); font-weight: 800; font-variant-numeric: tabular-nums; }
+.stage-next { font-size: calc(2.6vw * var(--stage-scale, 1)); color: var(--text-muted); }
+.stage-next b { color: var(--text); }
+.stage-msg { font-size: calc(5vw * var(--stage-scale, 1)); font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: 0.04em; padding: 0.35em 0.6em; border-top: 3px solid var(--accent); border-bottom: 3px solid var(--accent); animation: stagepulse 1.2s ease-in-out infinite; }
+@keyframes stagepulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+.stage-wait { font-size: 4vw; color: var(--text-muted); }
+
+/* Lyrics teleprompter: a vertical scroll with the active line centred and highlighted. */
+.stage-lyrics-wrap { display: flex; flex-direction: column; width: 100%; flex: 1 1 auto; min-height: 0; }
+.stage-ly-head { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: calc(1.4vw * var(--stage-scale, 1)); padding: 2.6vh 0 1.8vh; flex: none; border-bottom: 1px solid var(--border); }
+.lh-section { font-size: calc(1.6vw * var(--stage-scale, 1)); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.lh-title { font-size: calc(2.2vw * var(--stage-scale, 1)); font-weight: 800; }
+.lh-key { font-size: calc(1.8vw * var(--stage-scale, 1)); font-weight: 700; color: var(--text-muted); }
+.lh-rem { font-size: calc(2vw * var(--stage-scale, 1)); font-weight: 800; font-variant-numeric: tabular-nums; }
+.stage-lyrics { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: calc(1vh * var(--stage-scale, 1)); padding: 32vh 4vw; scrollbar-width: none; }
+.stage-lyrics::-webkit-scrollbar { display: none; }
+.ly-line { font-size: calc(4.4vw * var(--stage-scale, 1)); font-weight: 700; line-height: 1.15; color: var(--text-muted); opacity: 0.4; text-align: center; transition: opacity 0.25s, color 0.25s, transform 0.25s; }
+.ly-line.past { opacity: 0.25; }
+.ly-line.active { color: var(--text); opacity: 1; transform: scale(1.08); }
+/* Inline lyric formatting: chords sit above their syllable (ChordPro). */
+.lyr-chorded { display: inline; }
+.lyr-chunk { display: inline-flex; flex-direction: column; align-items: flex-start; vertical-align: bottom; }
+.lyr-chord { font-size: 0.5em; font-weight: 800; color: var(--accent); line-height: 1.1; height: 1.1em; white-space: nowrap; }
+.lyr-syl { white-space: pre-wrap; }
+.stage-ly-next { flex: none; display: flex; align-items: center; justify-content: center; min-height: 5vh; padding: 0.8vh 0; font-size: calc(1.8vw * var(--stage-scale, 1)); color: var(--text-muted); border-top: 1px solid var(--border); }
+.stage-ly-next b { color: var(--text); }
+
+/* ---- Lyrics editor ---- */
+.lyrics-editor { width: 760px; max-width: 94vw; max-height: 88vh; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; display: flex; flex-direction: column; overflow: hidden; }
+.le-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.le-title { font-weight: 800; font-size: 16px; }
+.le-song { font-size: 13px; font-weight: 700; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); padding: 3px 10px; border-radius: 999px; }
+.le-badge { font-size: 10px; color: var(--accent); line-height: 1; cursor: default; }
+.le-spacer { flex: 1; }
+.le-btn { padding: 7px 12px; border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 8px; cursor: pointer; }
+.le-btn:hover { border-color: var(--accent); color: var(--accent); }
+.le-bar { position: relative; height: 30px; margin: 12px 16px 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.le-tick { position: absolute; top: 4px; bottom: 4px; width: 2px; background: var(--text-muted); transform: translateX(-1px); cursor: ew-resize; }
+.le-tick::before { content: ""; position: absolute; left: -5px; right: -5px; top: -4px; bottom: -4px; }
+.le-tick:hover { background: var(--text); }
+.le-tick.sel { background: var(--text); width: 3px; }
+.le-tick.next { background: var(--accent); width: 3px; }
+.le-tick.drag { background: var(--accent); width: 3px; }
+.le-playhead { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--playing); box-shadow: 0 0 6px var(--playing); transform: translateX(-1px); }
+.le-iconbtn { display: inline-flex; align-items: center; gap: 6px; }
+.rec-dot { width: 11px; height: 11px; border-radius: 50%; background: #ff5252; flex: none; }
+.le-play, .le-recbtn, .le-next { padding: 8px 14px; border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 8px; cursor: pointer; font-weight: 700; }
+.le-play:hover { border-color: var(--accent); color: var(--accent); }
+.le-recbtn { color: #ff6b6b; border-color: rgba(224,30,30,0.5); }
+.le-recbtn:hover:not(:disabled) { background: rgba(224,30,30,0.16); }
+.le-recbtn:disabled { opacity: 0.35; cursor: default; }
+.le-next { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); font-size: 15px; }
+.le-reccount { font-variant-numeric: tabular-nums; font-weight: 800; }
+.le-hint { font-size: 12px; color: var(--text-muted); width: 100%; }
+.le-lines { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 16px 16px; display: flex; flex-direction: column; gap: 6px; }
+/* Keep the header / time bar / typography toolbar a FIXED size — only the lines list grows & scrolls. */
+.le-head, .le-bar { flex: none; }
+.le-empty { color: var(--text-muted); padding: 12px 0; }
+.le-line { display: flex; align-items: center; gap: 8px; padding: 4px; border-radius: 8px; }
+.le-line.sel { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.le-line.next { box-shadow: inset 3px 0 0 0 var(--accent); }
+.le-line.dragging { opacity: 0.45; }
+.le-line.dragover { box-shadow: inset 0 2px 0 0 var(--accent); }
+.le-grip { flex: none; width: 18px; text-align: center; color: var(--text-muted); cursor: grab; font-size: 13px; user-select: none; }
+.le-grip:active { cursor: grabbing; }
+.le-grip:hover { color: var(--text); }
+.le-num { width: 22px; text-align: right; color: var(--text-muted); font-variant-numeric: tabular-nums; font-size: 13px; }
+.le-text { flex: 1; padding: 8px 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 8px; }
+.le-text:focus { outline: none; border-color: var(--accent); }
+.le-time { min-width: 56px; padding: 8px 8px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); border-radius: 8px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.le-time:hover { border-color: var(--accent); color: var(--accent); }
+.le-rowbtn { width: 28px; height: 28px; flex: none; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 0; color: var(--text-muted); border-radius: 6px; cursor: pointer; }
+.le-rowbtn:hover:not(:disabled) { color: var(--accent); }
+.le-rowbtn:disabled { opacity: 0.25; cursor: default; }
+.le-rowdel:hover:not(:disabled) { color: #ff6b6b; }
+.le-lines-foot { display: flex; gap: 8px; margin-top: 6px; }
+.le-add { flex: 1; padding: 8px; border: 1px dashed var(--border); background: transparent; color: var(--text-muted); border-radius: 8px; cursor: pointer; }
+.le-add:hover { border-color: var(--accent); color: var(--accent); }
+.le-clear { padding: 8px 14px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); border-radius: 8px; cursor: pointer; }
+.le-clear:hover:not(:disabled) { color: #ff6b6b; border-color: rgba(224,30,30,0.4); }
+.le-clear:disabled { opacity: 0.35; cursor: default; }
+/* Typography toolbar (reflects + edits the SELECTED verse's line style; also holds play/record). */
+.le-typo { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--border); }
+.le-tbtn { width: 30px; height: 30px; flex: none; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 1px solid var(--border); color: var(--text); border-radius: 8px; cursor: pointer; font-size: 14px; }
+.le-tbtn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.le-tbtn.on { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.le-tbtn:disabled { opacity: 0.35; cursor: default; }
+.le-tcase { font-size: 12px; font-weight: 800; letter-spacing: -0.3px; }
+.le-tsize { height: 30px; padding: 0 8px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.le-tsize:disabled { opacity: 0.35; }
+.le-typo-sp { flex: 1 1 12px; min-width: 12px; }
+.le-typo-actions { display: inline-flex; align-items: center; gap: 8px; flex: none; }
+.stage-offset-val { font-variant-numeric: tabular-nums; min-width: 54px; color: var(--text-muted); }
+
+/* Lyrics import panel */
+.lyrics-import { width: 620px; max-width: 94vw; max-height: 88vh; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; display: flex; flex-direction: column; overflow: hidden; }
+.li-hint { padding: 10px 16px; color: var(--text-muted); font-size: 13px; line-height: 1.4; }
+.li-text { margin: 0 16px; min-height: 200px; resize: vertical; padding: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 8px; font-family: inherit; font-size: 14px; line-height: 1.5; }
+.li-text:focus { outline: none; border-color: var(--accent); }
+.li-preview { margin: 10px 16px 0; max-height: 160px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
+.li-row { font-size: 13px; color: var(--text); }
+.li-row.miss { color: #d66; }
+.li-foot { display: flex; align-items: center; gap: 10px; padding: 12px 16px; }
+.li-foot .le-hint { flex: 1; }
+
+/* Stage per-device config drawer */
+.stage-config { position: absolute; top: 54px; right: 14px; width: 320px; max-width: 86vw; background: var(--elevated); border: 1px solid var(--border); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; z-index: 4; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+.stage-config-head { font-weight: 700; }
+.stage-config-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.stage-config .chip { padding: 7px 10px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); border-radius: 8px; cursor: pointer; font-size: 13px; }
+.stage-config .chip.on { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+/* Block toggles: a uniform symmetric grid (same 8px corner as the topbar chips). */
+.stage-blocks { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.stage-blocks .chip { width: 100%; text-align: center; }
+/* Sliders: a 3-column grid so the two rows (size, offset) line up perfectly. */
+.stage-sliders { display: grid; grid-template-columns: auto 1fr auto; gap: 9px 10px; align-items: center; }
+.stage-sliders input[type="range"] { width: 100%; }
+.ss-lbl { font-size: 13px; color: var(--text-muted); }
+
+/* App-styled range slider: dark rounded track, accent fill (driven by inline --p), round accent thumb. */
+.ui-range { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 999px; cursor: pointer;
+  background: linear-gradient(to right, var(--accent) 0 var(--p, 50%), var(--border) var(--p, 50%) 100%); }
+.ui-range:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 3px; }
+.ui-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--accent); border: 2px solid var(--surface); box-shadow: 0 1px 4px rgba(0,0,0,0.55); transition: transform 0.08s ease; }
+.ui-range::-webkit-slider-thumb:hover { transform: scale(1.12); }
+.ui-range:active::-webkit-slider-thumb { transform: scale(1.12); }
+.ui-range::-moz-range-track { background: transparent; }
+.ui-range::-moz-range-thumb { width: 16px; height: 16px; border: 2px solid var(--surface); border-radius: 50%;
+  background: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,0.55); }
+.ss-end { justify-self: end; }
+.ss-val { font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; min-width: 50px; text-align: right; }
+.stage-config-close { margin-top: 2px; padding: 8px; border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.stage-config-close:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Operator cue bar (Performance footer + Stage config) */
+.cue-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--border); background: var(--surface); }
+.stage-config .cue-bar { border: 1px solid var(--border); border-radius: 8px; }
+.cue-tag { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.cue-input { flex: 1; min-width: 140px; padding: 7px 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 8px; }
+.cue-input:focus { outline: none; border-color: var(--accent); }
+.cue-send, .cue-clear { padding: 7px 12px; border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 8px; cursor: pointer; }
+.cue-send:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.cue-send:disabled, .cue-clear:disabled { opacity: 0.35; cursor: default; }
+.cue-presets { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
+.cue-presets button { padding: 4px 9px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); border-radius: 999px; cursor: pointer; font-size: 12px; }
+.cue-presets button:hover { border-color: var(--accent); color: var(--accent); }
