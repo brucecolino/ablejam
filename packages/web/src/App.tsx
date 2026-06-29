@@ -10,6 +10,8 @@ type TFn = (key: string, params?: Record<string, string | number>) => string;
 
 declare const __APP_VERSION__: string; // injected by Vite from the desktop package version
 const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
+const SITE_URL = "https://ablejam.com"; // also ablejam.it
+const SITE_LABEL = "ablejam.com";
 
 // Interface language flows through context: the App sets it from settings, every component
 // reads it with useT() and translates against the shared dictionary.
@@ -664,7 +666,10 @@ function InfoPanel({ onClose }: { onClose: () => void }) {
           <section className="info-section info-contact">
             <h4>{tr("info.contact.h")}</h4>
             <p>{tr("info.contact.b")}</p>
-            <a className="info-mail" href="mailto:support@ablejam.com">support@ablejam.com</a>
+            <div className="info-links">
+              <a className="info-mail" href="mailto:support@ablejam.com">support@ablejam.com</a>
+              <a className="info-mail info-web" href={SITE_URL} target="_blank" rel="noopener noreferrer">{SITE_LABEL}</a>
+            </div>
           </section>
         </div>
         <div className="settings-version">AbleJam v{APP_VERSION}</div>
@@ -1046,6 +1051,7 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
           <UpdatesCard />
         </div>
         <div className="settings-version">AbleJam v{APP_VERSION}</div>
+        <a className="settings-web" href={SITE_URL} target="_blank" rel="noopener noreferrer">{SITE_LABEL}</a>
         <div className="settings-product">{productParts[0]}<span className="apice">APICE</span>{productParts[1]}</div>
       </div>
     </div>
