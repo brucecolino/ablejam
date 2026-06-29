@@ -13,6 +13,11 @@ export const PORTS = {
   http: 3700,
 } as const;
 
+/** Master switch for the licensing/activation gate. While FALSE the app never locks to demo
+ * and the Activation settings card is hidden — the verification code + UI ship dormant. Flip to
+ * TRUE only once the store is live (so buyers can actually get a key). */
+export const LICENSING_ENABLED = false;
+
 export const ADDR = {
   hello: "/ablejam/hello",
   setlist: "/ablejam/setlist",

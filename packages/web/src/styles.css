@@ -322,6 +322,8 @@ input[type="checkbox"]:focus-visible { outline: 2px solid color-mix(in srgb, var
 .stop-diag-toggle input { accent-color: var(--accent); }
 .stop-diag-list { margin-top: 6px; color: var(--accent); max-height: 200px; overflow-y: auto; }
 .lan-url { font-size: 18px; font-weight: 700; color: var(--accent); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin: 6px 0; user-select: all; text-align: center; letter-spacing: 0.5px; }
+.lan-qr { display: flex; justify-content: center; margin: 12px 0 8px; }
+.lan-qr > svg { background: #fff; padding: 12px; border-radius: 12px; display: block; box-shadow: 0 6px 24px -8px rgba(0,0,0,0.5); }
 .shortcut-btn { min-width: 120px; padding: 7px 12px; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
 .shortcut-btn:hover { border-color: var(--accent); }
 .shortcut-btn.listening { border-color: var(--accent); color: var(--accent); }

@@ -14,6 +14,7 @@ import { readAbleton } from "./ableton";
 import {
   ADDR,
   PORTS,
+  LICENSING_ENABLED,
   bestMatch,
   buildSetlist,
   locateCurrent,
@@ -195,7 +196,8 @@ function licenseInfo(): { licensed: boolean; email: string } {
  * Ableton. A licensed app honours the user's own demo toggle. Called at boot and whenever the
  * license or the demo toggle changes. */
 function applyDemo(): void {
-  bridge.setDemo(!licenseInfo().licensed || settings.demoMode);
+  // When licensing is OFF (current), only the user's own demo toggle drives demo mode.
+  bridge.setDemo((LICENSING_ENABLED && !licenseInfo().licensed) || settings.demoMode);
 }
 
 function snapshot(): AppState {

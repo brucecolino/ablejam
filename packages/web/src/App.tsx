@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { translate, bestMatch, type AppState, type ClientCommand, type ImportResult, type Lang, type LyricLine, type Settings, type SetlistEntry, type ShortcutMap, type Song } from "@ablejam/shared";
+import { translate, bestMatch, LICENSING_ENABLED, type AppState, type ClientCommand, type ImportResult, type Lang, type LyricLine, type Settings, type SetlistEntry, type ShortcutMap, type Song } from "@ablejam/shared";
+import { QRCodeSVG } from "qrcode.react";
 import { useAbleJam, type Toast, type Beat } from "./ws";
 import { formatDuration, formatClock, colorOf } from "./format";
 
@@ -748,6 +749,7 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
   const productParts = tr("settings.product").split("APICE"); // APICE rendered as a styled brand span
   const [showStopDetails, setShowStopDetails] = useState(false);
   const [licenseInput, setLicenseInput] = useState("");
+  const tabletUrl = state.lanIp ? `http://${state.lanIp}:${typeof location !== "undefined" ? location.port || "3700" : "3700"}` : "";
   const setBool = (key: keyof Settings, v: boolean) => send({ type: "command", command: "setSetting", key, value: v });
   // Lyrics backup: download the whole project's lyrics (text + timing) to a JSON file, and
   // restore it later (after an update, or on another computer) — survives data-dir changes.
@@ -792,6 +794,7 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
           <button className="settings-close" onClick={onClose} title={tr("common.close")}>✕</button>
         </div>
         <div className="settings-grid">
+          {LICENSING_ENABLED && (
           <section className="settings-card">
             <div className="settings-section">{tr("settings.section.license")}</div>
             <label className="setting">
@@ -827,6 +830,7 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
               </>
             )}
           </section>
+          )}
           <section className="settings-card">
             <div className="settings-section">{tr("settings.section.playback")}</div>
             {row("autoplay", "set.autoplay.label", "set.autoplay.desc")}
@@ -1062,9 +1066,17 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
           <section className="settings-card">
             <div className="settings-section">{tr("settings.section.tablet")}</div>
             <div className="settings-desc-small">{tr("tablet.desc")}</div>
-            {state.lanIp
-              ? <div className="lan-url">http://{state.lanIp}:{typeof location !== "undefined" ? (location.port || "3700") : "3700"}</div>
-              : <div className="settings-desc-small">{tr("tablet.noIp")}</div>}
+            {state.lanIp ? (
+              <>
+                <div className="lan-url">{tabletUrl}</div>
+                <div className="lan-qr">
+                  <QRCodeSVG value={tabletUrl} size={150} level="M" marginSize={2} />
+                </div>
+                <div className="settings-desc-small">{tr("tablet.qr")}</div>
+              </>
+            ) : (
+              <div className="settings-desc-small">{tr("tablet.noIp")}</div>
+            )}
           </section>
 
           <section className="settings-card">

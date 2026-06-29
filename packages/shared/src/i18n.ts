@@ -317,6 +317,7 @@ const it: Dict = {
   "settings.section.tablet": "Controllo da tablet / iPad",
   "tablet.desc": "Collega il tablet alla STESSA rete WiFi del computer, poi apri questo indirizzo nel suo browser. La UI è identica e controlla AbleJam in tempo reale.",
   "tablet.noIp": "Indirizzo di rete non rilevato (controlla la connessione del computer).",
+  "tablet.qr": "Inquadra il QR con la fotocamera per aprire AbleJam su un altro dispositivo (stessa Wi-Fi).",
   // settings — language
   "settings.section.language": "Lingua / Language",
   "language.desc": "Scegli la lingua dell'interfaccia.",
@@ -756,6 +757,7 @@ const en: Dict = {
   "settings.section.tablet": "Tablet / iPad control",
   "tablet.desc": "Connect the tablet to the SAME WiFi network as the computer, then open this address in its browser. The UI is identical and controls AbleJam in real time.",
   "tablet.noIp": "Network address not detected (check the computer's connection).",
+  "tablet.qr": "Scan the QR with the camera to open AbleJam on another device (same Wi-Fi).",
   // settings — language
   "settings.section.language": "Lingua / Language",
   "language.desc": "Choose the interface language.",
@@ -1177,6 +1179,7 @@ const es: Dict = {
   "settings.section.tablet": "Control por tableta / iPad",
   "tablet.desc": "Conecta la tableta a la MISMA red WiFi que el ordenador, luego abre esta dirección en su navegador. La interfaz es idéntica y controla AbleJam en tiempo real.",
   "tablet.noIp": "Dirección de red no detectada (revisa la conexión del ordenador).",
+  "tablet.qr": "Escanea el QR con la cámara para abrir AbleJam en otro dispositivo (misma Wi-Fi).",
   "settings.section.language": "Lingua / Idioma",
   "language.desc": "Elige el idioma de la interfaz.",
   "settings.bridge.connected": "v{n}",
@@ -1589,6 +1592,7 @@ const fr: Dict = {
   "settings.section.tablet": "Contrôle tablette / iPad",
   "tablet.desc": "Connectez la tablette au MÊME réseau WiFi que l'ordinateur, puis ouvrez cette adresse dans son navigateur. L'interface est identique et contrôle AbleJam en temps réel.",
   "tablet.noIp": "Adresse réseau non détectée (vérifiez la connexion de l'ordinateur).",
+  "tablet.qr": "Scannez le QR avec l'appareil photo pour ouvrir AbleJam sur un autre appareil (même Wi-Fi).",
   "settings.section.language": "Lingua / Langue",
   "language.desc": "Choisissez la langue de l'interface.",
   "settings.bridge.connected": "v{n}",
