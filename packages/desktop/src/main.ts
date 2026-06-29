@@ -24,6 +24,11 @@ if (!app.requestSingleInstanceLock()) {
   process.exit(0);
 }
 
+// Windows taskbar identity: bind the running process to the installed app's AppUserModelID
+// (matches electron-builder's appId). Without this Windows treats the Electron host as a
+// generic app and shows its default icon in the taskbar instead of AbleJam's.
+if (process.platform === "win32") app.setAppUserModelId("com.ablejam.app");
+
 let mainWin: BrowserWindow | null = null;
 let splash: BrowserWindow | null = null;
 let hostHandle: { ready: Promise<void>; close: () => Promise<void> } | null = null;

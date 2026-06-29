@@ -65,10 +65,18 @@ function pickIndex(list: string[], preferred: string): number {
   return list.findIndex((n) => !/wavetable|microsoft gs/i.test(n)); // -1 if only GM-like
 }
 
+// macOS (CoreMIDI) and Linux (ALSA) can OPEN A VIRTUAL PORT — AbleJam exposes its own
+// "AbleJam" MIDI source that Ableton sees directly, so the user needs NO loopMIDI/IAC setup.
+// The Windows MultiMedia MIDI API has no virtual-port support, which is exactly why loopMIDI
+// is required there.
+const CAN_VIRTUAL = process.platform === "darwin" || process.platform === "linux";
+const VIRTUAL_NAME = "AbleJam";
+
 // Keep the chosen output OPEN and reuse it. Re-opening a Windows MIDI port on every
 // note is what made the Panic fire only intermittently (open/close churn + the 200 ms
 // close racing the next note). We resolve the port by name each call (cheap, no open)
-// and only (re)open when the selection actually changes.
+// and only (re)open when the selection actually changes. `virtual` marks the port we created
+// ourselves (openVirtualPort), so teardown closes it the same way.
 let openOut: { name: string; preferred: string; out: any } | null = null;
 
 function ensureOpen(m: any, preferred: string): { name: string; out: any } | null {
@@ -76,13 +84,30 @@ function ensureOpen(m: any, preferred: string): { name: string; out: any } | nul
   const scan = new m.Output();
   const list = names(scan);
   try { scan.closePort?.(); } catch { /* not opened */ }
-  if (list.length === 0) return null;
-  const idx = pickIndex(list, preferred || "");
-  if (idx < 0) return null;
+
+  let idx = -1;
+  let virtual = false;
+  if (preferred) {
+    idx = pickIndex(list, preferred); // explicit name wins (exact, then substring)
+  } else if (CAN_VIRTUAL) {
+    // mac/linux "Automatic": use a loopback/IAC port if the user already made one, otherwise
+    // create our own virtual "AbleJam" source — never silently fall back to random hardware.
+    idx = list.findIndex((n) => /loop|virtual|iac|ablejam/i.test(n));
+    if (idx < 0) virtual = true;
+  } else {
+    idx = pickIndex(list, ""); // Windows "Automatic": loopMIDI, else first non-GM (never the GM synth)
+  }
+  if (!virtual && idx < 0) return null;
+
   if (openOut) { try { openOut.out.closePort(); } catch { /* ignore */ } openOut = null; }
   const out = new m.Output();
-  out.openPort(idx);
-  openOut = { name: list[idx]!, preferred, out };
+  if (virtual) {
+    out.openVirtualPort(VIRTUAL_NAME); // CoreMIDI/ALSA only (guarded by CAN_VIRTUAL)
+    openOut = { name: `${VIRTUAL_NAME} (virtual)`, preferred, out };
+  } else {
+    out.openPort(idx);
+    openOut = { name: list[idx]!, preferred, out };
+  }
   return openOut;
 }
 
