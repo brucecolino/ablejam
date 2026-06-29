@@ -1,0 +1,88 @@
+// "What's new" data + helpers. The modal (in App.tsx) shows the notes for every version newer
+// than the one the user last saw, so a skipped update still surfaces everything that changed.
+import type { Lang } from "@ablejam/shared";
+
+export interface ChangelogEntry {
+  version: string;
+  notes: Partial<Record<Lang, string[]>>;
+}
+
+// Newest first. Keep the top entry's version in sync with the desktop package version.
+export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.1.13",
+    notes: {
+      it: [
+        'Nuova schermata "Novità": dopo ogni aggiornamento vedi subito cosa è cambiato.',
+        "Attivazione della versione completa con la tua licenza (Impostazioni → Attivazione).",
+        "Correzioni e migliorie di stabilità.",
+      ],
+      en: [
+        'New "What\'s new" screen: after each update you instantly see what changed.',
+        "Full-version activation with your license (Settings → Activation).",
+        "Stability fixes and improvements.",
+      ],
+    },
+  },
+  {
+    version: "0.1.12",
+    notes: {
+      it: [
+        "Pannello connessione: copia l'IP, QR code per collegare tablet e telefoni, salva il QR come immagine.",
+        "Accesso da tutta la rete WiFi: chiunque sulla stessa rete può controllare AbleJam.",
+      ],
+      en: [
+        "Connection panel: copy the IP, QR code to connect tablets and phones, save the QR as an image.",
+        "Whole-network access: anyone on the same WiFi can control AbleJam.",
+      ],
+    },
+  },
+  {
+    version: "0.1.11",
+    notes: {
+      it: ["QR code per l'accesso via rete locale.", "Migliorie interne."],
+      en: ["QR code for local-network access.", "Internal improvements."],
+    },
+  },
+  {
+    version: "0.1.10",
+    notes: {
+      it: ["Icona nella barra delle applicazioni di Windows.", "Nota MIDI di sicurezza (panic) su macOS."],
+      en: ["Windows taskbar icon.", "macOS safety (panic) MIDI note."],
+    },
+  },
+];
+
+export const WHATS_NEW_TITLE: Record<Lang, string> = {
+  it: "Novità di questa versione",
+  en: "What's new in this version",
+  es: "Novedades de esta versión",
+  fr: "Nouveautés de cette version",
+};
+
+export const WHATS_NEW_CTA: Record<Lang, string> = {
+  it: "Continua",
+  en: "Got it",
+  es: "Entendido",
+  fr: "Continuer",
+};
+
+/** Localized notes for one entry, falling back to EN then IT. */
+export function notesFor(entry: ChangelogEntry, lang: Lang): string[] {
+  return entry.notes[lang] ?? entry.notes.en ?? entry.notes.it ?? [];
+}
+
+function cmp(a: string, b: string): number {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d;
+  }
+  return 0;
+}
+
+/** Entries newer than `since` (exclusive) up to and including `current`, newest first. */
+export function entriesSince(since: string, current: string): ChangelogEntry[] {
+  return CHANGELOG.filter((e) => cmp(e.version, since) > 0 && cmp(e.version, current) <= 0);
+}

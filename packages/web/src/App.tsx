@@ -3,6 +3,7 @@ import { translate, bestMatch, LICENSING_ENABLED, type AppState, type ClientComm
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 import { useAbleJam, type Toast, type Beat } from "./ws";
 import { formatDuration, formatClock, colorOf } from "./format";
+import { entriesSince, notesFor, WHATS_NEW_TITLE, WHATS_NEW_CTA, type ChangelogEntry } from "./changelog";
 
 type View = "setlist" | "performance" | "stage";
 type Panel = "none" | "import" | "load" | "print";
@@ -238,6 +239,22 @@ export function App() {
   const [panel, setPanel] = useState<Panel>("none");
   const [showSettings, setShowSettings] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [whatsNew, setWhatsNew] = useState<ChangelogEntry[] | null>(null);
+  // Show "what's new" once after an update: compare the last-seen version (per device) with the
+  // current one. First run (no stored version) records it silently — no modal on a fresh install.
+  useEffect(() => {
+    const KEY = "ablejam.lastSeenVersion";
+    try {
+      const last = localStorage.getItem(KEY);
+      localStorage.setItem(KEY, APP_VERSION);
+      if (last && last !== APP_VERSION) {
+        const fresh = entriesSince(last, APP_VERSION);
+        if (fresh.length) setWhatsNew(fresh);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
   const { bridgeConnected } = state;
   const lang = state.settings.language;
   const tr: TFn = (key, params) => translate(lang, key, params);
@@ -337,6 +354,7 @@ export function App() {
       {panel === "print" && <PrintView state={state} onClose={() => setPanel("none")} />}
       {showSettings && <SettingsPanel state={state} send={send} onClose={() => setShowSettings(false)} />}
       {showInfo && <InfoPanel onClose={() => setShowInfo(false)} />}
+      {whatsNew && <WhatsNewModal entries={whatsNew} onClose={() => setWhatsNew(null)} />}
       <Toasts toasts={toasts} />
     </div>
     </BeatCtx.Provider>
@@ -696,6 +714,33 @@ function InfoPanel({ onClose }: { onClose: () => void }) {
           </section>
         </div>
         <div className="settings-version">AbleJam v{APP_VERSION}</div>
+      </div>
+    </div>
+  );
+}
+
+function WhatsNewModal({ entries, onClose }: { entries: ChangelogEntry[]; onClose: () => void }) {
+  const { lang, tr } = useT();
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal info-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="settings-head">
+          <h3>{WHATS_NEW_TITLE[lang]}</h3>
+          <button className="settings-close" onClick={onClose} title={tr("common.close")}>✕</button>
+        </div>
+        <div className="info-body">
+          {entries.map((e) => (
+            <section key={e.version} className="info-section">
+              <h4>v{e.version}</h4>
+              {notesFor(e, lang).map((n, i) => (
+                <p key={i}>• {n}</p>
+              ))}
+            </section>
+          ))}
+        </div>
+        <div className="modal-actions">
+          <button className="act on" onClick={onClose}>{WHATS_NEW_CTA[lang]}</button>
+        </div>
       </div>
     </div>
   );
