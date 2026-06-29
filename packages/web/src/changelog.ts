@@ -10,6 +10,13 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.16",
+    notes: {
+      it: ["Risolta la schermata di avvio trasparente su Windows: ora il logo di caricamento si vede correttamente."],
+      en: ["Fixed the transparent splash screen on Windows: the loading logo now shows correctly."],
+    },
+  },
+  {
     version: "0.1.15",
     notes: {
       it: [

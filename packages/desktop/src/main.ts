@@ -133,9 +133,12 @@ function waitForPort(port: number, timeoutMs: number): Promise<void> {
 function createSplash(): void {
   splash = new BrowserWindow({
     width: 420, height: 280, frame: false, resizable: false, center: true,
-    backgroundColor: "#0b0b0c", show: true, skipTaskbar: false, title: "AbleJam",
+    backgroundColor: "#0b0b0c", show: false, skipTaskbar: false, title: "AbleJam",
     webPreferences: { contextIsolation: true, sandbox: true },
   });
+  // Show only once the splash HTML has painted. On Windows a frameless window shown BEFORE its
+  // first paint renders transparent (you see the desktop through it) — that was the bug.
+  splash.once("ready-to-show", () => splash?.show());
   void splash.loadFile(path.join(__dirname, "splash.html"));
   splash.on("closed", () => { splash = null; });
 }
