@@ -672,6 +672,59 @@ function InfoPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
+interface UpdateCheck { current: string; latest: string; available: boolean; notes: string; assetName: string | null; platform: string; noAsset: boolean }
+interface AbleJamBridge {
+  version: () => Promise<string>;
+  installBridge?: () => Promise<void>;
+  checkUpdate?: () => Promise<UpdateCheck>;
+  installUpdate?: () => Promise<{ ok: boolean; error?: string }>;
+}
+function getBridge(): AbleJamBridge | undefined {
+  return typeof window !== "undefined" ? (window as unknown as { ablejam?: AbleJamBridge }).ablejam : undefined;
+}
+
+/** Settings → Updates. Only rendered inside the desktop app (the preload exposes
+ * window.ablejam); on a phone/tablet browser there's no preload, so this is hidden. */
+function UpdatesCard() {
+  const { tr } = useT();
+  const api = getBridge();
+  const [ver, setVer] = useState("");
+  const [info, setInfo] = useState<UpdateCheck | null>(null);
+  const [busy, setBusy] = useState<"" | "check" | "install">("");
+  const [msg, setMsg] = useState("");
+  useEffect(() => { api?.version().then(setVer).catch(() => {}); }, [api]);
+  if (!api?.checkUpdate) return null;
+  const check = async () => {
+    setBusy("check"); setMsg("");
+    try { setInfo(await api.checkUpdate!()); } catch { setMsg(tr("update.error")); }
+    setBusy("");
+  };
+  const install = async () => {
+    setBusy("install"); setMsg("");
+    try { const r = await api.installUpdate!(); if (!r?.ok) setMsg(tr("update.error")); } catch { setMsg(tr("update.error")); }
+    setBusy("");
+  };
+  return (
+    <section className="settings-card">
+      <div className="settings-section">{tr("settings.section.updates")}</div>
+      <div className="settings-desc-small">{tr("update.current", { v: ver || info?.current || "—" })}</div>
+      <div className="stop-diag-head">
+        <span style={{ fontWeight: 700, color: info?.available ? "var(--accent)" : "var(--text-muted)" }}>
+          {!info ? "" : info.available ? tr("update.available", { v: info.latest }) : tr("update.uptodate", { v: info.latest })}
+        </span>
+        <button className="settings-btn" disabled={busy !== ""} onClick={check}>{busy === "check" ? tr("update.checking") : tr("update.check")}</button>
+      </div>
+      {info?.available && (
+        <>
+          <button className="settings-btn" disabled={busy !== ""} onClick={install}>⬇ {busy === "install" ? tr("update.installing") : tr("update.install")}</button>
+          {info.platform === "darwin" && <div className="settings-desc-small">{tr("update.macNote")}</div>}
+        </>
+      )}
+      {msg && <div className="settings-desc-small" style={{ color: "#d66" }}>{msg}</div>}
+    </section>
+  );
+}
+
 function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; onClose: () => void }) {
   const { tr } = useT();
   const s = state.settings;
@@ -721,6 +774,7 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
           <button className="settings-close" onClick={onClose} title={tr("common.close")}>✕</button>
         </div>
         <div className="settings-grid">
+          <UpdatesCard />
           <section className="settings-card">
             <div className="settings-section">{tr("settings.section.language")}</div>
             <div className="settings-desc-small">{tr("language.desc")}</div>

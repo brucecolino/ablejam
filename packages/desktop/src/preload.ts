@@ -8,4 +8,6 @@ import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld("ablejam", {
   version: (): Promise<string> => ipcRenderer.invoke("ablejam:version"),
   installBridge: (): Promise<void> => ipcRenderer.invoke("ablejam:install-bridge"),
+  checkUpdate: (): Promise<unknown> => ipcRenderer.invoke("ablejam:update-check"),
+  installUpdate: (): Promise<unknown> => ipcRenderer.invoke("ablejam:update-install"),
 });

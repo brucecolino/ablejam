@@ -13,6 +13,7 @@ import net from "node:net";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { installBridge, openDataFolder, lanUrl } from "./install";
+import { checkForUpdate, downloadAndInstall } from "./update";
 
 const HOST_PORT = 3700;
 
@@ -156,6 +157,8 @@ async function boot(): Promise<void> {
   // ipc seams (reserved for a future in-UI "Install bridge" button).
   ipcMain.handle("ablejam:version", () => app.getVersion());
   ipcMain.handle("ablejam:install-bridge", () => { installBridge(resourcesRoot); });
+  ipcMain.handle("ablejam:update-check", () => checkForUpdate());
+  ipcMain.handle("ablejam:update-install", () => downloadAndInstall());
 
   // Dynamic import of the ESM host bundle from this CJS main (computed specifier keeps it a
   // native import(), so Node loads the .mjs correctly).
