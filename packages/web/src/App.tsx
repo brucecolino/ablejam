@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { translate, bestMatch, LICENSING_ENABLED, type AppState, type ClientCommand, type ImportResult, type Lang, type LyricLine, type Settings, type SetlistEntry, type ShortcutMap, type Song } from "@ablejam/shared";
-import { QRCodeSVG } from "qrcode.react";
+import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 import { useAbleJam, type Toast, type Beat } from "./ws";
 import { formatDuration, formatClock, colorOf } from "./format";
 
@@ -171,18 +171,40 @@ function RemoteChip({ ip }: { ip: string }) {
   const { tr } = useT();
   const port = typeof location !== "undefined" ? (location.port || "3700") : "3700";
   const url = `http://${ip}:${port}`;
-  const [revealed, setRevealed] = useState(false);
+  const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  // Hidden by default to keep the bar tidy. The main button toggles the address on/off; when
-  // shown, a separate copy icon sits beside it.
-  const copy = () => { try { navigator.clipboard?.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1200); } catch { /* ignore */ } };
+  const copy = () => { try { navigator.clipboard?.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1400); } catch { /* ignore */ } };
+  const saveQr = () => {
+    const canvas = document.querySelector(".conn-qr canvas") as HTMLCanvasElement | null;
+    if (!canvas) return;
+    const a = document.createElement("a");
+    a.download = "ablejam-qr.png";
+    a.href = canvas.toDataURL("image/png");
+    a.click();
+  };
   return (
     <span className="remote-chip">
-      <button className="remote-toggle" title={revealed ? tr("remote.hide.title") : tr("remote.show.title")} onClick={() => setRevealed((v) => !v)}>
-        📱 {revealed ? `${ip}:${port}` : tr("remote.show.label")}
+      <button className="remote-toggle" title={tr("remote.title")} onClick={() => setOpen(true)}>
+        📱 {ip}:{port}
       </button>
-      {revealed && (
-        <button className="remote-copy" title={tr("remote.copy.title")} onClick={copy}>{copied ? "✓" : "📋"}</button>
+      {open && (
+        <div className="overlay" onClick={() => setOpen(false)}>
+          <div className="modal conn-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="settings-head">
+              <h3>{tr("remote.panelTitle")}</h3>
+              <button className="settings-close" onClick={() => setOpen(false)} title={tr("common.close")}>✕</button>
+            </div>
+            <div className="conn-body">
+              <div className="settings-desc-small">{tr("remote.desc")}</div>
+              <div className="conn-url-row">
+                <div className="lan-url" style={{ flex: 1, margin: 0 }}>{url}</div>
+                <button className="act" onClick={copy}>{copied ? `✓ ${tr("remote.copied")}` : tr("remote.copy")}</button>
+              </div>
+              <div className="conn-qr"><QRCodeCanvas value={url} size={220} level="M" marginSize={2} /></div>
+              <button className="act on conn-save" onClick={saveQr}>{tr("remote.save")}</button>
+            </div>
+          </div>
+        </div>
       )}
     </span>
   );
