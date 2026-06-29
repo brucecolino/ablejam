@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.15",
+    notes: {
+      it: [
+        'Attivazione con un clic dall\'area clienti: sul sito premi "Attiva su AbleJam" e la chiave entra subito nell\'app.',
+        "Sezione Attivazione spostata in fondo alle impostazioni, con il pulsante rifatto.",
+      ],
+      en: [
+        'One-click activation from your customer area: press "Activate in AbleJam" on the site and the key lands in the app.',
+        "Activation moved to the bottom of Settings, with a redesigned button.",
+      ],
+    },
+  },
+  {
     version: "0.1.14",
     notes: {
       it: ["Risolto lo sfarfallio del transport (BPM e brano attivo che saltavano) in modalità demo con Ableton collegato: la demo ora è completamente isolata dal bridge reale."],

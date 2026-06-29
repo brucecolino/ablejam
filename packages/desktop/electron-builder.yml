@@ -1,6 +1,10 @@
 appId: com.ablejam.app
 productName: AbleJam
 copyright: AbleJam
+# Custom URL scheme for one-click activation from the customer area (ablejam://activate?key=…).
+protocols:
+  - name: AbleJam
+    schemes: [ablejam]
 directories:
   output: release
   buildResources: build        # build/icon.ico + build/icon.icns auto-picked once added

@@ -16,4 +16,11 @@ contextBridge.exposeInMainWorld("ablejam", {
     ipcRenderer.on("ablejam:update-progress", listener);
     return () => ipcRenderer.removeListener("ablejam:update-progress", listener);
   },
+  // Main forwards a license key parsed from an ablejam://activate?key=… deep link (one-click
+  // activation from the customer area). The web UI applies it via the normal setSetting path.
+  onActivateKey: (cb: (key: string) => void): (() => void) => {
+    const listener = (_e: unknown, key: string): void => cb(key);
+    ipcRenderer.on("ablejam:activate-key", listener);
+    return () => ipcRenderer.removeListener("ablejam:activate-key", listener);
+  },
 });

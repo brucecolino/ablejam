@@ -311,6 +311,17 @@ export function App() {
     return () => window.removeEventListener("keydown", onSave);
   }, []);
 
+  // One-click activation from the customer area: the desktop main forwards a license key parsed
+  // from an ablejam://activate?key=… deep link; apply it via the normal setSetting path.
+  useEffect(() => {
+    const api = getBridge();
+    if (!api?.onActivateKey) return;
+    return api.onActivateKey((key) => {
+      const k = (key || "").trim();
+      if (k) sendRef.current({ type: "command", command: "setSetting", key: "licenseKey", value: k });
+    });
+  }, []);
+
   return (
     <LangCtx.Provider value={lang}>
     <BeatCtx.Provider value={beat}>
@@ -739,7 +750,7 @@ function WhatsNewModal({ entries, onClose }: { entries: ChangelogEntry[]; onClos
           ))}
         </div>
         <div className="modal-actions">
-          <button className="act on" onClick={onClose}>{WHATS_NEW_CTA[lang]}</button>
+          <button className="settings-btn" style={{ marginTop: 0, background: "color-mix(in srgb, var(--accent) 16%, transparent)", borderColor: "color-mix(in srgb, var(--accent) 50%, transparent)", color: "var(--accent)" }} onClick={onClose}>{WHATS_NEW_CTA[lang]}</button>
         </div>
       </div>
     </div>
@@ -755,6 +766,7 @@ interface AbleJamBridge {
   checkUpdate?: () => Promise<UpdateCheck>;
   installUpdate?: () => Promise<{ ok: boolean; error?: string }>;
   onUpdateProgress?: (cb: (p: UpdateProgress) => void) => () => void;
+  onActivateKey?: (cb: (key: string) => void) => () => void;
 }
 function getBridge(): AbleJamBridge | undefined {
   return typeof window !== "undefined" ? (window as unknown as { ablejam?: AbleJamBridge }).ablejam : undefined;
@@ -861,43 +873,6 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
           <button className="settings-close" onClick={onClose} title={tr("common.close")}>✕</button>
         </div>
         <div className="settings-grid">
-          {LICENSING_ENABLED && (
-          <section className="settings-card">
-            <div className="settings-section">{tr("settings.section.license")}</div>
-            <label className="setting">
-              <span className="setting-text">
-                <span className="setting-label" style={state.licensed ? { color: "var(--playing)" } : undefined}>
-                  {state.licensed ? `✓ ${tr("license.status.active", { email: state.licenseEmail })}` : tr("license.status.demo")}
-                </span>
-                <span className="setting-desc">{tr("license.desc")}</span>
-              </span>
-            </label>
-            {state.licensed ? (
-              <button className="act" style={{ alignSelf: "flex-start" }} onClick={() => send({ type: "command", command: "setSetting", key: "licenseKey", value: "" })}>
-                {tr("license.remove")}
-              </button>
-            ) : (
-              <>
-                <input
-                  className="setting-select"
-                  style={{ width: "100%", maxWidth: "none", fontFamily: "ui-monospace, monospace", fontSize: 11 }}
-                  placeholder={tr("license.key.placeholder")}
-                  value={licenseInput}
-                  onChange={(e) => setLicenseInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && licenseInput.trim()) send({ type: "command", command: "setSetting", key: "licenseKey", value: licenseInput.trim() }); }}
-                />
-                <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
-                  <button className="act on" disabled={!licenseInput.trim()} onClick={() => send({ type: "command", command: "setSetting", key: "licenseKey", value: licenseInput.trim() })}>
-                    {tr("license.activate")}
-                  </button>
-                  <a href="https://ablejam.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontSize: 12, textDecoration: "none" }}>
-                    {tr("license.buy")}
-                  </a>
-                </div>
-              </>
-            )}
-          </section>
-          )}
           <section className="settings-card">
             <div className="settings-section">{tr("settings.section.playback")}</div>
             {row("autoplay", "set.autoplay.label", "set.autoplay.desc")}
@@ -1163,6 +1138,48 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
               ))}
             </div>
           </section>
+          {LICENSING_ENABLED && (
+          <section className="settings-card">
+            <div className="settings-section">{tr("settings.section.license")}</div>
+            <label className="setting">
+              <span className="setting-text">
+                <span className="setting-label" style={state.licensed ? { color: "var(--playing)" } : undefined}>
+                  {state.licensed ? `✓ ${tr("license.status.active", { email: state.licenseEmail })}` : tr("license.status.demo")}
+                </span>
+                <span className="setting-desc">{tr("license.desc")}</span>
+              </span>
+            </label>
+            {state.licensed ? (
+              <button className="settings-btn" onClick={() => send({ type: "command", command: "setSetting", key: "licenseKey", value: "" })}>
+                {tr("license.remove")}
+              </button>
+            ) : (
+              <>
+                <input
+                  className="setting-select"
+                  style={{ width: "100%", maxWidth: "none", fontFamily: "ui-monospace, monospace", fontSize: 11, marginTop: 4 }}
+                  placeholder={tr("license.key.placeholder")}
+                  value={licenseInput}
+                  onChange={(e) => setLicenseInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && licenseInput.trim()) send({ type: "command", command: "setSetting", key: "licenseKey", value: licenseInput.trim() }); }}
+                />
+                <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
+                  <button
+                    className="settings-btn"
+                    style={{ marginTop: 0, background: "color-mix(in srgb, var(--accent) 16%, transparent)", borderColor: "color-mix(in srgb, var(--accent) 50%, transparent)", color: "var(--accent)" }}
+                    disabled={!licenseInput.trim()}
+                    onClick={() => send({ type: "command", command: "setSetting", key: "licenseKey", value: licenseInput.trim() })}
+                  >
+                    {tr("license.activate")}
+                  </button>
+                  <a href="https://ablejam.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+                    {tr("license.buy")}
+                  </a>
+                </div>
+              </>
+            )}
+          </section>
+          )}
           <UpdatesCard />
         </div>
         <div className="settings-version">AbleJam v{APP_VERSION}</div>

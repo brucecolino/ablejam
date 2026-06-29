@@ -313,7 +313,8 @@ input[type="checkbox"]:focus-visible { outline: 2px solid color-mix(in srgb, var
 .setting-select { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 7px 10px; font-size: 14px; max-width: 180px; }
 .settings-desc-small { font-size: 12px; color: #8a8a8a; margin: 4px 0 8px; line-height: 1.4; }
 .settings-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 13px; font-size: 14px; font-weight: 700; line-height: 1.2; cursor: pointer; margin-top: 8px; }
-.settings-btn:hover { border-color: var(--accent); color: var(--accent); }
+.settings-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.settings-btn:disabled { opacity: 0.4; cursor: default; }
 .settings-btn svg { width: 15px; height: 15px; stroke-width: 2.4; display: block; }
 .stop-diag { font-size: 12px; margin: 0 0 2px; line-height: 1.45; }
 .stop-diag-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 38px; margin-top: 8px; }

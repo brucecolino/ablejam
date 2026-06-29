@@ -33,12 +33,59 @@ let mainWin: BrowserWindow | null = null;
 let splash: BrowserWindow | null = null;
 let hostHandle: { ready: Promise<void>; close: () => Promise<void> } | null = null;
 let quitting = false;
+let pendingActivateKey: string | null = null;
 
-app.on("second-instance", () => {
+// ---- one-click license activation: ablejam://activate?key=… (from the customer area) --------
+// Register the custom scheme so the OS routes ablejam:// links here. A bogus link is harmless:
+// the host verifies the Ed25519 signature before activating, so an invalid key is just ignored.
+if (process.defaultApp) {
+  const devArg = process.argv[1];
+  if (devArg) app.setAsDefaultProtocolClient("ablejam", process.execPath, [path.resolve(devArg)]);
+} else {
+  app.setAsDefaultProtocolClient("ablejam");
+}
+
+function activateKeyFromArg(arg: string): string | null {
+  if (typeof arg !== "string" || !arg.startsWith("ablejam://")) return null;
+  try {
+    const u = new URL(arg);
+    if (u.hostname === "activate" || u.pathname.replace(/\//g, "") === "activate") return u.searchParams.get("key");
+  } catch { /* not a URL */ }
+  return null;
+}
+
+function flushActivateKey(): void {
+  if (pendingActivateKey && mainWin && !mainWin.webContents.isLoading()) {
+    mainWin.webContents.send("ablejam:activate-key", pendingActivateKey);
+    pendingActivateKey = null;
+  }
+}
+
+function deliverActivateKey(key: string): void {
+  pendingActivateKey = key;
+  if (mainWin) { if (mainWin.isMinimized()) mainWin.restore(); mainWin.focus(); }
+  flushActivateKey();
+}
+
+// Cold start carrying the link (Windows passes it as an argv).
+{
+  const coldKey = process.argv.map(activateKeyFromArg).find(Boolean);
+  if (coldKey) pendingActivateKey = coldKey;
+}
+
+app.on("second-instance", (_e, argv) => {
+  const key = argv.map(activateKeyFromArg).find(Boolean);
+  if (key) { deliverActivateKey(key); return; }
   if (mainWin) {
     if (mainWin.isMinimized()) mainWin.restore();
     mainWin.focus();
   }
+});
+
+// macOS delivers the link via open-url (can fire before the window exists).
+app.on("open-url", (_e, url) => {
+  const key = activateKeyFromArg(url);
+  if (key) deliverActivateKey(key);
 });
 
 // ---- 2. crash guards ----------------------------------------------------------------
@@ -123,6 +170,8 @@ function createMainWindow(): void {
   mainWin.webContents.on("did-fail-load", () => {
     if (retries++ < 5 && mainWin) setTimeout(() => mainWin?.loadURL(`http://127.0.0.1:${HOST_PORT}`), 300);
   });
+  // Deliver any deep-link key captured before the UI finished loading (cold start / mac open-url).
+  mainWin.webContents.on("did-finish-load", flushActivateKey);
   mainWin.once("ready-to-show", () => {
     mainWin?.show();
     splash?.destroy();
