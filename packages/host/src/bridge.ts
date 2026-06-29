@@ -21,6 +21,12 @@ export class BridgeLink extends EventEmitter {
   constructor() {
     super();
     this.sock.on("message", (msg) => {
+      // In demo mode the simulated playhead is the only source of truth. Drop real Ableton
+      // packets so the demo timer (120 BPM, every 100 ms) and a live bridge can't both push
+      // `transport` and fight over it — that flapping is what caused the on-stage flicker
+      // (BPM/active-song/countdown jumping). It also keeps an unlicensed app fully isolated
+      // from real Ableton, as licensing intends.
+      if (this.demo) return;
       this.lastSeen = Date.now();
       try {
         const m = decode(msg);
