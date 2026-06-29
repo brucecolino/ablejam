@@ -189,6 +189,9 @@ export interface Settings {
   /** Demo mode: drive the app with a fictional setlist + a simulated playhead (no Ableton
    * needed), so new users can practice and see how everything works. */
   demoMode: boolean;
+  /** License key (signed by ablejam.com). Empty / invalid = unlicensed → the app is locked to
+   * the demo setlist (it won't drive real Ableton) until a valid key is entered. */
+  licenseKey: string;
 }
 
 export const defaultSettings: Settings = {
@@ -220,6 +223,7 @@ export const defaultSettings: Settings = {
   medleyDisplay: "split",
   clickIndicator: "off",
   demoMode: false,
+  licenseKey: "",
 };
 
 /** A colour ("#rrggbb") for item `i` of `n` under a scheme. "contrast" (default) uses the
@@ -285,6 +289,11 @@ export interface AppState {
   lyrics: LyricLine[];
   /** True when `lyrics` is an AbleJam-edited document (timing recorded in AbleJam), not raw clips. */
   lyricsEdited: boolean;
+  /** True when a valid license key is stored — the full version is unlocked. When false the app
+   * is locked to the demo setlist. */
+  licensed: boolean;
+  /** Email the stored license is registered to ("" when unlicensed). */
+  licenseEmail: string;
 }
 
 export const initialTransport: Transport = {
@@ -324,6 +333,8 @@ export const initialState: AppState = {
   stageMessage: "",
   lyrics: [],
   lyricsEdited: false,
+  licensed: false,
+  licenseEmail: "",
 };
 
 export interface ImportResult {

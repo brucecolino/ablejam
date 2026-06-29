@@ -747,6 +747,7 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
   const s = state.settings;
   const productParts = tr("settings.product").split("APICE"); // APICE rendered as a styled brand span
   const [showStopDetails, setShowStopDetails] = useState(false);
+  const [licenseInput, setLicenseInput] = useState("");
   const setBool = (key: keyof Settings, v: boolean) => send({ type: "command", command: "setSetting", key, value: v });
   // Lyrics backup: download the whole project's lyrics (text + timing) to a JSON file, and
   // restore it later (after an update, or on another computer) — survives data-dir changes.
@@ -791,6 +792,41 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
           <button className="settings-close" onClick={onClose} title={tr("common.close")}>✕</button>
         </div>
         <div className="settings-grid">
+          <section className="settings-card">
+            <div className="settings-section">{tr("settings.section.license")}</div>
+            <label className="setting">
+              <span className="setting-text">
+                <span className="setting-label" style={state.licensed ? { color: "var(--playing)" } : undefined}>
+                  {state.licensed ? `✓ ${tr("license.status.active", { email: state.licenseEmail })}` : tr("license.status.demo")}
+                </span>
+                <span className="setting-desc">{tr("license.desc")}</span>
+              </span>
+            </label>
+            {state.licensed ? (
+              <button className="act" style={{ alignSelf: "flex-start" }} onClick={() => send({ type: "command", command: "setSetting", key: "licenseKey", value: "" })}>
+                {tr("license.remove")}
+              </button>
+            ) : (
+              <>
+                <input
+                  className="setting-select"
+                  style={{ width: "100%", maxWidth: "none", fontFamily: "ui-monospace, monospace", fontSize: 11 }}
+                  placeholder={tr("license.key.placeholder")}
+                  value={licenseInput}
+                  onChange={(e) => setLicenseInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && licenseInput.trim()) send({ type: "command", command: "setSetting", key: "licenseKey", value: licenseInput.trim() }); }}
+                />
+                <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
+                  <button className="act on" disabled={!licenseInput.trim()} onClick={() => send({ type: "command", command: "setSetting", key: "licenseKey", value: licenseInput.trim() })}>
+                    {tr("license.activate")}
+                  </button>
+                  <a href="https://ablejam.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontSize: 12, textDecoration: "none" }}>
+                    {tr("license.buy")}
+                  </a>
+                </div>
+              </>
+            )}
+          </section>
           <section className="settings-card">
             <div className="settings-section">{tr("settings.section.playback")}</div>
             {row("autoplay", "set.autoplay.label", "set.autoplay.desc")}

@@ -8,6 +8,7 @@ import { watch, type FSWatcher } from "node:fs";
 import { exec as execChild } from "node:child_process";
 import { extractText, textToTitles } from "./import";
 import { listOutputs, sendNote as sendMidiNote, isAvailable as midiAvailable, closeOutput } from "./midiout";
+import { verifyLicenseKey } from "./license";
 import { listBluetooth, openBluetoothSettings } from "./bluetooth";
 import { readAbleton } from "./ableton";
 import {
@@ -185,7 +186,20 @@ let lastTempo = 120;
 let pendingRebuild = false;
 let prevTime = 0;
 
+/** Decode the stored license key (cheap signature verify). */
+function licenseInfo(): { licensed: boolean; email: string } {
+  const p = verifyLicenseKey(settings.licenseKey || "");
+  return { licensed: !!p, email: p?.email ?? "" };
+}
+/** Enforce licensing: an UNLICENSED app is locked to the demo setlist — it never drives real
+ * Ableton. A licensed app honours the user's own demo toggle. Called at boot and whenever the
+ * license or the demo toggle changes. */
+function applyDemo(): void {
+  bridge.setDemo(!licenseInfo().licensed || settings.demoMode);
+}
+
 function snapshot(): AppState {
+  const li = licenseInfo();
   return {
     bridgeConnected,
     bridgeVersion,
@@ -212,6 +226,8 @@ function snapshot(): AppState {
     stageMessage,
     lyrics: effectiveLyrics(),
     lyricsEdited: lyricsDoc != null,
+    licensed: li.licensed,
+    licenseEmail: li.email,
   };
 }
 
@@ -677,7 +693,7 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
 function applySetting(key: keyof Settings, value: boolean | string | number): void {
   const target = settings as unknown as Record<string, boolean | string | number>;
   if (key === "emergencyNote" || key === "stopNote") target[key] = Number(value);
-  else if (key === "emergencyPort" || key === "stopTrack" || key === "lyricsTrack" || key === "colorScheme" || key === "setlistColorScheme" || key === "panicLabel" || key === "panicColor" || key === "language" || key === "medleyDisplay" || key === "clickIndicator") target[key] = String(value);
+  else if (key === "emergencyPort" || key === "stopTrack" || key === "lyricsTrack" || key === "colorScheme" || key === "setlistColorScheme" || key === "panicLabel" || key === "panicColor" || key === "language" || key === "medleyDisplay" || key === "clickIndicator" || key === "licenseKey") target[key] = String(value);
   else target[key] = Boolean(value);
 }
 
@@ -865,7 +881,12 @@ server.onCommand = (c: ClientCommand) => {
       applySetting(c.key, c.value);
       if (c.key === "stopTrack" || c.key === "stopNote") sendStopConfig(); // re-read with the new track/note
       if (c.key === "lyricsTrack") sendLyricsConfig(); // re-read lyrics from the new track
-      if (c.key === "demoMode") bridge.setDemo(Boolean(c.value)); // toggle the fictional demo setlist + playhead
+      if (c.key === "demoMode") applyDemo(); // honour the toggle (only effective when licensed)
+      if (c.key === "licenseKey") {
+        const li = licenseInfo();
+        toast(li.licensed ? "info" : "error", li.licensed ? tr("license.activated", { email: li.email }) : tr("license.invalid"));
+        applyDemo(); // unlock real Ableton, or re-lock to demo if the key was cleared/invalid
+      }
       changed();
       break;
   }
@@ -910,7 +931,7 @@ export function startHost(): { ready: Promise<void>; close: () => Promise<void> 
   btId = setInterval(refreshBT, 20000); // keep the connected-Bluetooth list fresh
   refreshAbleton();
   abletonId = setInterval(refreshAbleton, 3000); // fast enough that the unsaved "*" clears right after a save
-  if (settings.demoMode) bridge.setDemo(true); // restore demo mode across restarts
+  applyDemo(); // enforce licensing (unlicensed -> locked to demo) + restore the demo toggle across restarts
   console.log("[host] AbleJam host started — waiting for the bridge (Ableton or mock)...");
 
   return { ready, close };
