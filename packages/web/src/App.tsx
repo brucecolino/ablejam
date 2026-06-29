@@ -198,11 +198,11 @@ function RemoteChip({ ip }: { ip: string }) {
             <div className="conn-body">
               <div className="settings-desc-small">{tr("remote.desc")}</div>
               <div className="conn-url-row">
-                <div className="lan-url" style={{ flex: 1, margin: 0 }}>{url}</div>
-                <button className="act" onClick={copy}>{copied ? `✓ ${tr("remote.copied")}` : tr("remote.copy")}</button>
+                <div className="lan-url" style={{ flex: 1, margin: 0, fontSize: 16 }}>{url}</div>
+                <button className="settings-btn" style={{ marginTop: 0, flex: "none" }} onClick={copy}>{copied ? `✓ ${tr("remote.copied")}` : tr("remote.copy")}</button>
               </div>
               <div className="conn-qr"><QRCodeCanvas value={url} size={220} level="M" marginSize={2} /></div>
-              <button className="act on conn-save" onClick={saveQr}>{tr("remote.save")}</button>
+              <button className="settings-btn conn-save" style={{ marginTop: 0, background: "color-mix(in srgb, var(--accent) 16%, transparent)", borderColor: "color-mix(in srgb, var(--accent) 50%, transparent)", color: "var(--accent)" }} onClick={saveQr}>{tr("remote.save")}</button>
             </div>
           </div>
         </div>
