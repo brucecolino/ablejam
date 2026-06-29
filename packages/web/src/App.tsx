@@ -668,7 +668,7 @@ function InfoPanel({ onClose }: { onClose: () => void }) {
             <p>{tr("info.contact.b")}</p>
             <div className="info-links">
               <a className="info-mail" href="mailto:support@ablejam.com">support@ablejam.com</a>
-              <a className="info-mail info-web" href={SITE_URL} target="_blank" rel="noopener noreferrer">{SITE_LABEL}</a>
+              <a className="info-mail info-web" href={SITE_URL} target="_blank" rel="noopener noreferrer"><img className="info-web-logo" src="/logo-grid.svg" width={16} height={16} alt="" />{SITE_LABEL}</a>
             </div>
           </section>
         </div>

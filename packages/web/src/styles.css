@@ -291,7 +291,8 @@ input[type="checkbox"]:focus-visible { outline: 2px solid color-mix(in srgb, var
 .info-mail:hover { background: color-mix(in srgb, var(--accent) 26%, transparent); border-color: var(--accent); }
 .info-links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
 .info-links .info-mail { margin-top: 0; }
-.info-web::before { content: "🌐"; }
+.info-web::before { content: none; } /* the AbleJam logo replaces the generic icon */
+.info-web-logo { display: block; border-radius: 4px; flex: none; }
 .settings-web { display: block; text-align: center; color: var(--accent); font-size: 12px; font-weight: 600; text-decoration: none; margin-top: 3px; letter-spacing: 0.3px; }
 .settings-web:hover { text-decoration: underline; }
 .settings-product { text-align: center; color: var(--text-muted); font-size: 12px; margin-top: 3px; }
