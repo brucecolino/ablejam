@@ -22,6 +22,23 @@ body {
 }
 button { font-family: inherit; }
 
+/* App-styled checkboxes — dark, rounded, amber when checked (no white native boxes), so the
+   whole app stays on-brand. */
+input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none; margin: 0; flex: none;
+  width: 18px; height: 18px; vertical-align: middle; display: inline-block;
+  background: var(--bg); border: 1.5px solid var(--border); border-radius: 5px;
+  cursor: pointer; position: relative;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+input[type="checkbox"]:hover { border-color: var(--accent); }
+input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+input[type="checkbox"]:checked::after {
+  content: ""; position: absolute; left: 5px; top: 2px;
+  width: 4px; height: 8px; border: solid var(--bg); border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+input[type="checkbox"]:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 2px; }
+
 .app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
 .body { display: flex; flex-direction: column; min-height: 0; }
 
@@ -282,7 +299,8 @@ button { font-family: inherit; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); background-clip: padding-box; }
 .settings-section { color: var(--accent); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin: 16px 0 4px; }
 .setting { display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 8px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
-.setting input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); flex: none; }
+.setting input[type="checkbox"] { width: 22px; height: 22px; border-radius: 6px; }
+.setting input[type="checkbox"]:checked::after { left: 7px; top: 3px; width: 5px; height: 10px; border-width: 0 2.5px 2.5px 0; }
 .setting-text { display: flex; flex-direction: column; flex: 1; }
 .setting-label { font-size: 15px; }
 .setting-desc { font-size: 12px; color: var(--text-muted); }

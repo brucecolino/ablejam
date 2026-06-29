@@ -155,6 +155,10 @@ const it: Dict = {
   // settings — shell
   "settings.title": "Impostazioni",
   // settings — playback
+  "settings.section.demo": "Modalità demo",
+  "demo.desc": "Prova AbleJam senza Ableton: una scaletta fittizia con un playhead simulato, per imparare i meccanismi.",
+  "set.demoMode.label": "Attiva la demo",
+  "set.demoMode.desc": "Scaletta di esempio + riproduzione simulata. Disattivala quando colleghi Ableton.",
   "settings.section.playback": "Riproduzione",
   "set.autoplay.label": "Autoplay",
   "set.autoplay.desc": "Selezionando un brano parte subito",
@@ -579,6 +583,10 @@ const en: Dict = {
   // settings — shell
   "settings.title": "Settings",
   // settings — playback
+  "settings.section.demo": "Demo mode",
+  "demo.desc": "Try AbleJam without Ableton: a fictional setlist with a simulated playhead, to learn how it works.",
+  "set.demoMode.label": "Enable demo",
+  "set.demoMode.desc": "Sample setlist + simulated playback. Turn it off when you connect Ableton.",
   "settings.section.playback": "Playback",
   "set.autoplay.label": "Autoplay",
   "set.autoplay.desc": "Selecting a song starts it immediately",
@@ -993,6 +1001,10 @@ const es: Dict = {
   "common.close": "Cerrar",
   "common.automatic": "Automático",
   "settings.title": "Ajustes",
+  "settings.section.demo": "Modo demo",
+  "demo.desc": "Prueba AbleJam sin Ableton: una lista ficticia con un cabezal simulado, para aprender cómo funciona.",
+  "set.demoMode.label": "Activar demo",
+  "set.demoMode.desc": "Lista de ejemplo + reproducción simulada. Desactívala cuando conectes Ableton.",
   "settings.section.playback": "Reproducción",
   "set.autoplay.label": "Reproducción automática",
   "set.autoplay.desc": "Seleccionar una canción la inicia de inmediato",
@@ -1390,6 +1402,10 @@ const fr: Dict = {
   "common.close": "Fermer",
   "common.automatic": "Automatique",
   "settings.title": "Réglages",
+  "settings.section.demo": "Mode démo",
+  "demo.desc": "Essayez AbleJam sans Ableton : une setlist fictive avec une tête de lecture simulée, pour découvrir le fonctionnement.",
+  "set.demoMode.label": "Activer la démo",
+  "set.demoMode.desc": "Setlist d'exemple + lecture simulée. Désactivez-la quand vous connectez Ableton.",
   "settings.section.playback": "Lecture",
   "set.autoplay.label": "Lecture auto",
   "set.autoplay.desc": "Sélectionner une chanson la démarre immédiatement",

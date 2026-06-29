@@ -865,6 +865,7 @@ server.onCommand = (c: ClientCommand) => {
       applySetting(c.key, c.value);
       if (c.key === "stopTrack" || c.key === "stopNote") sendStopConfig(); // re-read with the new track/note
       if (c.key === "lyricsTrack") sendLyricsConfig(); // re-read lyrics from the new track
+      if (c.key === "demoMode") bridge.setDemo(Boolean(c.value)); // toggle the fictional demo setlist + playhead
       changed();
       break;
   }
@@ -909,6 +910,7 @@ export function startHost(): { ready: Promise<void>; close: () => Promise<void> 
   btId = setInterval(refreshBT, 20000); // keep the connected-Bluetooth list fresh
   refreshAbleton();
   abletonId = setInterval(refreshAbleton, 3000); // fast enough that the unsaved "*" clears right after a save
+  if (settings.demoMode) bridge.setDemo(true); // restore demo mode across restarts
   console.log("[host] AbleJam host started — waiting for the bridge (Ableton or mock)...");
 
   return { ready, close };

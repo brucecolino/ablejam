@@ -186,6 +186,9 @@ export interface Settings {
   /** Metronome visual on the CLICK button: "off", "blink" (flash each beat, 2&4 stronger),
    * or "bars" (vertical bars fill in sequence per beat). Client-rendered. */
   clickIndicator: string;
+  /** Demo mode: drive the app with a fictional setlist + a simulated playhead (no Ableton
+   * needed), so new users can practice and see how everything works. */
+  demoMode: boolean;
 }
 
 export const defaultSettings: Settings = {
@@ -216,6 +219,7 @@ export const defaultSettings: Settings = {
   clickOnStartup: false,
   medleyDisplay: "split",
   clickIndicator: "off",
+  demoMode: false,
 };
 
 /** A colour ("#rrggbb") for item `i` of `n` under a scheme. "contrast" (default) uses the

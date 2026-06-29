@@ -154,6 +154,14 @@ async function boot(): Promise<void> {
   createSplash();
   buildMenu();
 
+  // macOS dock icon: the packaged .app uses the .icns for Finder, but set it at runtime too
+  // so the dock always shows the AbleJam logo (and so it's branded in dev, where the bundled
+  // electron has its own icon).
+  if (process.platform === "darwin" && app.dock) {
+    const dockIcon = path.join(__dirname, "icon.png");
+    if (existsSync(dockIcon)) app.dock.setIcon(dockIcon);
+  }
+
   // ipc seams (reserved for a future in-UI "Install bridge" button).
   ipcMain.handle("ablejam:version", () => app.getVersion());
   ipcMain.handle("ablejam:install-bridge", () => { installBridge(resourcesRoot); });

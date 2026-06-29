@@ -1027,6 +1027,12 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
           </section>
 
           <section className="settings-card">
+            <div className="settings-section">{tr("settings.section.demo")}</div>
+            <div className="settings-desc-small">{tr("demo.desc")}</div>
+            {row("demoMode", "set.demoMode.label", "set.demoMode.desc")}
+          </section>
+
+          <section className="settings-card">
             <div className="settings-section">{tr("settings.section.language")}</div>
             <div className="settings-desc-small">{tr("language.desc")}</div>
             <div className="lang-row">
