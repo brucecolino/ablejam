@@ -8,7 +8,8 @@ type Panel = "none" | "import" | "load" | "print";
 type Send = (c: ClientCommand) => void;
 type TFn = (key: string, params?: Record<string, string | number>) => string;
 
-const APP_VERSION = "1.0";
+declare const __APP_VERSION__: string; // injected by Vite from the desktop package version
+const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
 
 // Interface language flows through context: the App sets it from settings, every component
 // reads it with useT() and translates against the shared dictionary.
@@ -643,7 +644,7 @@ function LoadPanel({ state, send, onClose }: { state: AppState; send: Send; onCl
   );
 }
 
-const INFO_SECTIONS = ["intro", "markers", "stops", "bridge", "midi", "main", "lyrics", "stage", "views", "presets", "print", "secondary", "trouble"];
+const INFO_SECTIONS = ["intro", "markers", "stops", "bridge", "midi", "main", "lyrics", "stage", "views", "presets", "print", "secondary", "trouble", "updates"];
 function InfoPanel({ onClose }: { onClose: () => void }) {
   const { tr } = useT();
   return (
@@ -666,19 +667,21 @@ function InfoPanel({ onClose }: { onClose: () => void }) {
             <a className="info-mail" href="mailto:support@ablejam.com">support@ablejam.com</a>
           </section>
         </div>
-        <div className="settings-version">AbleJam v{APP_VERSION} · APICE</div>
+        <div className="settings-version">AbleJam v{APP_VERSION}</div>
       </div>
     </div>
   );
 }
 
 interface UpdateCheck { current: string; latest: string; available: boolean; notes: string; assetName: string | null; platform: string; noAsset: boolean }
+interface UpdateProgress { pct: number; mb: number; total: number }
 interface AbleJamBridge {
   platform?: string;
   version: () => Promise<string>;
   installBridge?: () => Promise<void>;
   checkUpdate?: () => Promise<UpdateCheck>;
   installUpdate?: () => Promise<{ ok: boolean; error?: string }>;
+  onUpdateProgress?: (cb: (p: UpdateProgress) => void) => () => void;
 }
 function getBridge(): AbleJamBridge | undefined {
   return typeof window !== "undefined" ? (window as unknown as { ablejam?: AbleJamBridge }).ablejam : undefined;
@@ -692,36 +695,44 @@ function UpdatesCard() {
   const [ver, setVer] = useState("");
   const [info, setInfo] = useState<UpdateCheck | null>(null);
   const [busy, setBusy] = useState<"" | "check" | "install">("");
+  const [prog, setProg] = useState<UpdateProgress | null>(null);
   const [msg, setMsg] = useState("");
   useEffect(() => { api?.version().then(setVer).catch(() => {}); }, [api]);
   if (!api?.checkUpdate) return null;
   const check = async () => {
-    setBusy("check"); setMsg("");
+    setBusy("check"); setMsg(""); setInfo(null);
     try { setInfo(await api.checkUpdate!()); } catch { setMsg(tr("update.error")); }
     setBusy("");
   };
   const install = async () => {
-    setBusy("install"); setMsg("");
+    setBusy("install"); setMsg(""); setProg(null);
+    const off = api.onUpdateProgress?.((p) => setProg(p));
     try { const r = await api.installUpdate!(); if (!r?.ok) setMsg(tr("update.error")); } catch { setMsg(tr("update.error")); }
-    setBusy("");
+    off?.(); setProg(null); setBusy("");
   };
   return (
     <section className="settings-card">
       <div className="settings-section">{tr("settings.section.updates")}</div>
       <div className="settings-desc-small">{tr("update.current", { v: ver || info?.current || "—" })}</div>
-      <div className="stop-diag-head">
-        <span style={{ fontWeight: 700, color: info?.available ? "var(--accent)" : "var(--text-muted)" }}>
-          {!info ? "" : info.available ? tr("update.available", { v: info.latest }) : tr("update.uptodate", { v: info.latest })}
-        </span>
-        <button className="settings-btn" disabled={busy !== ""} onClick={check}>{busy === "check" ? tr("update.checking") : tr("update.check")}</button>
-      </div>
-      {info?.available && (
-        <>
-          <button className="settings-btn" disabled={busy !== ""} onClick={install}>⬇ {busy === "install" ? tr("update.installing") : tr("update.install")}</button>
-          {info.platform === "darwin" && <div className="settings-desc-small">{tr("update.macNote")}</div>}
-        </>
+      {info && (
+        <div style={{ fontWeight: 700, margin: "4px 0 10px", color: info.available ? "var(--accent)" : "var(--text-muted)" }}>
+          {info.available ? tr("update.available", { v: info.latest }) : tr("update.uptodate", { v: info.latest })}
+        </div>
       )}
-      {msg && <div className="settings-desc-small" style={{ color: "#d66" }}>{msg}</div>}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button className="settings-btn" style={{ marginTop: 0 }} disabled={busy !== ""} onClick={check}>{busy === "check" ? tr("update.checking") : tr("update.check")}</button>
+        {info?.available && <button className="settings-btn" style={{ marginTop: 0 }} disabled={busy !== ""} onClick={install}>⬇ {busy === "install" ? tr("update.installing") : tr("update.install")}</button>}
+      </div>
+      {busy === "install" && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ height: 7, borderRadius: 999, background: "var(--bg)", border: "1px solid var(--border)", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: (prog?.pct ?? 0) + "%", background: "var(--accent)", transition: "width 0.2s linear" }} />
+          </div>
+          <div className="settings-desc-small" style={{ marginTop: 4 }}>{prog ? `${prog.pct}% · ${prog.mb}/${prog.total} MB` : tr("update.installing")}</div>
+        </div>
+      )}
+      {info?.available && info.platform === "darwin" && <div className="settings-desc-small" style={{ marginTop: 8 }}>{tr("update.macNote")}</div>}
+      {msg && <div className="settings-desc-small" style={{ color: "#d66", marginTop: 8 }}>{msg}</div>}
     </section>
   );
 }
@@ -775,19 +786,6 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
           <button className="settings-close" onClick={onClose} title={tr("common.close")}>✕</button>
         </div>
         <div className="settings-grid">
-          <UpdatesCard />
-          <section className="settings-card">
-            <div className="settings-section">{tr("settings.section.language")}</div>
-            <div className="settings-desc-small">{tr("language.desc")}</div>
-            <div className="lang-row">
-              {([["it", "Italiano"], ["en", "English"], ["es", "Español"], ["fr", "Français"]] as const).map(([code, name]) => (
-                <button key={code} className={"lang-btn" + (s.language === code ? " on" : "")} onClick={() => send({ type: "command", command: "setSetting", key: "language", value: code })}>
-                  <FlagIcon lang={code} /><span>{name}</span>
-                </button>
-              ))}
-            </div>
-          </section>
-
           <section className="settings-card">
             <div className="settings-section">{tr("settings.section.playback")}</div>
             {row("autoplay", "set.autoplay.label", "set.autoplay.desc")}
@@ -1027,8 +1025,21 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
               ? <div className="lan-url">http://{state.lanIp}:{typeof location !== "undefined" ? (location.port || "3700") : "3700"}</div>
               : <div className="settings-desc-small">{tr("tablet.noIp")}</div>}
           </section>
+
+          <section className="settings-card">
+            <div className="settings-section">{tr("settings.section.language")}</div>
+            <div className="settings-desc-small">{tr("language.desc")}</div>
+            <div className="lang-row">
+              {([["it", "Italiano"], ["en", "English"], ["es", "Español"], ["fr", "Français"]] as const).map(([code, name]) => (
+                <button key={code} className={"lang-btn" + (s.language === code ? " on" : "")} onClick={() => send({ type: "command", command: "setSetting", key: "language", value: code })}>
+                  <FlagIcon lang={code} /><span>{name}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+          <UpdatesCard />
         </div>
-        <div className="settings-version">AbleJam v{APP_VERSION} · Bridge {state.bridgeVersion ? tr("settings.bridge.connected", { n: state.bridgeVersion }) : tr("settings.bridge.disconnected")}</div>
+        <div className="settings-version">AbleJam v{APP_VERSION}</div>
         <div className="settings-product">{productParts[0]}<span className="apice">APICE</span>{productParts[1]}</div>
       </div>
     </div>

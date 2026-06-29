@@ -158,7 +158,7 @@ async function boot(): Promise<void> {
   ipcMain.handle("ablejam:version", () => app.getVersion());
   ipcMain.handle("ablejam:install-bridge", () => { installBridge(resourcesRoot); });
   ipcMain.handle("ablejam:update-check", () => checkForUpdate());
-  ipcMain.handle("ablejam:update-install", () => downloadAndInstall());
+  ipcMain.handle("ablejam:update-install", (event) => downloadAndInstall((p) => event.sender.send("ablejam:update-progress", p)));
 
   // Dynamic import of the ESM host bundle from this CJS main (computed specifier keeps it a
   // native import(), so Node loads the .mjs correctly).

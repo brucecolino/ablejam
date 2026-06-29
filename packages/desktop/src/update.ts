@@ -82,16 +82,28 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
   };
 }
 
-function download(url: string, dest: string, redirects = 0): Promise<void> {
+export interface DownloadProgress { pct: number; mb: number; total: number }
+
+function download(url: string, dest: string, onProgress?: (p: DownloadProgress) => void, redirects = 0): Promise<void> {
   return new Promise((resolve, reject) => {
     if (redirects > 5) { reject(new Error("too many redirects")); return; }
     https.get(url, { headers: { "User-Agent": UA } }, (res) => {
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
-        resolve(download(res.headers.location, dest, redirects + 1));
+        resolve(download(res.headers.location, dest, onProgress, redirects + 1));
         return;
       }
       if (res.statusCode !== 200) { res.resume(); reject(new Error(`HTTP ${res.statusCode}`)); return; }
+      const total = parseInt(String(res.headers["content-length"] || "0"), 10);
+      let got = 0;
+      let lastPct = -1;
+      res.on("data", (chunk: Buffer) => {
+        got += chunk.length;
+        if (onProgress && total > 0) {
+          const pct = Math.floor((got / total) * 100);
+          if (pct !== lastPct) { lastPct = pct; onProgress({ pct, mb: Math.round(got / 1e6), total: Math.round(total / 1e6) }); }
+        }
+      });
       const file = createWriteStream(dest);
       res.pipe(file);
       file.on("finish", () => file.close(() => resolve()));
@@ -100,10 +112,10 @@ function download(url: string, dest: string, redirects = 0): Promise<void> {
   });
 }
 
-/** Download the installer for this OS and hand it to the user.
+/** Download the installer for this OS and hand it to the user (reporting progress).
  * Windows: launch the NSIS installer, then quit so it can replace files.
  * macOS: open the .dmg (the user drags AbleJam to Applications). */
-export async function downloadAndInstall(): Promise<{ ok: boolean; error?: string }> {
+export async function downloadAndInstall(onProgress?: (p: DownloadProgress) => void): Promise<{ ok: boolean; error?: string }> {
   const info = await checkForUpdate();
   if (!info.available) return { ok: false, error: "up-to-date" };
   if (!cachedAsset) return { ok: false, error: "no-asset" };
@@ -111,7 +123,7 @@ export async function downloadAndInstall(): Promise<{ ok: boolean; error?: strin
   try { mkdirSync(dir, { recursive: true }); } catch { /* exists */ }
   const dest = path.join(dir, cachedAsset.name);
   try {
-    await download(cachedAsset.browser_download_url, dest);
+    await download(cachedAsset.browser_download_url, dest, onProgress);
   } catch (e) {
     return { ok: false, error: `download failed: ${(e as Error).message}` };
   }

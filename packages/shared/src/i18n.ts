@@ -306,7 +306,7 @@ const it: Dict = {
   "settings.section.language": "Lingua / Language",
   "language.desc": "Scegli la lingua dell'interfaccia.",
   // settings — footer
-  "settings.bridge.connected": "Live v{n}",
+  "settings.bridge.connected": "v{n}",
   "settings.bridge.disconnected": "non connesso",
   "settings.product": "Un prodotto APICE",
   // print
@@ -401,6 +401,8 @@ const it: Dict = {
   "info.secondary.b": "• Importa scaletta: incolla i titoli o carica .txt/.pdf/.docx; abbinati ai marker e colorati in automatico.\n• Colora brani Ableton / Colora scaletta: colori le clip del progetto o le righe della scaletta (schema a scelta).\n• Scorciatoie tastiera e Pedali Bluetooth: assegna tasti/pedali a Play/Stop/Avanti/Indietro/PANIC.\n• Pulisci progetto: rinomina ogni clip del progetto come «Brano — Traccia», per un progetto ordinato (la traccia testi è esclusa).\n• Lingua: Italiano / English.",
   "info.trouble.h": "12 · Problemi comuni",
   "info.trouble.b": "• «Live» grigio: la control surface non è selezionata in Ableton, oppure va riavviato.\n• Nessuno stop letto: controlla che la traccia STOP sia quella giusta e che le note siano DENTRO le clip; premi «Rileggi».\n• PANIC non suona: scegli la porta MIDI (loopMIDI) e attiva «Monitor: In» sulla traccia.\n• La scaletta non cambia subito: «Safe Mode» blocca i salti mentre suona — disattivalo se non lo vuoi.",
+  "info.updates.h": "13 · Aggiornamenti dell'app",
+  "info.updates.b": "AbleJam si aggiorna da solo.\n• Impostazioni → Aggiornamenti → «Controlla aggiornamenti»: se c'è una versione nuova, premi «Scarica e installa» (vedi la barra di avanzamento).\n• Su Windows l'installer parte da solo; su Mac si apre il .dmg — trascina AbleJam in Applicazioni.\n• La sezione è visibile solo nell'app desktop (da telefono/tablet aggiorni dal computer).\nNovità recenti: interfaccia ottimizzata per telefono e tablet, backup dei testi (Impostazioni → Testi → Esporta/Importa), supporto macOS.",
   "info.contact.h": "Supporto e contatti",
   "info.contact.b": "Domande, problemi o suggerimenti? Scrivici, rispondiamo volentieri:",
   // host toasts
@@ -728,7 +730,7 @@ const en: Dict = {
   "settings.section.language": "Lingua / Language",
   "language.desc": "Choose the interface language.",
   // settings — footer
-  "settings.bridge.connected": "Live v{n}",
+  "settings.bridge.connected": "v{n}",
   "settings.bridge.disconnected": "not connected",
   "settings.product": "An APICE product",
   // print
@@ -823,6 +825,8 @@ const en: Dict = {
   "info.secondary.b": "• Import setlist: paste titles or load .txt/.pdf/.docx; matched to the markers and colored automatically.\n• Color Ableton songs / Color setlist: color the project clips or the setlist rows (chosen scheme).\n• Keyboard shortcuts and Bluetooth pedals: map keys/pedals to Play/Stop/Next/Previous/PANIC.\n• Clean project: rename every clip in the project as \"Song — Track\", for a tidy project (the lyrics track is excluded).\n• Language: Italiano / English.",
   "info.trouble.h": "12 · Common issues",
   "info.trouble.b": "• \"Live\" grey: the control surface isn't selected in Ableton, or it needs a restart.\n• No stops read: check that the STOP track is the right one and that the notes are INSIDE the clips; press \"Re-read\".\n• PANIC doesn't sound: pick the MIDI port (loopMIDI) and enable \"Monitor: In\" on the track.\n• The setlist doesn't change right away: \"Safe Mode\" blocks jumps while playing — turn it off if you don't want it.",
+  "info.updates.h": "13 · App updates",
+  "info.updates.b": "AbleJam updates itself.\n• Settings → Updates → «Check for updates»: if a newer version exists, press «Download & install» (a progress bar shows).\n• On Windows the installer launches automatically; on Mac the .dmg opens — drag AbleJam to Applications.\n• The section only shows in the desktop app (from a phone/tablet you update from the computer).\nRecent additions: phone & tablet-optimized interface, lyrics backup (Settings → Lyrics → Export/Import), macOS support.",
   "info.contact.h": "Support & contact",
   "info.contact.b": "Questions, problems or suggestions? Get in touch, we're happy to help:",
   // host toasts
@@ -1130,7 +1134,7 @@ const es: Dict = {
   "tablet.noIp": "Dirección de red no detectada (revisa la conexión del ordenador).",
   "settings.section.language": "Lingua / Idioma",
   "language.desc": "Elige el idioma de la interfaz.",
-  "settings.bridge.connected": "Live v{n}",
+  "settings.bridge.connected": "v{n}",
   "settings.bridge.disconnected": "no conectado",
   "settings.product": "Un producto de APICE",
   "print.band": "Banda",
@@ -1219,6 +1223,8 @@ const es: Dict = {
   "info.secondary.b": "• Importar setlist: pega títulos o carga .txt/.pdf/.docx; se emparejan con los marcadores y se colorean automáticamente.\n• Colorear canciones de Ableton / Colorear setlist: colorea los clips del proyecto o las filas del setlist (esquema elegido).\n• Atajos de teclado y pedales Bluetooth: asigna teclas/pedales a Reproducir/Stop/Siguiente/Anterior/PANIC.\n• Limpiar proyecto: renombra cada clip del proyecto como \"Canción — Pista\", para un proyecto ordenado (la pista de letras se excluye).\n• Idioma: Italiano / English.",
   "info.trouble.h": "12 · Problemas comunes",
   "info.trouble.b": "• \"Live\" gris: el control surface no está seleccionado en Ableton, o necesita un reinicio.\n• No se leen paradas: comprueba que la pista STOP sea la correcta y que las notas estén DENTRO de los clips; pulsa \"Releer\".\n• PANIC no suena: elige el puerto MIDI (loopMIDI) y activa \"Monitor: In\" en la pista.\n• El setlist no cambia de inmediato: el \"Modo seguro\" bloquea los saltos durante la reproducción — desactívalo si no lo quieres.",
+  "info.updates.h": "13 · Actualizaciones de la app",
+  "info.updates.b": "AbleJam se actualiza solo.\n• Ajustes → Actualizaciones → «Buscar actualizaciones»: si hay una versión nueva, pulsa «Descargar e instalar» (con barra de progreso).\n• En Windows el instalador se inicia solo; en Mac se abre el .dmg — arrastra AbleJam a Aplicaciones.\n• La sección solo aparece en la app de escritorio (desde el móvil/tablet actualizas desde el ordenador).\nNovedades recientes: interfaz optimizada para móvil y tablet, copia de seguridad de letras (Ajustes → Letras → Exportar/Importar), soporte para macOS.",
   "info.contact.h": "Soporte y contacto",
   "info.contact.b": "¿Preguntas, problemas o sugerencias? Ponte en contacto, estaremos encantados de ayudar:",
   "host.colorize.noSongs": "No hay canciones que colorear",
@@ -1525,7 +1531,7 @@ const fr: Dict = {
   "tablet.noIp": "Adresse réseau non détectée (vérifiez la connexion de l'ordinateur).",
   "settings.section.language": "Lingua / Langue",
   "language.desc": "Choisissez la langue de l'interface.",
-  "settings.bridge.connected": "Live v{n}",
+  "settings.bridge.connected": "v{n}",
   "settings.bridge.disconnected": "non connecté",
   "settings.product": "Un produit APICE",
   "print.band": "Groupe",
@@ -1614,6 +1620,8 @@ const fr: Dict = {
   "info.secondary.b": "• Importer une setlist : collez des titres ou chargez un .txt/.pdf/.docx ; mis en correspondance avec les marqueurs et coloré automatiquement.\n• Colorer les morceaux Ableton / Colorer la setlist : colorez les clips du projet ou les lignes de la setlist (schéma choisi).\n• Raccourcis clavier et pédales Bluetooth : associez touches/pédales à Lecture/Arrêt/Suivant/Précédent/PANIC.\n• Nettoyer le projet : renommez chaque clip du projet en \"Morceau — Piste\", pour un projet bien rangé (la piste de paroles est exclue).\n• Langue : Italiano / English.",
   "info.trouble.h": "12 · Problèmes courants",
   "info.trouble.b": "• \"Live\" gris : la control surface n'est pas sélectionnée dans Ableton, ou il faut redémarrer.\n• Aucun arrêt lu : vérifiez que la piste STOP est la bonne et que les notes sont À L'INTÉRIEUR des clips ; appuyez sur \"Relire\".\n• PANIC ne sonne pas : choisissez le port MIDI (loopMIDI) et activez \"Monitor: In\" sur la piste.\n• La setlist ne change pas tout de suite : le \"Safe Mode\" bloque les sauts pendant la lecture — désactivez-le si vous n'en voulez pas.",
+  "info.updates.h": "13 · Mises à jour de l'app",
+  "info.updates.b": "AbleJam se met à jour tout seul.\n• Réglages → Mises à jour → «Rechercher des mises à jour» : s'il y a une nouvelle version, appuyez sur «Télécharger et installer» (barre de progression).\n• Sous Windows l'installeur se lance seul ; sur Mac le .dmg s'ouvre — glissez AbleJam dans Applications.\n• La section n'apparaît que dans l'app de bureau (depuis un téléphone/tablette, mettez à jour depuis l'ordinateur).\nNouveautés récentes : interface optimisée pour téléphone et tablette, sauvegarde des paroles (Réglages → Paroles → Exporter/Importer), prise en charge de macOS.",
   "info.contact.h": "Assistance & contact",
   "info.contact.b": "Des questions, des problèmes ou des suggestions ? Contactez-nous, nous sommes ravis de vous aider :",
   "host.colorize.noSongs": "Aucun morceau à colorer",

@@ -11,4 +11,9 @@ contextBridge.exposeInMainWorld("ablejam", {
   installBridge: (): Promise<void> => ipcRenderer.invoke("ablejam:install-bridge"),
   checkUpdate: (): Promise<unknown> => ipcRenderer.invoke("ablejam:update-check"),
   installUpdate: (): Promise<unknown> => ipcRenderer.invoke("ablejam:update-install"),
+  onUpdateProgress: (cb: (p: unknown) => void): (() => void) => {
+    const listener = (_e: unknown, p: unknown): void => cb(p);
+    ipcRenderer.on("ablejam:update-progress", listener);
+    return () => ipcRenderer.removeListener("ablejam:update-progress", listener);
+  },
 });
