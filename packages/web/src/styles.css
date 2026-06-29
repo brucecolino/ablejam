@@ -712,3 +712,10 @@ button { font-family: inherit; }
   .transport, .perf-transport, .stage-transport { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
   .stage { padding-bottom: max(3vh, env(safe-area-inset-bottom)); }
 }
+
+/* macOS desktop app: the window's traffic-light buttons (hiddenInset title bar) overlay the
+   top-left of the topbar — pad it clear of them, and make the bar drag the window like a real
+   title bar (the tabs/status controls stay clickable). Only applied in the Electron Mac app
+   (the `mac` class comes from window.ablejam.platform); browsers/phones are unaffected. */
+.app.mac .topbar { padding-left: 82px; -webkit-app-region: drag; }
+.app.mac .topbar .tabs, .app.mac .topbar .status { -webkit-app-region: no-drag; }

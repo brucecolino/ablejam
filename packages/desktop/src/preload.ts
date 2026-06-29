@@ -6,6 +6,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("ablejam", {
+  platform: process.platform, // so the web can pad the macOS traffic-light title bar
   version: (): Promise<string> => ipcRenderer.invoke("ablejam:version"),
   installBridge: (): Promise<void> => ipcRenderer.invoke("ablejam:install-bridge"),
   checkUpdate: (): Promise<unknown> => ipcRenderer.invoke("ablejam:update-check"),

@@ -271,7 +271,7 @@ export function App() {
   return (
     <LangCtx.Provider value={lang}>
     <BeatCtx.Provider value={beat}>
-    <div className={"app" + (KIOSK ? " kiosk" : "")}>
+    <div className={"app" + (getBridge()?.platform === "darwin" ? " mac" : "") + (KIOSK ? " kiosk" : "")}>
       {!KIOSK && <header className="topbar">
         <span className="brand" title={`AbleJam v${APP_VERSION} · Bridge ${state.bridgeVersion ? tr("settings.bridge.connected", { n: state.bridgeVersion }) : tr("settings.bridge.disconnected")}`}>
           <img className="brand-mark" src="/logo-grid.svg" width={26} height={26} alt="" />
@@ -674,6 +674,7 @@ function InfoPanel({ onClose }: { onClose: () => void }) {
 
 interface UpdateCheck { current: string; latest: string; available: boolean; notes: string; assetName: string | null; platform: string; noAsset: boolean }
 interface AbleJamBridge {
+  platform?: string;
   version: () => Promise<string>;
   installBridge?: () => Promise<void>;
   checkUpdate?: () => Promise<UpdateCheck>;
