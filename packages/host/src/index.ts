@@ -10,6 +10,7 @@ import { extractText, textToTitles } from "./import";
 import { listOutputs, sendNote as sendMidiNote, isAvailable as midiAvailable, closeOutput } from "./midiout";
 import { verifyLicenseKey } from "./license";
 import { listBluetooth, openBluetoothSettings } from "./bluetooth";
+import { listAudioDevices } from "./audio";
 import { readAbleton } from "./ableton";
 import {
   ADDR,
@@ -167,6 +168,27 @@ function refreshBT(): void {
     }
   }).catch(() => {});
 }
+let audioDevices: string[] = []; // audio devices present on the host (for the Audio watcher)
+/** Is the watched interface present? True when nothing is being watched (indicator stays neutral). */
+function audioConnected(): boolean {
+  const want = settings.audioDevice.trim().toLowerCase();
+  if (!want) return true;
+  return audioDevices.some((d) => d.toLowerCase().includes(want));
+}
+function refreshAudio(): void {
+  listAudioDevices().then((list) => {
+    const changed = list.length !== audioDevices.length || list.some((d, i) => d !== audioDevices[i]);
+    if (!changed) return;
+    const wasConnected = audioConnected();
+    audioDevices = list;
+    const nowConnected = audioConnected();
+    // Alert only on a real present -> absent transition of the WATCHED device (not on every poll).
+    if (settings.audioDevice && wasConnected && !nowConnected) {
+      toast("error", tr("host.audio.lost", { name: settings.audioDevice }));
+    }
+    broadcastState();
+  }).catch(() => {});
+}
 let abletonProject = ""; // open Live Set name (from the Ableton window title)
 let abletonVersion = ""; // Ableton edition + version in use
 function refreshAbleton(): void {
@@ -219,6 +241,8 @@ function snapshot(): AppState {
     stopPoints,
     stopDiag,
     bluetooth,
+    audioDevices,
+    audioConnected: audioConnected(),
     abletonProject,
     abletonVersion,
     currentSetlistName,
@@ -695,7 +719,7 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
 function applySetting(key: keyof Settings, value: boolean | string | number): void {
   const target = settings as unknown as Record<string, boolean | string | number>;
   if (key === "emergencyNote" || key === "stopNote") target[key] = Number(value);
-  else if (key === "emergencyPort" || key === "stopTrack" || key === "lyricsTrack" || key === "colorScheme" || key === "setlistColorScheme" || key === "panicLabel" || key === "panicColor" || key === "language" || key === "medleyDisplay" || key === "clickIndicator" || key === "licenseKey") target[key] = String(value);
+  else if (key === "emergencyPort" || key === "stopTrack" || key === "lyricsTrack" || key === "audioDevice" || key === "colorScheme" || key === "setlistColorScheme" || key === "panicLabel" || key === "panicColor" || key === "language" || key === "medleyDisplay" || key === "clickIndicator" || key === "licenseKey") target[key] = String(value);
   else target[key] = Boolean(value);
 }
 
@@ -881,6 +905,7 @@ server.onCommand = (c: ClientCommand) => {
     case "setMetronome": bridge.send(ADDR.cmdMetronome, [c.on ? 1 : 0]); break;
     case "refreshBluetooth": refreshBT(); break;
     case "openBluetoothSettings": openBluetoothSettings(); break;
+    case "refreshAudio": refreshAudio(); break;
     case "setSetting":
       applySetting(c.key, c.value);
       if (c.key === "stopTrack" || c.key === "stopNote") sendStopConfig(); // re-read with the new track/note
@@ -903,6 +928,7 @@ server.onCommand = (c: ClientCommand) => {
 // the file calls it — preserving the original behaviour exactly.
 let scanId: ReturnType<typeof setInterval> | undefined;
 let btId: ReturnType<typeof setInterval> | undefined;
+let audioId: ReturnType<typeof setInterval> | undefined;
 let abletonId: ReturnType<typeof setInterval> | undefined;
 let lyricsWatcher: FSWatcher | undefined;
 
@@ -933,6 +959,8 @@ export function startHost(): { ready: Promise<void>; close: () => Promise<void> 
   bridge.send(ADDR.cmdRefresh);
   refreshBT();
   btId = setInterval(refreshBT, 20000); // keep the connected-Bluetooth list fresh
+  refreshAudio();
+  audioId = setInterval(refreshAudio, 5000); // watch the audio interface so a disconnect alerts fast
   refreshAbleton();
   abletonId = setInterval(refreshAbleton, 3000); // fast enough that the unsaved "*" clears right after a save
   applyDemo(); // enforce licensing (unlicensed -> locked to demo) + restore the demo toggle across restarts
@@ -941,12 +969,13 @@ export function startHost(): { ready: Promise<void>; close: () => Promise<void> 
   return { ready, close };
 }
 
-/** Release everything startHost() acquired: the 3 timers, the lyrics + edit watchers, the
+/** Release everything startHost() acquired: the 4 timers, the lyrics + edit watchers, the
  * cached MIDI out port, the UDP socket (39062) and the http+ws listener (3700). Called by
  * the Electron wrapper before quit so a relaunch never hits a held port. */
 async function close(): Promise<void> {
   if (scanId) { clearInterval(scanId); scanId = undefined; }
   if (btId) { clearInterval(btId); btId = undefined; }
+  if (audioId) { clearInterval(audioId); audioId = undefined; }
   if (abletonId) { clearInterval(abletonId); abletonId = undefined; }
   try { lyricsWatcher?.close(); } catch { /* ignore */ }
   lyricsWatcher = undefined;

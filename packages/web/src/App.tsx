@@ -370,6 +370,12 @@ export function App() {
             <BluetoothIcon /> {state.bluetooth.length}
           </button>
           {state.lanIp && <RemoteChip ip={state.lanIp} />}
+          {state.settings.audioDevice && (
+            <AudioDot ok={state.audioConnected}
+              title={(state.audioConnected
+                ? tr("audio.dot.connected", { name: state.settings.audioDevice })
+                : tr("audio.dot.disconnected", { name: state.settings.audioDevice }))} />
+          )}
           <Dot ok={bridgeConnected} label="Live"
             title={state.abletonVersion ? (state.abletonProject ? `${tr("live.project")}: ${state.abletonProject}\n` : "") + state.abletonVersion : undefined} />
           <button className="gear" onClick={() => setShowInfo(true)} title={tr("info.title")} aria-label={tr("info.title")}>
@@ -1128,6 +1134,30 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
             <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
               <button className="settings-btn" onClick={() => send({ type: "command", command: "refreshBluetooth" })}><ActionIcon name="reset" /> {tr("bluetooth.refresh")}</button>
               <button className="settings-btn" onClick={() => send({ type: "command", command: "openBluetoothSettings" })}>{tr("bluetooth.openSettings")}</button>
+            </div>
+          </section>
+
+          <section className="settings-card">
+            <div className="settings-section">{tr("settings.section.audio")}</div>
+            <div className="settings-desc-small">{tr("settings.audio.desc")}</div>
+            <label className="setting">
+              <span className="setting-text">
+                <span className="setting-label">{tr("set.audioDevice.label")}</span>
+                <span className="setting-desc">{tr("set.audioDevice.desc")}</span>
+              </span>
+              <select className="setting-select" value={s.audioDevice} onChange={(e) => send({ type: "command", command: "setSetting", key: "audioDevice", value: e.target.value })}>
+                <option value="">{tr("set.audioDevice.none")}</option>
+                {state.audioDevices.map((d) => <option key={d} value={d}>{d}</option>)}
+                {s.audioDevice && !state.audioDevices.includes(s.audioDevice) && <option value={s.audioDevice}>{s.audioDevice}</option>}
+              </select>
+            </label>
+            <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
+              {s.audioDevice && (
+                <span style={{ color: state.audioConnected ? "var(--playing)" : "#e2503b", fontWeight: 700, fontSize: 13 }}>
+                  {(state.audioConnected ? tr("audio.dot.connected", { name: s.audioDevice }) : tr("audio.dot.disconnected", { name: s.audioDevice })).replace(/\n/g, " ")}
+                </span>
+              )}
+              <button className="settings-btn" onClick={() => send({ type: "command", command: "refreshAudio" })}><ActionIcon name="reset" /> {tr("audio.refresh")}</button>
             </div>
           </section>
 
@@ -2204,6 +2234,19 @@ function Toasts({ toasts }: { toasts: Toast[] }) {
 
 function Dot({ ok, label, title }: { ok: boolean; label: string; title?: string }) {
   return <span className={"dot" + (ok ? " ok" : "")} title={title}>{label}</span>;
+}
+/** Top-bar audio-interface indicator: green when the watched device is present, red when it dropped.
+ * Reuses the `.dot` colours (red default / `.ok` green); the headphones glyph inherits the colour. */
+function AudioDot({ ok, title }: { ok: boolean; title?: string }) {
+  return (
+    <span className={"dot audio-dot" + (ok ? " ok" : "")} title={title}>
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 14v-2a8 8 0 0 1 16 0v2" />
+        <rect x="2.5" y="13.5" width="4" height="6.5" rx="1.3" />
+        <rect x="17.5" y="13.5" width="4" height="6.5" rx="1.3" />
+      </svg>
+    </span>
+  );
 }
 /** Metronome visual that overlays the CLICK button. "blink" flashes each beat (2 & 4 stronger),
  * "bars" fills one vertical bar per beat (earlier bars stay, dimmed). Active only while the click is

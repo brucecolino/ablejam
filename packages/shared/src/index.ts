@@ -161,6 +161,10 @@ export interface Settings {
   /** Name of the Ableton track whose arrangement clips hold the lyrics (one clip per line).
    * "" = automatic (the first track with "lyrics" in its name). */
   lyricsTrack: string;
+  /** Name (or substring) of the audio interface to WATCH on the host machine. When set, AbleJam
+   * shows a green/red indicator and alerts if this device drops off the OS audio bus. "" = no watcher.
+   * The Live API can't reveal Ableton's selected device, so this is an OS-level presence check. */
+  audioDevice: string;
   /** Colour scheme for the "colora brani" features: "contrast" | "rainbow" | "warm-cold"
    * | "random". "contrast" makes adjacent songs maximally distinct (golden-angle hue). */
   colorScheme: string;
@@ -215,6 +219,7 @@ export const defaultSettings: Settings = {
   stopTrack: "",
   stopNote: -1,
   lyricsTrack: "LYRICS",
+  audioDevice: "",
   colorScheme: "rainbow",
   shortcuts: { prev: "", play: "", stop: "", next: "", panic: "" },
   pedals: { prev: "", play: "", stop: "", next: "", panic: "" },
@@ -277,6 +282,11 @@ export interface AppState {
   stopDiag: string;
   /** Names of the Bluetooth peripherals currently connected to the host machine. */
   bluetooth: string[];
+  /** Names of the audio devices present on the host machine (to pick the interface to watch). */
+  audioDevices: string[];
+  /** Whether the watched audio interface (`settings.audioDevice`) is currently present. True when no
+   * device is being watched, so the indicator stays neutral until the user opts in. */
+  audioConnected: boolean;
   /** Name of the Ableton Live Set currently open (from the app window title; "" = unknown). */
   abletonProject: string;
   /** Ableton edition + version in use, e.g. "Ableton Live 12 Suite (12.2)" ("" = unknown). */
@@ -329,6 +339,8 @@ export const initialState: AppState = {
   stopPoints: [],
   stopDiag: "",
   bluetooth: [],
+  audioDevices: [],
+  audioConnected: true,
   abletonProject: "",
   abletonVersion: "",
   currentSetlistName: "",
@@ -394,6 +406,7 @@ export type ClientCommand =
   | { type: "command"; command: "setMetronome"; on: boolean }
   | { type: "command"; command: "refreshBluetooth" }
   | { type: "command"; command: "openBluetoothSettings" }
+  | { type: "command"; command: "refreshAudio" }
   | { type: "command"; command: "setSetting"; key: keyof Settings; value: boolean | string | number };
 
 // ---- setlist model builders (pure) ----
