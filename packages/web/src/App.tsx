@@ -198,8 +198,14 @@ function RemoteChip({ ip }: { ip: string }) {
             <div className="conn-body">
               <div className="settings-desc-small">{tr("remote.desc")}</div>
               <div className="conn-url-row">
-                <div className="lan-url" style={{ flex: 1, margin: 0, fontSize: 16 }}>{url}</div>
-                <button className="settings-btn" style={{ marginTop: 0, flex: "none" }} onClick={copy}>{copied ? `✓ ${tr("remote.copied")}` : tr("remote.copy")}</button>
+                <div className="lan-url" style={{ flex: 1, minWidth: 0, margin: 0, fontSize: 14, letterSpacing: 0, wordBreak: "break-all" }}>{url}</div>
+                <button className={"act" + (copied ? " on" : "")} style={{ flex: "none" }} onClick={copy} title={copied ? tr("remote.copied") : tr("remote.copy")} aria-label={tr("remote.copy")}>
+                  {copied ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12l5 5L20 6" /></svg>
+                  ) : (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
+                  )}
+                </button>
               </div>
               <div className="conn-qr"><QRCodeCanvas value={url} size={220} level="M" marginSize={2} /></div>
               <button className="settings-btn conn-save" style={{ marginTop: 0, background: "color-mix(in srgb, var(--accent) 16%, transparent)", borderColor: "color-mix(in srgb, var(--accent) 50%, transparent)", color: "var(--accent)" }} onClick={saveQr}>{tr("remote.save")}</button>

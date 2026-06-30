@@ -10,6 +10,13 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.18",
+    notes: {
+      it: ["Card \"Connetti un dispositivo\": pulsante copia compatto (icona) e indirizzo su una riga — niente più testo che sborda dalla card."],
+      en: ["\"Connect a device\" card: compact icon copy button and the address on one line — no more text spilling out of the card."],
+    },
+  },
+  {
     version: "0.1.17",
     notes: {
       it: ["Sistemata la card \"Connetti un dispositivo\": i pulsanti Copia indirizzo / Salva QR ora sono in stile (prima il testo sbordava)."],
