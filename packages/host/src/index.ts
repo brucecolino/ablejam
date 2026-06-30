@@ -8,7 +8,8 @@ import { watch, type FSWatcher } from "node:fs";
 import { exec as execChild } from "node:child_process";
 import { extractText, textToTitles } from "./import";
 import { listOutputs, sendNote as sendMidiNote, isAvailable as midiAvailable, closeOutput } from "./midiout";
-import { verifyLicenseKey } from "./license";
+import { verifyLicenseKey, isActivatedHere } from "./license";
+import { deviceId, deviceName } from "./deviceid";
 import { listBluetooth, openBluetoothSettings } from "./bluetooth";
 import { hasAudioInterface } from "./audio";
 import { readAbleton } from "./ableton";
@@ -216,10 +217,13 @@ let lastTempo = 120;
 let pendingRebuild = false;
 let prevTime = 0;
 
-/** Decode the stored license key (cheap signature verify). */
+let activationState = ""; // transient UI status for device activation ("", "busy", "limit", "offline", "invalid")
+/** Licensed = the key is valid AND this device holds a matching activation token (offline check, no
+ * network). The email is read from the key even before activation, so the UI can show it. */
 function licenseInfo(): { licensed: boolean; email: string } {
   const p = verifyLicenseKey(settings.licenseKey || "");
-  return { licensed: !!p, email: p?.email ?? "" };
+  if (!p) return { licensed: false, email: "" };
+  return { licensed: isActivatedHere(settings.licenseKey, settings.activationToken || "", deviceId()), email: p.email };
 }
 /** Enforce licensing: an UNLICENSED app is locked to the demo setlist — it never drives real
  * Ableton. A licensed app honours the user's own demo toggle. Called at boot and whenever the
@@ -227,6 +231,47 @@ function licenseInfo(): { licensed: boolean; email: string } {
 function applyDemo(): void {
   // When licensing is OFF (current), only the user's own demo toggle drives demo mode.
   bridge.setDemo((LICENSING_ENABLED && !licenseInfo().licensed) || settings.demoMode);
+}
+
+// One-time ONLINE activation: register THIS device against the key (max 3 per key) and store the
+// signed token. After this the app verifies the token OFFLINE forever (no internet on stage). Fire
+// it when the user enters a key; a network failure leaves them in demo until they retry with WiFi.
+const ACTIVATE_URL = "https://ablejam.com/api/activate";
+async function activateOnline(key: string): Promise<void> {
+  if (!verifyLicenseKey(key)) { activationState = "invalid"; toast("error", tr("license.invalid")); broadcastState(); return; }
+  activationState = "busy";
+  broadcastState();
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 12000);
+  try {
+    const res = await fetch(ACTIVATE_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key, deviceId: deviceId(), deviceName: deviceName() }),
+      signal: ctrl.signal,
+    });
+    if (res.status === 409) { // the key's 3 devices are all used
+      settings.activationToken = "";
+      activationState = "limit";
+      toast("error", tr("license.limit"));
+      applyDemo(); persistSession(); broadcastState();
+      return;
+    }
+    const data = res.ok ? (await res.json().catch(() => ({}))) as { token?: string; slots?: number; max?: number } : {};
+    if (!res.ok || !data.token) { activationState = "offline"; toast("error", tr("license.activate.offline")); broadcastState(); return; }
+    settings.activationToken = data.token;
+    activationState = "";
+    const li = licenseInfo();
+    if (li.licensed) toast("info", tr("license.activated.device", { email: li.email, slot: data.slots ?? 1, max: data.max ?? 3 }));
+    else toast("error", tr("license.invalid"));
+    applyDemo(); persistSession(); broadcastState();
+  } catch {
+    activationState = "offline";
+    toast("error", tr("license.activate.offline"));
+    broadcastState();
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function snapshot(): AppState {
@@ -263,6 +308,7 @@ function snapshot(): AppState {
     lyricsEdited: lyricsDoc != null,
     licensed: li.licensed,
     licenseEmail: li.email,
+    activationState,
   };
 }
 
@@ -940,9 +986,12 @@ server.onCommand = (c: ClientCommand) => {
       if (c.key === "automationEnabled") applyPluginAutomation(transport.isPlaying, true); // enforce on toggle
       if (c.key === "demoMode") applyDemo(); // honour the toggle (only effective when licensed)
       if (c.key === "licenseKey") {
-        const li = licenseInfo();
-        toast(li.licensed ? "info" : "error", li.licensed ? tr("license.activated", { email: li.email }) : tr("license.invalid"));
-        applyDemo(); // unlock real Ableton, or re-lock to demo if the key was cleared/invalid
+        if (settings.licenseKey) {
+          void activateOnline(settings.licenseKey); // register this device online + store the token
+        } else {
+          settings.activationToken = ""; activationState = ""; // key cleared -> drop activation, back to demo
+          applyDemo();
+        }
       }
       changed();
       break;

@@ -224,6 +224,10 @@ export interface Settings {
   /** License key (signed by ablejam.com). Empty / invalid = unlicensed → the app is locked to
    * the demo setlist (it won't drive real Ableton) until a valid key is entered. */
   licenseKey: string;
+  /** Activation token (signed by ablejam.com) binding this key to THIS device. Obtained once,
+   * online, when the key is entered (max 3 devices per key); afterwards the app verifies it offline
+   * to unlock Pro with no internet. Empty until the device is activated. */
+  activationToken: string;
 }
 
 export const defaultSettings: Settings = {
@@ -258,6 +262,7 @@ export const defaultSettings: Settings = {
   clickIndicator: "off",
   demoMode: false,
   licenseKey: "",
+  activationToken: "",
 };
 
 /** A colour ("#rrggbb") for item `i` of `n` under a scheme. "contrast" (default) uses the
@@ -334,6 +339,10 @@ export interface AppState {
   licensed: boolean;
   /** Email the stored license is registered to ("" when unlicensed). */
   licenseEmail: string;
+  /** Transient device-activation status for the UI: "" idle, "busy" (online activation in flight),
+   * "limit" (the key's 3 devices are used), "offline" (couldn't reach the server to activate),
+   * "invalid" (key rejected). The licensed flag above is the source of truth for the gate. */
+  activationState: string;
 }
 
 export const initialTransport: Transport = {
@@ -377,6 +386,7 @@ export const initialState: AppState = {
   lyricsEdited: false,
   licensed: false,
   licenseEmail: "",
+  activationState: "",
 };
 
 export interface ImportResult {

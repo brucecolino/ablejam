@@ -1261,8 +1261,14 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
             <div className="settings-section">{tr("settings.section.license")}</div>
             <label className="setting">
               <span className="setting-text">
-                <span className="setting-label" style={state.licensed ? { color: "var(--playing)" } : undefined}>
-                  {state.licensed ? `✓ ${tr("license.status.active", { email: state.licenseEmail })}` : tr("license.status.demo")}
+                <span className="setting-label" style={state.licensed ? { color: "var(--playing)" } : state.activationState === "limit" ? { color: "#e2503b" } : undefined}>
+                  {state.activationState === "busy"
+                    ? `… ${tr("license.activating")}`
+                    : state.licensed
+                      ? `✓ ${tr("license.activatedHere")} — ${state.licenseEmail}`
+                      : state.activationState === "limit"
+                        ? tr("license.limit")
+                        : tr("license.status.demo")}
                 </span>
                 <span className="setting-desc">{tr("license.desc")}</span>
               </span>
@@ -1279,16 +1285,17 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
                   placeholder={tr("license.key.placeholder")}
                   value={licenseInput}
                   onChange={(e) => setLicenseInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && licenseInput.trim()) send({ type: "command", command: "setSetting", key: "licenseKey", value: licenseInput.trim() }); }}
+                  onKeyDown={(e) => { if (e.key === "Enter" && licenseInput.trim() && state.activationState !== "busy") send({ type: "command", command: "setSetting", key: "licenseKey", value: licenseInput.trim() }); }}
                 />
+                <div className="settings-desc-small">{state.activationState === "limit" ? tr("license.limitHint") : tr("license.activate.hint")}</div>
                 <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
                   <button
                     className="settings-btn"
                     style={{ marginTop: 0, background: "color-mix(in srgb, var(--accent) 16%, transparent)", borderColor: "color-mix(in srgb, var(--accent) 50%, transparent)", color: "var(--accent)" }}
-                    disabled={!licenseInput.trim()}
+                    disabled={!licenseInput.trim() || state.activationState === "busy"}
                     onClick={() => send({ type: "command", command: "setSetting", key: "licenseKey", value: licenseInput.trim() })}
                   >
-                    {tr("license.activate")}
+                    {state.activationState === "busy" ? tr("license.activating") : tr("license.activate")}
                   </button>
                   <a href="https://ablejam.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
                     {tr("license.buy")}

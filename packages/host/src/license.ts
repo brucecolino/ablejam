@@ -43,3 +43,49 @@ export function verifyLicenseKey(key: string): LicensePayload | null {
 export function isLicensed(key: string | undefined | null): boolean {
   return verifyLicenseKey(String(key ?? "")) != null;
 }
+
+// ---- Device activation (3-device limit) -------------------------------------------------------
+// After the online activation handshake the app stores an ACTIVATION TOKEN (signed by the same
+// keypair) that binds the key to THIS device. From then on the app verifies it OFFLINE — no internet
+// needed — and unlocks Pro only when the token's key-hash + device-id both match.
+
+export interface ActivationPayload {
+  v: number;
+  typ: "activation";
+  kid: string; // key id (hash) the token is bound to
+  did: string; // device id (hash) the token is bound to
+  email: string;
+  iat: number;
+}
+
+/** Stable short id for a license key (must match the server's keyId()). */
+export function keyId(key: string): string {
+  const clean = (key ?? "").trim().replace(/\s+/g, "");
+  return crypto.createHash("sha256").update(clean).digest("hex").slice(0, 32);
+}
+
+/** Verify an activation token's signature offline. Returns the payload, or null if invalid. The
+ * caller still checks `kid` matches the stored key and `did` matches this machine. */
+export function verifyActivationToken(token: string): ActivationPayload | null {
+  try {
+    const clean = (token ?? "").trim().replace(/\s+/g, "");
+    const dot = clean.indexOf(".");
+    if (dot <= 0 || dot >= clean.length - 1) return null;
+    const payloadBuf = Buffer.from(clean.slice(0, dot), "base64url");
+    const sig = Buffer.from(clean.slice(dot + 1), "base64url");
+    if (!sig.length || !payloadBuf.length) return null;
+    if (!crypto.verify(null, payloadBuf, PUBLIC_KEY, sig)) return null;
+    const p = JSON.parse(payloadBuf.toString("utf8")) as ActivationPayload;
+    if (!p || p.typ !== "activation" || typeof p.kid !== "string" || typeof p.did !== "string") return null;
+    return p;
+  } catch {
+    return null;
+  }
+}
+
+/** Full offline check: the stored key is valid AND the activation token binds THIS device to it. */
+export function isActivatedHere(key: string, token: string, did: string): boolean {
+  if (!isLicensed(key)) return false;
+  const p = verifyActivationToken(token);
+  return !!p && p.kid === keyId(key) && p.did === did;
+}
