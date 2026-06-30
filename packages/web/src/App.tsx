@@ -168,13 +168,16 @@ function Clock() {
   return <span className="clock" title={now.toLocaleString()}>{hh}:{mm}</span>;
 }
 
+/** Top-bar "connect a device" indicator: an icon that's green when a tablet/phone CAN reach AbleJam
+ * (the host has a LAN IP), red when offline. Clicking opens the connection card (QR + address)
+ * directly — no Settings detour. Same size as the other status dots. */
 function RemoteChip({ ip }: { ip: string }) {
   const { tr } = useT();
   const port = typeof location !== "undefined" ? (location.port || "3700") : "3700";
-  const url = `http://${ip}:${port}`;
+  const url = ip ? `http://${ip}:${port}` : "";
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const copy = () => { try { navigator.clipboard?.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1400); } catch { /* ignore */ } };
+  const copy = () => { if (!url) return; try { navigator.clipboard?.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1400); } catch { /* ignore */ } };
   const saveQr = () => {
     const canvas = document.querySelector(".conn-qr canvas") as HTMLCanvasElement | null;
     if (!canvas) return;
@@ -184,9 +187,11 @@ function RemoteChip({ ip }: { ip: string }) {
     a.click();
   };
   return (
-    <span className="remote-chip">
-      <button className="remote-toggle" title={tr("remote.title")} onClick={() => setOpen(true)}>
-        📱 {ip}:{port}
+    <>
+      <button className={"dot remote-dot" + (ip ? " ok" : "")} title={ip ? tr("remote.title") : tr("remote.offline")} aria-label={tr("remote.title")} onClick={() => setOpen(true)}>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="7" y="3" width="10" height="18" rx="2.5" /><line x1="10.5" y1="18.5" x2="13.5" y2="18.5" />
+        </svg>
       </button>
       {open && (
         <div className="overlay" onClick={() => setOpen(false)}>
@@ -196,24 +201,29 @@ function RemoteChip({ ip }: { ip: string }) {
               <button className="settings-close" onClick={() => setOpen(false)} title={tr("common.close")}>✕</button>
             </div>
             <div className="conn-body">
-              <div className="settings-desc-small">{tr("remote.desc")}</div>
-              <div className="conn-url-row">
-                <div className="lan-url" style={{ flex: 1, minWidth: 0, margin: 0, fontSize: 14, letterSpacing: 0, wordBreak: "break-all" }}>{url}</div>
-                <button className={"act" + (copied ? " on" : "")} style={{ flex: "none" }} onClick={copy} title={copied ? tr("remote.copied") : tr("remote.copy")} aria-label={tr("remote.copy")}>
-                  {copied ? (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12l5 5L20 6" /></svg>
-                  ) : (
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
-                  )}
-                </button>
-              </div>
-              <div className="conn-qr"><QRCodeCanvas value={url} size={220} level="M" marginSize={2} /></div>
-              <button className="settings-btn conn-save" style={{ marginTop: 0, background: "color-mix(in srgb, var(--accent) 16%, transparent)", borderColor: "color-mix(in srgb, var(--accent) 50%, transparent)", color: "var(--accent)" }} onClick={saveQr}>{tr("remote.save")}</button>
+              {url ? (
+                <>
+                  <div className="conn-url-row">
+                    <div className="lan-url" style={{ flex: 1, minWidth: 0, margin: 0, fontSize: 14, letterSpacing: 0, wordBreak: "break-all" }}>{url}</div>
+                    <button className={"act" + (copied ? " on" : "")} style={{ flex: "none" }} onClick={copy} title={copied ? tr("remote.copied") : tr("remote.copy")} aria-label={tr("remote.copy")}>
+                      {copied ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12l5 5L20 6" /></svg>
+                      ) : (
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
+                      )}
+                    </button>
+                  </div>
+                  <div className="conn-qr"><QRCodeCanvas value={url} size={220} level="M" marginSize={2} /></div>
+                  <button className="settings-btn conn-save" style={{ marginTop: 0, background: "color-mix(in srgb, var(--accent) 16%, transparent)", borderColor: "color-mix(in srgb, var(--accent) 50%, transparent)", color: "var(--accent)" }} onClick={saveQr}>{tr("remote.save")}</button>
+                </>
+              ) : (
+                <div className="settings-desc-small">{tr("remote.offline.desc")}</div>
+              )}
             </div>
           </div>
         </div>
       )}
-    </span>
+    </>
   );
 }
 
@@ -369,13 +379,9 @@ export function App() {
             onClick={() => { send({ type: "command", command: "refreshBluetooth" }); send({ type: "command", command: "openBluetoothSettings" }); }}>
             <BluetoothIcon /> {state.bluetooth.length}
           </button>
-          {state.lanIp && <RemoteChip ip={state.lanIp} />}
-          {state.settings.audioDevice && (
-            <AudioDot ok={state.audioConnected}
-              title={(state.audioConnected
-                ? tr("audio.dot.connected", { name: state.settings.audioDevice })
-                : tr("audio.dot.disconnected", { name: state.settings.audioDevice }))} />
-          )}
+          <RemoteChip ip={state.lanIp} />
+          <AudioDot ok={state.audioConnected}
+            title={state.audioConnected ? tr("audio.dot.connected") : tr("audio.dot.disconnected")} />
           <Dot ok={bridgeConnected} label="Live"
             title={state.abletonVersion ? (state.abletonProject ? `${tr("live.project")}: ${state.abletonProject}\n` : "") + state.abletonVersion : undefined} />
           <button className="gear" onClick={() => setShowInfo(true)} title={tr("info.title")} aria-label={tr("info.title")}>
@@ -1190,30 +1196,6 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
             <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
               <button className="settings-btn" onClick={() => send({ type: "command", command: "refreshBluetooth" })}><ActionIcon name="reset" /> {tr("bluetooth.refresh")}</button>
               <button className="settings-btn" onClick={() => send({ type: "command", command: "openBluetoothSettings" })}>{tr("bluetooth.openSettings")}</button>
-            </div>
-          </section>
-
-          <section className="settings-card">
-            <div className="settings-section">{tr("settings.section.audio")}</div>
-            <div className="settings-desc-small">{tr("settings.audio.desc")}</div>
-            <label className="setting">
-              <span className="setting-text">
-                <span className="setting-label">{tr("set.audioDevice.label")}</span>
-                <span className="setting-desc">{tr("set.audioDevice.desc")}</span>
-              </span>
-              <select className="setting-select" value={s.audioDevice} onChange={(e) => send({ type: "command", command: "setSetting", key: "audioDevice", value: e.target.value })}>
-                <option value="">{tr("set.audioDevice.none")}</option>
-                {state.audioDevices.map((d) => <option key={d} value={d}>{d}</option>)}
-                {s.audioDevice && !state.audioDevices.includes(s.audioDevice) && <option value={s.audioDevice}>{s.audioDevice}</option>}
-              </select>
-            </label>
-            <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
-              {s.audioDevice && (
-                <span style={{ color: state.audioConnected ? "var(--playing)" : "#e2503b", fontWeight: 700, fontSize: 13 }}>
-                  {(state.audioConnected ? tr("audio.dot.connected", { name: s.audioDevice }) : tr("audio.dot.disconnected", { name: s.audioDevice })).replace(/\n/g, " ")}
-                </span>
-              )}
-              <button className="settings-btn" onClick={() => send({ type: "command", command: "refreshAudio" })}><ActionIcon name="reset" /> {tr("audio.refresh")}</button>
             </div>
           </section>
 

@@ -1,55 +1,55 @@
-// Read-only audio-interface presence, host machine side. The sound card is on the machine that
-// runs Ableton (the host) — NOT on a remote tablet — so enumeration happens here and the result is
-// broadcast in the app state, like the Bluetooth list. The Live API can't expose Ableton's selected
-// audio device, so we can't know which one Live drives; instead the user picks the interface to WATCH
-// (Settings → Audio) and AbleJam flags it red + alerts when that device drops off the OS bus.
+// Read-only "is a real audio interface connected?" check, host machine side. The sound card is on
+// the machine that runs Ableton (the host) — NOT on a remote tablet — so the check runs here and the
+// boolean is broadcast in the app state. The Live API can't expose Ableton's selected audio device, so
+// instead of guessing which device Live drives we answer a simpler, honest question: is a real audio
+// INTERFACE present on the OS bus? A USB-class audio device (the Audient/Behringer/RME/… an act plugs
+// in) qualifies; onboard HD-Audio (Realtek/AMD) and virtual cables (VB-Audio/Voicemeeter/…) do not.
 //
-// Windows: Win32_SoundDevice gives one clean name per physical/virtual sound device ("Audient iD14",
-// "Behringer …"); a present device has Status 'OK' and an unplugged USB interface disappears from the
-// list entirely. macOS: system_profiler SPAudioDataType. Everywhere else: [] (no watcher).
+// Windows: Win32_SoundDevice whose PNPDeviceID names a USB enumerator — "USB\…" or the Thesycon
+// "TUSBAUDIO_ENUM\…" used by many pro interfaces (both contain "USB"); onboard is "HDAUDIO\…/PCI\…",
+// virtual is "ROOT\…", neither matches. macOS: a system_profiler audio device on the USB transport.
 import { exec } from "node:child_process";
 import os from "node:os";
 
 const PS_SCRIPT = [
   "$ErrorActionPreference='SilentlyContinue'",
   "$ProgressPreference='SilentlyContinue'",
-  "Get-CimInstance Win32_SoundDevice|?{$_.Status -eq 'OK'}|Select-Object -ExpandProperty Name|Sort-Object -Unique",
+  "@(Get-CimInstance Win32_SoundDevice|?{$_.Status -eq 'OK' -and $_.PNPDeviceID -match 'USB'}).Count",
 ].join("\n");
 
-/** Names of the audio devices currently present on the host machine (for the Audio watcher). [] off-host. */
-export function listAudioDevices(): Promise<string[]> {
+/** True when a USB-class audio interface is present on the host (drives the audio indicator). */
+export function hasAudioInterface(): Promise<boolean> {
   const p = os.platform();
-  if (p === "win32") return listWindows();
-  if (p === "darwin") return listMac();
-  return Promise.resolve([]);
+  if (p === "win32") return checkWindows();
+  if (p === "darwin") return checkMac();
+  return Promise.resolve(true); // unknown platform: stay neutral (green), never a false alarm
 }
 
-function listWindows(): Promise<string[]> {
+function checkWindows(): Promise<boolean> {
   const enc = Buffer.from(PS_SCRIPT, "utf16le").toString("base64");
   return new Promise((resolve) => {
     exec(
       `powershell -NoProfile -NonInteractive -EncodedCommand ${enc}`,
       { timeout: 12000, windowsHide: true, maxBuffer: 1 << 20 },
       (err, stdout) => {
-        if (err || !stdout) { resolve([]); return; }
-        const names = stdout.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
-        resolve(Array.from(new Set(names)));
+        if (err) { resolve(true); return; } // on a query error stay green (avoid a false disconnect alarm)
+        resolve((parseInt(String(stdout).trim(), 10) || 0) > 0);
       },
     );
   });
 }
 
-function listMac(): Promise<string[]> {
+function checkMac(): Promise<boolean> {
   return new Promise((resolve) => {
     exec("system_profiler -json SPAudioDataType", { timeout: 12000, maxBuffer: 1 << 20 }, (err, stdout) => {
-      if (err || !stdout) { resolve([]); return; }
+      if (err || !stdout) { resolve(true); return; }
       try {
-        const data = JSON.parse(stdout) as { SPAudioDataType?: Array<{ _items?: Array<{ _name?: string }> }> };
+        const data = JSON.parse(stdout) as { SPAudioDataType?: Array<{ _items?: Array<Record<string, unknown>> }> };
         const items = data.SPAudioDataType?.[0]?._items ?? [];
-        const names = items.map((it) => String(it?._name ?? "").trim()).filter((n) => n.length > 0);
-        resolve(Array.from(new Set(names)));
+        const usb = items.some((it) => /usb/i.test(String(it["coreaudio_device_transport"] ?? "")));
+        resolve(usb);
       } catch {
-        resolve([]);
+        resolve(true);
       }
     });
   });

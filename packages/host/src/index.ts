@@ -10,7 +10,7 @@ import { extractText, textToTitles } from "./import";
 import { listOutputs, sendNote as sendMidiNote, isAvailable as midiAvailable, closeOutput } from "./midiout";
 import { verifyLicenseKey } from "./license";
 import { listBluetooth, openBluetoothSettings } from "./bluetooth";
-import { listAudioDevices } from "./audio";
+import { hasAudioInterface } from "./audio";
 import { readAbleton } from "./ableton";
 import {
   ADDR,
@@ -184,24 +184,14 @@ function refreshBT(): void {
     }
   }).catch(() => {});
 }
-let audioDevices: string[] = []; // audio devices present on the host (for the Audio watcher)
-/** Is the watched interface present? True when nothing is being watched (indicator stays neutral). */
-function audioConnected(): boolean {
-  const want = settings.audioDevice.trim().toLowerCase();
-  if (!want) return true;
-  return audioDevices.some((d) => d.toLowerCase().includes(want));
-}
+let audioConnected = true; // is a USB audio interface present on the host (always-on indicator)
 function refreshAudio(): void {
-  listAudioDevices().then((list) => {
-    const changed = list.length !== audioDevices.length || list.some((d, i) => d !== audioDevices[i]);
-    if (!changed) return;
-    const wasConnected = audioConnected();
-    audioDevices = list;
-    const nowConnected = audioConnected();
-    // Alert only on a real present -> absent transition of the WATCHED device (not on every poll).
-    if (settings.audioDevice && wasConnected && !nowConnected) {
-      toast("error", tr("host.audio.lost", { name: settings.audioDevice }));
-    }
+  hasAudioInterface().then((now) => {
+    if (now === audioConnected) return;
+    const wasConnected = audioConnected;
+    audioConnected = now;
+    // Alert on a real present -> absent transition: the show's interface just dropped off the bus.
+    if (wasConnected && !now) toast("error", tr("host.audio.lost"));
     broadcastState();
   }).catch(() => {});
 }
@@ -257,8 +247,7 @@ function snapshot(): AppState {
     stopPoints,
     stopDiag,
     bluetooth,
-    audioDevices,
-    audioConnected: audioConnected(),
+    audioConnected,
     trackDevices,
     abletonProject,
     abletonVersion,
@@ -745,7 +734,7 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
 function applySetting(key: keyof Settings, value: boolean | string | number): void {
   const target = settings as unknown as Record<string, boolean | string | number>;
   if (key === "emergencyNote" || key === "stopNote") target[key] = Number(value);
-  else if (key === "emergencyPort" || key === "stopTrack" || key === "lyricsTrack" || key === "audioDevice" || key === "colorScheme" || key === "setlistColorScheme" || key === "panicLabel" || key === "panicColor" || key === "language" || key === "medleyDisplay" || key === "clickIndicator" || key === "licenseKey") target[key] = String(value);
+  else if (key === "emergencyPort" || key === "stopTrack" || key === "lyricsTrack" || key === "colorScheme" || key === "setlistColorScheme" || key === "panicLabel" || key === "panicColor" || key === "language" || key === "medleyDisplay" || key === "clickIndicator" || key === "licenseKey") target[key] = String(value);
   else target[key] = Boolean(value);
 }
 
@@ -931,7 +920,6 @@ server.onCommand = (c: ClientCommand) => {
     case "setMetronome": bridge.send(ADDR.cmdMetronome, [c.on ? 1 : 0]); break;
     case "refreshBluetooth": refreshBT(); break;
     case "openBluetoothSettings": openBluetoothSettings(); break;
-    case "refreshAudio": refreshAudio(); break;
     case "setPluginRules":
       settings.pluginRules = (c.rules || []).map((r) => ({
         id: String(r.id ?? ""),

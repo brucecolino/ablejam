@@ -216,15 +216,14 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 /* Settings gear */
 .gear { background: transparent; border: 1px solid var(--border); color: var(--text); border-radius: 8px; width: 32px; height: 26px; font-size: 14px; cursor: pointer; }
 .gear:hover { border-color: var(--accent); }
-.remote-chip { background: var(--surface); border: 1px solid var(--accent); color: var(--text); border-radius: 8px; padding: 0; overflow: hidden; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.remote-chip > button { background: transparent; border: 0; color: inherit; font: inherit; cursor: pointer; height: 100%; display: inline-flex; align-items: center; }
-.remote-toggle { padding: 0 10px; }
-.remote-copy { padding: 0 8px; border-left: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); font-size: 13px; }
-.remote-chip > button:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+/* Address/connect indicator: icon-only dot (green when a tablet can reach AbleJam, red offline). */
+.remote-dot { background: transparent; cursor: pointer; padding: 3px 8px; }
+.remote-dot:hover { background: color-mix(in srgb, currentColor 14%, transparent); }
+.remote-dot svg { display: block; }
 .bt-chip { display: inline-flex; align-items: center; gap: 5px; background: transparent; border: 1px solid var(--border); color: var(--text-muted); border-radius: 8px; padding: 4px 9px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .bt-chip:hover { border-color: var(--accent); color: var(--text); }
 .bt-chip.on { color: #5aa9ff; border-color: color-mix(in srgb, #5aa9ff 50%, transparent); }
-/* Uniform height + corner radius for every topbar status control (BT chip, address chip, gear, Live dot). */
+/* Uniform height + corner radius for every topbar status control (BT chip, connect/audio dots, gear, Live dot). */
 .status > * { height: 28px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; }
 .bt-list { list-style: none; margin: 4px 0; padding: 0; font-size: 13px; }
 .bt-list li { display: flex; align-items: center; gap: 6px; padding: 3px 0; color: #5aa9ff; }
@@ -702,7 +701,7 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
   .status { flex: 0 0 auto; gap: 6px; }
   /* Declutter: clock, the connected-pedals chip and the LAN-address chip are for
      configuring OTHER devices / live in Settings — hide them on the phone itself. */
-  .status .clock, .status .bt-chip, .status .remote-chip { display: none; }
+  .status .clock, .status .bt-chip { display: none; }
   .tabs { order: 2; flex: 1 0 100%; gap: 6px; align-self: stretch; }
   .tab { flex: 1; text-align: center; border: 1px solid var(--border); border-radius: 9px; padding: 12px 4px; margin-bottom: 0; font-size: 12px; letter-spacing: 0.5px; }
   .tab.on { border-color: var(--accent); }

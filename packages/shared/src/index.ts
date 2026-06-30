@@ -184,10 +184,6 @@ export interface Settings {
   /** Name of the Ableton track whose arrangement clips hold the lyrics (one clip per line).
    * "" = automatic (the first track with "lyrics" in its name). */
   lyricsTrack: string;
-  /** Name (or substring) of the audio interface to WATCH on the host machine. When set, AbleJam
-   * shows a green/red indicator and alerts if this device drops off the OS audio bus. "" = no watcher.
-   * The Live API can't reveal Ableton's selected device, so this is an OS-level presence check. */
-  audioDevice: string;
   /** Master switch for play/stop plugin automation. When off, the rules below are ignored. */
   automationEnabled: boolean;
   /** Plugin-automation rules applied on every play/stop transition (e.g. autotune ON while playing). */
@@ -246,7 +242,6 @@ export const defaultSettings: Settings = {
   stopTrack: "",
   stopNote: -1,
   lyricsTrack: "LYRICS",
-  audioDevice: "",
   automationEnabled: false,
   pluginRules: [],
   colorScheme: "rainbow",
@@ -311,12 +306,11 @@ export interface AppState {
   stopDiag: string;
   /** Names of the Bluetooth peripherals currently connected to the host machine. */
   bluetooth: string[];
-  /** Names of the audio devices present on the host machine (to pick the interface to watch). */
-  audioDevices: string[];
   /** Tracks + their device names (for the plugin-automation device picker). */
   trackDevices: TrackDevices[];
-  /** Whether the watched audio interface (`settings.audioDevice`) is currently present. True when no
-   * device is being watched, so the indicator stays neutral until the user opts in. */
+  /** Whether a real audio interface (a USB-class audio device) is present on the host machine.
+   * Drives the always-on top-bar audio indicator (green = present, red = none). The Live API can't
+   * reveal Ableton's selected device, so this is an OS-level presence check, not Ableton-specific. */
   audioConnected: boolean;
   /** Name of the Ableton Live Set currently open (from the app window title; "" = unknown). */
   abletonProject: string;
@@ -370,7 +364,6 @@ export const initialState: AppState = {
   stopPoints: [],
   stopDiag: "",
   bluetooth: [],
-  audioDevices: [],
   audioConnected: true,
   trackDevices: [],
   abletonProject: "",
@@ -438,7 +431,6 @@ export type ClientCommand =
   | { type: "command"; command: "setMetronome"; on: boolean }
   | { type: "command"; command: "refreshBluetooth" }
   | { type: "command"; command: "openBluetoothSettings" }
-  | { type: "command"; command: "refreshAudio" }
   | { type: "command"; command: "setPluginRules"; rules: PluginRule[] }
   | { type: "command"; command: "setSetting"; key: keyof Settings; value: boolean | string | number };
 
