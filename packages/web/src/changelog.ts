@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.23",
+    notes: {
+      it: [
+        "Medley creati a mano (unendo due brani nella setlist): la barra di avanzamento ora copre l'intero medley — la somma dei brani — invece del solo primo, anche quando i brani non sono adiacenti nel timeline di Ableton.",
+        "Medley: cliccando un punto sulla barra il playhead va esattamente lì, non più al marker del brano.",
+      ],
+      en: [
+        "Hand-made medleys (joining two songs in the setlist): the progress bar now spans the whole medley — the sum of its songs — instead of just the first, even when the songs aren't adjacent in the Ableton timeline.",
+        "Medley: clicking a point on the bar now seeks exactly there instead of jumping to the song's marker.",
+      ],
+    },
+  },
+  {
     version: "0.1.22",
     notes: {
       it: [

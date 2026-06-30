@@ -1450,16 +1450,36 @@ function PerformanceView({ state, send }: { state: AppState; send: Send }) {
     while (start > 0 && links(start - 1)) start--;
     let end = currentEntryIndex;
     while (links(end) && setlist[end + 1]) end++;
-    const songs: { idx: number; song: Song; key: string }[] = [];
+    const raw: { idx: number; song: Song; key: string }[] = [];
     for (let k = start; k <= end; k++) {
       const sg = songOf(state, setlist[k]);
-      if (sg) songs.push({ idx: k, song: sg, key: sg.key || setlist[k]!.key });
+      if (sg) raw.push({ idx: k, song: sg, key: sg.key || setlist[k]!.key });
     }
-    if (songs.length < 2) return null;
-    const spanStart = songs[0]!.song.startBeat;
-    const spanEnd = songs[songs.length - 1]!.song.endBeat ?? spanStart + 1;
-    return spanEnd > spanStart ? { songs, spanStart, spanEnd } : null;
-  }, [state, setlist, currentEntryIndex]);
+    if (raw.length < 2) return null;
+    // The bar is a CONCATENATION of each song's own length, NOT one timeline span: manually-joined
+    // songs need not be adjacent in the Ableton arrangement (and the last one may have no endBeat),
+    // so a single [firstStart, lastEnd] span degenerates and breaks both the fill and seeking. Each
+    // song contributes its own length in beats; the playhead = prior songs + progress in the current.
+    const lenOf = (sg: Song) => (sg.endBeat != null && sg.endBeat > sg.startBeat)
+      ? sg.endBeat - sg.startBeat
+      : (sg.durationSec && transport.tempo > 0 ? (sg.durationSec * transport.tempo) / 60 : 0);
+    const known = raw.map((s) => lenOf(s.song)).filter((l) => l > 0);
+    const fallback = known.length ? known.reduce((a, b) => a + b, 0) / known.length : 64; // unknown last-song length
+    let acc = 0;
+    const songs = raw.map((s) => {
+      const len = lenOf(s.song) || fallback;
+      const offset = acc;
+      acc += len;
+      return { ...s, len, offset };
+    });
+    return acc > 0 ? { songs, total: acc } : null;
+  }, [state, setlist, currentEntryIndex, transport.tempo]);
+  // Playhead fraction along the concatenated medley bar: full length of every prior song + how far
+  // into the CURRENT song the playhead is (clamped to that song's own range).
+  const medleySeg = medley?.songs.find((s) => s.idx === currentEntryIndex) ?? null;
+  const medleyFill = medley && medleySeg
+    ? (medleySeg.offset + Math.min(medleySeg.len, Math.max(0, transport.time - medleySeg.song.startBeat))) / medley.total
+    : 0;
 
   let setRemaining = remainingSec ?? 0;
   let songsLeft = 0;
@@ -1524,12 +1544,19 @@ function PerformanceView({ state, send }: { state: AppState; send: Send }) {
                   onClick={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect();
                     const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-                    send({ type: "command", command: "seek", beat: medley.spanStart + frac * (medley.spanEnd - medley.spanStart) });
+                    const tg = frac * medley.total;
+                    const seg = medley.songs.find((s) => tg < s.offset + s.len) ?? medley.songs[medley.songs.length - 1]!;
+                    // Click inside the playing song -> seek precisely within it; on another song -> start that song.
+                    if (seg.idx === currentEntryIndex) {
+                      send({ type: "command", command: "seek", beat: seg.song.startBeat + Math.min(seg.len, Math.max(0, tg - seg.offset)) });
+                    } else {
+                      send({ type: "command", command: "jumpToEntry", index: seg.idx });
+                    }
                   }}
                 >
-                  <div className="progress-fill" style={{ width: `${rangeFrac(transport.time, medley.spanStart, medley.spanEnd) * 100}%`, background: accent }} />
+                  <div className="progress-fill" style={{ width: `${medleyFill * 100}%`, background: accent }} />
                   {medley.songs.map((sg) => {
-                    const left = ((sg.song.startBeat - medley.spanStart) / (medley.spanEnd - medley.spanStart)) * 100;
+                    const left = (sg.offset / medley.total) * 100;
                     if (left < 0.5) return null;
                     return (
                       <span
