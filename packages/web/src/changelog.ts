@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.0.0",
+    notes: {
+      it: [
+        "Versione 1.0 — prima release stabile.",
+        "La finestra delle impostazioni ora ha una dimensione fissa: non cambia più passando da una categoria all'altra (scorre solo l'elenco interno).",
+      ],
+      en: [
+        "Version 1.0 — first stable release.",
+        "The settings window now has a fixed size: it no longer resizes when you switch categories (only the inner list scrolls).",
+      ],
+    },
+  },
+  {
     version: "0.1.24",
     notes: {
       it: [
