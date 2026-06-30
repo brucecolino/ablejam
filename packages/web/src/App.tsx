@@ -924,10 +924,10 @@ const SETTINGS_CATS: { id: SettingsCat; labelKey: string }[] = [
   { id: "general", labelKey: "set.cat.general" },
   { id: "network", labelKey: "set.cat.network" },
   { id: "midi", labelKey: "set.cat.midi" },
-  { id: "updates", labelKey: "set.cat.updates" },
   { id: "controls", labelKey: "set.cat.controls" },
   { id: "lyrics", labelKey: "set.cat.lyrics" },
   { id: "project", labelKey: "set.cat.project" },
+  { id: "updates", labelKey: "set.cat.updates" }, // always last
 ];
 
 function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; onClose: () => void }) {

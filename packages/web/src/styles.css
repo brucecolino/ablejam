@@ -277,7 +277,7 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 /* Fixed size: the window must NOT resize when you switch category tabs — only the card grid
    scrolls inside it. height adapts to the screen (so it never overflows a small laptop) but is
    constant across tabs. */
-.settings-modal { width: min(940px, 96vw); height: min(90vh, 760px); display: flex; flex-direction: column; overflow: hidden; }
+.settings-modal { width: min(940px, 96vw); height: min(90vh, 760px); display: flex; flex-direction: column; overflow: hidden; background: var(--surface); }
 .settings-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex: none; }
 .settings-head h3 { margin: 0; }
 .settings-close { background: transparent; border: 0; color: var(--text-muted); font-size: 18px; cursor: pointer; padding: 4px 8px; line-height: 1; }
@@ -289,13 +289,12 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .settings-nav-btn { text-align: left; padding: 9px 12px; background: transparent; border: 1px solid transparent; border-radius: 8px; color: var(--text-muted); font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .settings-nav-btn:hover { background: var(--surface); color: var(--text); }
 .settings-nav-btn.on { background: color-mix(in srgb, var(--accent) 15%, transparent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); color: var(--accent); }
-.settings-body .settings-grid { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; column-count: 1; padding-right: 4px; }
-@media (min-width: 900px) { .settings-body .settings-grid { column-count: 2; } }
+.settings-body .settings-grid { flex: 1; min-width: 0; min-height: 0; overflow: hidden auto; column-count: 1; padding-right: 4px; }
 @media (max-width: 760px) {
   .settings-body { flex-direction: column; }
   .settings-nav { flex-direction: row; flex-wrap: wrap; min-width: 0; position: static; gap: 6px; }
 }
-.settings-card { break-inside: avoid; display: inline-block; width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 6px 14px 14px; margin-bottom: 16px; }
+.settings-card { break-inside: avoid; display: block; width: 100%; background: var(--elevated); border: 1px solid var(--border); border-radius: 12px; padding: 6px 14px 14px; margin-bottom: 14px; }
 .settings-card .settings-section:first-child { margin-top: 10px; }
 .settings-version { text-align: center; color: var(--text-muted); font-size: 12px; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--border); }
 /* Info / guide panel */
@@ -324,8 +323,8 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); background-clip: padding-box; }
 .settings-section { color: var(--accent); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin: 16px 0 4px; }
 .setting { display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 8px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
-.setting input[type="checkbox"] { width: 22px; height: 22px; border-radius: 6px; }
-.setting input[type="checkbox"]:checked::after { left: 7px; top: 3px; width: 5px; height: 10px; border-width: 0 2.5px 2.5px 0; }
+.setting input[type="checkbox"] { width: 18px; height: 18px; border-radius: 5px; }
+.setting input[type="checkbox"]:checked::after { left: 6px; top: 3px; width: 4px; height: 8px; border-width: 0 2px 2px 0; }
 .setting-text { display: flex; flex-direction: column; flex: 1; }
 .setting-label { font-size: 15px; }
 .setting-desc { font-size: 12px; color: var(--text-muted); }
