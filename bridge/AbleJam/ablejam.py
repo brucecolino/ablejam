@@ -14,7 +14,7 @@ from .osc import OSCServer
 HOST_IP = "127.0.0.1"
 HOST_PORT = 39062     # the AbleJam host listens here for state
 LISTEN_PORT = 39061   # we listen here for commands from the host
-BRIDGE_VERSION = 46   # bump on every change; shown in the UI to confirm reloads
+BRIDGE_VERSION = 47   # bump on every change; shown in the UI to confirm reloads
 
 
 class AbleJam(ControlSurface):
@@ -57,6 +57,7 @@ class AbleJam(ControlSurface):
         self._send_midi_tracks()
         self._send_stop_points()
         self._send_lyrics()
+        self._send_devices()
         # NOTE: AbleJam never touches song.metronome — the user (or their click-automation
         # track) owns it. Toggling it here made the metronome button flicker on every play.
         try:
@@ -160,6 +161,8 @@ class AbleJam(ControlSurface):
         o.on("/ablejam/cmd/fireClip", lambda a: self._fire_clip(a[0] if a else ""))
         o.on("/ablejam/cmd/sendNote", lambda a: self._send_note(int(a[0]) if a else 36))
         o.on("/ablejam/cmd/reenableAutomation", lambda a: self._reenable_automation())
+        o.on("/ablejam/cmd/setDeviceOn", lambda a: self._set_device_on(a[0] if a else "", a[1] if len(a) > 1 else "", int(a[2]) if len(a) > 2 else 1))
+        o.on("/ablejam/cmd/refreshDevices", lambda a: self._send_devices())
         o.on("/ablejam/cmd/refresh", lambda a: self._on_refresh())
 
     def _on_refresh(self):
@@ -172,6 +175,7 @@ class AbleJam(ControlSurface):
         self._send_stop_points()
         self._send_lyrics()
         self._send_autotune_diag()
+        self._send_devices()
 
     def _send_autotune_diag(self):
         # Dump the AUTOTUNE track's devices + (key/scale-ish) parameters so the host can learn
@@ -591,6 +595,64 @@ class AbleJam(ControlSurface):
         except Exception:
             pass
         self._osc.send("/ablejam/miditracks", [json.dumps(names)])
+
+    def _send_devices(self):
+        # Every track + the names of the devices (plugins / Live devices) on it, so the host
+        # can offer a per-track device picker for the play/stop plugin automation. Nested
+        # racks are not flattened — top-level devices are what the user toggles on/off.
+        out = []
+        try:
+            for tr in self._song.tracks:
+                devs = []
+                try:
+                    for dev in tr.devices:
+                        nm = dev.name or ""
+                        if nm:
+                            devs.append(nm)
+                except Exception:
+                    pass
+                out.append({"track": tr.name or "", "devices": devs})
+        except Exception:
+            out = []
+        self._osc.send("/ablejam/devices", [json.dumps(out)])
+
+    def _set_device_on(self, track_name, device_name, on):
+        # Toggle a device's on/off ("Device On") for the play/stop automation. Matches the
+        # track + device by name; first match wins. Silent no-op if not found.
+        tname = track_name if isinstance(track_name, str) else ""
+        dname = device_name if isinstance(device_name, str) else ""
+        if not tname or not dname:
+            return
+        try:
+            for tr in self._song.tracks:
+                if (tr.name or "") != tname:
+                    continue
+                for dev in tr.devices:
+                    if (dev.name or "") != dname:
+                        continue
+                    self._set_dev_active(dev, on)
+                    return
+        except Exception:
+            pass
+
+    def _set_dev_active(self, dev, on):
+        # "Device On" is the standard on/off parameter (index 0 on Live devices, and present on
+        # plugin wrappers too). Match it by name first, fall back to the first parameter.
+        val = 1.0 if on else 0.0
+        try:
+            for pr in dev.parameters:
+                if (pr.name or "").lower() == "device on":
+                    if pr.is_enabled:
+                        pr.value = val
+                    return
+        except Exception:
+            pass
+        try:
+            plist = list(dev.parameters)
+            if plist and plist[0].is_enabled:
+                plist[0].value = val
+        except Exception:
+            pass
 
     # ---- Lyrics: a track (named "LYRICS" by default, configurable) whose arrangement clips are
     # one-per-line — clip name = text, clip left/right edges = start/end arrangement beats. Travels

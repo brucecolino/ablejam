@@ -30,6 +30,7 @@ export const ADDR = {
   beat: "/ablejam/beat",
   renamed: "/ablejam/renamed",
   autotuneDiag: "/ablejam/autotunediag",
+  devices: "/ablejam/devices",
   lyrics: "/ablejam/lyrics",
   lyricsWrite: "/ablejam/lyricswrite",
   midiStop: "/ablejam/midistop",
@@ -52,6 +53,8 @@ export const ADDR = {
   cmdFireClip: "/ablejam/cmd/fireClip",
   cmdSendNote: "/ablejam/cmd/sendNote",
   cmdReenableAutomation: "/ablejam/cmd/reenableAutomation",
+  cmdSetDeviceOn: "/ablejam/cmd/setDeviceOn",
+  cmdRefreshDevices: "/ablejam/cmd/refreshDevices",
   cmdRefresh: "/ablejam/cmd/refresh",
 } as const;
 
@@ -127,6 +130,26 @@ export interface ShortcutMap {
   panic: string;
 }
 
+/** One play/stop plugin-automation rule: keep an Ableton device on/off depending on whether a
+ * sequence is playing. The flagship case is an autotune device that's ON while the click/sequence
+ * runs and OFF when you stop to talk between songs. */
+export interface PluginRule {
+  /** Stable id (for React keys + edits). */
+  id: string;
+  /** Ableton track holding the device. */
+  track: string;
+  /** Device (plugin) name on that track. */
+  device: string;
+  /** true = device ON while playing, OFF while stopped; false = inverted (ON while stopped). */
+  onWhilePlaying: boolean;
+}
+
+/** A track and the names of the devices on it (for the plugin-automation device picker). */
+export interface TrackDevices {
+  track: string;
+  devices: string[];
+}
+
 export interface Settings {
   /** Selecting a song starts playback immediately. */
   autoplay: boolean;
@@ -165,6 +188,10 @@ export interface Settings {
    * shows a green/red indicator and alerts if this device drops off the OS audio bus. "" = no watcher.
    * The Live API can't reveal Ableton's selected device, so this is an OS-level presence check. */
   audioDevice: string;
+  /** Master switch for play/stop plugin automation. When off, the rules below are ignored. */
+  automationEnabled: boolean;
+  /** Plugin-automation rules applied on every play/stop transition (e.g. autotune ON while playing). */
+  pluginRules: PluginRule[];
   /** Colour scheme for the "colora brani" features: "contrast" | "rainbow" | "warm-cold"
    * | "random". "contrast" makes adjacent songs maximally distinct (golden-angle hue). */
   colorScheme: string;
@@ -220,6 +247,8 @@ export const defaultSettings: Settings = {
   stopNote: -1,
   lyricsTrack: "LYRICS",
   audioDevice: "",
+  automationEnabled: false,
+  pluginRules: [],
   colorScheme: "rainbow",
   shortcuts: { prev: "", play: "", stop: "", next: "", panic: "" },
   pedals: { prev: "", play: "", stop: "", next: "", panic: "" },
@@ -284,6 +313,8 @@ export interface AppState {
   bluetooth: string[];
   /** Names of the audio devices present on the host machine (to pick the interface to watch). */
   audioDevices: string[];
+  /** Tracks + their device names (for the plugin-automation device picker). */
+  trackDevices: TrackDevices[];
   /** Whether the watched audio interface (`settings.audioDevice`) is currently present. True when no
    * device is being watched, so the indicator stays neutral until the user opts in. */
   audioConnected: boolean;
@@ -341,6 +372,7 @@ export const initialState: AppState = {
   bluetooth: [],
   audioDevices: [],
   audioConnected: true,
+  trackDevices: [],
   abletonProject: "",
   abletonVersion: "",
   currentSetlistName: "",
@@ -407,6 +439,7 @@ export type ClientCommand =
   | { type: "command"; command: "refreshBluetooth" }
   | { type: "command"; command: "openBluetoothSettings" }
   | { type: "command"; command: "refreshAudio" }
+  | { type: "command"; command: "setPluginRules"; rules: PluginRule[] }
   | { type: "command"; command: "setSetting"; key: keyof Settings; value: boolean | string | number };
 
 // ---- setlist model builders (pure) ----

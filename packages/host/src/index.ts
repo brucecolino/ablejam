@@ -26,8 +26,10 @@ import {
   type AppState,
   type ClientCommand,
   type LyricLine,
+  type PluginRule,
   type RawCue,
   type Settings,
+  type TrackDevices,
   type Transport,
 } from "@ablejam/shared";
 
@@ -160,6 +162,20 @@ let lyricsDoc: LyricLine[] | null = null; // AbleJam-edited lyrics doc (authorit
 const effectiveLyrics = (): LyricLine[] => lyricsDoc ?? lyricsFromClips;
 let stopDiag = ""; // raw STOP-clip reading values (debug)
 let bluetooth: string[] = []; // connected Bluetooth peripherals (host machine)
+let trackDevices: TrackDevices[] = []; // Ableton tracks + their device names (plugin-automation picker)
+let lastAutomationPlaying: boolean | null = null; // last play-state the plugin automation acted on
+/** Apply every enabled plugin rule for the given play state: device ON/OFF per the rule's polarity.
+ * Idempotent + de-duped on the play state so it only fires on a real play<->stop transition. */
+function applyPluginAutomation(playing: boolean, force = false): void {
+  if (!settings.automationEnabled) { lastAutomationPlaying = null; return; }
+  if (!force && lastAutomationPlaying === playing) return;
+  lastAutomationPlaying = playing;
+  for (const r of settings.pluginRules) {
+    if (!r.track || !r.device) continue;
+    const on = playing ? r.onWhilePlaying : !r.onWhilePlaying;
+    bridge.send(ADDR.cmdSetDeviceOn, [r.track, r.device, on ? 1 : 0]);
+  }
+}
 function refreshBT(): void {
   listBluetooth().then((list) => {
     if (list.length !== bluetooth.length || list.some((d, i) => d !== bluetooth[i])) {
@@ -243,6 +259,7 @@ function snapshot(): AppState {
     bluetooth,
     audioDevices,
     audioConnected: audioConnected(),
+    trackDevices,
     abletonProject,
     abletonVersion,
     currentSetlistName,
@@ -621,6 +638,14 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
         // ignore
       }
       break;
+    case ADDR.devices:
+      try {
+        trackDevices = JSON.parse(String(args[0] ?? "[]")) as TrackDevices[];
+        broadcastState();
+      } catch {
+        // ignore
+      }
+      break;
     case ADDR.midiStop:
       // The bridge halted precisely on a MIDI stop note. Advance to the next song.
       prepareNextAfterStop(mgr.currentEntry);
@@ -696,6 +721,7 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
       }
       const tnum = Number(time);
       const isPlaying = Number(playing) !== 0;
+      applyPluginAutomation(isPlaying); // fires only on a real play<->stop transition (de-duped)
       handleAuto(tnum, isPlaying); // before syncing the current entry
       const { songIndex, sectionIndex } = locateCurrent(mgr.library, tnum);
       mgr.syncFromPlayhead(songIndex, isPlaying);
@@ -906,10 +932,21 @@ server.onCommand = (c: ClientCommand) => {
     case "refreshBluetooth": refreshBT(); break;
     case "openBluetoothSettings": openBluetoothSettings(); break;
     case "refreshAudio": refreshAudio(); break;
+    case "setPluginRules":
+      settings.pluginRules = (c.rules || []).map((r) => ({
+        id: String(r.id ?? ""),
+        track: String(r.track ?? ""),
+        device: String(r.device ?? ""),
+        onWhilePlaying: Boolean(r.onWhilePlaying),
+      }));
+      applyPluginAutomation(transport.isPlaying, true); // apply the new rules now, don't wait for a transition
+      changed();
+      break;
     case "setSetting":
       applySetting(c.key, c.value);
       if (c.key === "stopTrack" || c.key === "stopNote") sendStopConfig(); // re-read with the new track/note
       if (c.key === "lyricsTrack") sendLyricsConfig(); // re-read lyrics from the new track
+      if (c.key === "automationEnabled") applyPluginAutomation(transport.isPlaying, true); // enforce on toggle
       if (c.key === "demoMode") applyDemo(); // honour the toggle (only effective when licensed)
       if (c.key === "licenseKey") {
         const li = licenseInfo();

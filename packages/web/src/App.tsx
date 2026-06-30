@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { translate, bestMatch, LICENSING_ENABLED, type AppState, type ClientCommand, type ImportResult, type Lang, type LyricLine, type Settings, type SetlistEntry, type ShortcutMap, type Song } from "@ablejam/shared";
+import { translate, bestMatch, LICENSING_ENABLED, type AppState, type ClientCommand, type ImportResult, type Lang, type LyricLine, type PluginRule, type Settings, type SetlistEntry, type ShortcutMap, type Song } from "@ablejam/shared";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 import { useAbleJam, type Toast, type Beat } from "./ws";
 import { formatDuration, formatClock, colorOf } from "./format";
@@ -854,6 +854,62 @@ function UpdatesCard() {
   );
 }
 
+/** Settings card for play/stop plugin automation: a master toggle plus a list of rules, each
+ * pinning an Ableton device on/off to the play state (e.g. autotune ON while the sequence runs). */
+function PluginAutomationCard({ state, send }: { state: AppState; send: Send }) {
+  const { tr } = useT();
+  const s = state.settings;
+  const rules = s.pluginRules;
+  const tds = state.trackDevices;
+  const setRules = (next: PluginRule[]) => send({ type: "command", command: "setPluginRules", rules: next });
+  const newId = () => "r" + Math.random().toString(36).slice(2, 9);
+  const patch = (i: number, p: Partial<PluginRule>) => setRules(rules.map((r, idx) => (idx === i ? { ...r, ...p } : r)));
+  const add = () => setRules([...rules, { id: newId(), track: "", device: "", onWhilePlaying: true }]);
+  const del = (i: number) => setRules(rules.filter((_, idx) => idx !== i));
+  return (
+    <section className="settings-card">
+      <div className="settings-section">{tr("settings.section.automation")}</div>
+      <div className="settings-desc-small">{tr("automation.desc")}</div>
+      <label className="setting">
+        <input type="checkbox" checked={s.automationEnabled} onChange={(e) => send({ type: "command", command: "setSetting", key: "automationEnabled", value: e.target.checked })} />
+        <span className="setting-text">
+          <span className="setting-label">{tr("automation.enable.label")}</span>
+          <span className="setting-desc">{tr("automation.enable.desc")}</span>
+        </span>
+      </label>
+      {s.automationEnabled && (<>
+        {rules.length === 0 && <div className="settings-desc-small">{tr("automation.empty")}</div>}
+        {rules.map((r, i) => {
+          const devs = tds.find((td) => td.track === r.track)?.devices ?? [];
+          return (
+            <div key={r.id} className="auto-rule">
+              <select className="setting-select" value={r.track} onChange={(e) => patch(i, { track: e.target.value, device: "" })}>
+                <option value="">{tr("automation.track.pick")}</option>
+                {tds.map((td) => <option key={td.track} value={td.track}>{td.track}</option>)}
+                {r.track && !tds.some((td) => td.track === r.track) && <option value={r.track}>{r.track}</option>}
+              </select>
+              <select className="setting-select" value={r.device} onChange={(e) => patch(i, { device: e.target.value })}>
+                <option value="">{tr("automation.device.pick")}</option>
+                {devs.map((d) => <option key={d} value={d}>{d}</option>)}
+                {r.device && !devs.includes(r.device) && <option value={r.device}>{r.device}</option>}
+              </select>
+              <select className="setting-select" value={r.onWhilePlaying ? "play" : "stop"} onChange={(e) => patch(i, { onWhilePlaying: e.target.value === "play" })}>
+                <option value="play">{tr("automation.onPlay")}</option>
+                <option value="stop">{tr("automation.onStop")}</option>
+              </select>
+              <button className="settings-btn auto-del" onClick={() => del(i)} title={tr("automation.remove")} aria-label={tr("automation.remove")}>✕</button>
+            </div>
+          );
+        })}
+        <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+          <button className="settings-btn" onClick={add}>＋ {tr("automation.add")}</button>
+          <button className="settings-btn" onClick={() => send({ type: "command", command: "refresh" })}><ActionIcon name="reset" /> {tr("automation.reload")}</button>
+        </div>
+      </>)}
+    </section>
+  );
+}
+
 function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; onClose: () => void }) {
   const { tr } = useT();
   const s = state.settings;
@@ -1160,6 +1216,8 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
               <button className="settings-btn" onClick={() => send({ type: "command", command: "refreshAudio" })}><ActionIcon name="reset" /> {tr("audio.refresh")}</button>
             </div>
           </section>
+
+          <PluginAutomationCard state={state} send={send} />
 
           <section className="settings-card">
             <div className="settings-section">{tr("settings.section.tablet")}</div>
