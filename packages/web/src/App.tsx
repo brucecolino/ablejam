@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { translate, bestMatch, LICENSING_ENABLED, type AppState, type ClientCommand, type ImportResult, type Lang, type LyricLine, type PluginRule, type Settings, type SetlistEntry, type ShortcutMap, type Song } from "@ablejam/shared";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 import { useAbleJam, type Toast, type Beat } from "./ws";
@@ -193,7 +194,7 @@ function RemoteChip({ ip }: { ip: string }) {
           <rect x="7" y="3" width="10" height="18" rx="2.5" /><line x1="10.5" y1="18.5" x2="13.5" y2="18.5" />
         </svg>
       </button>
-      {open && (
+      {open && createPortal(
         <div className="overlay" onClick={() => setOpen(false)}>
           <div className="modal conn-modal" onClick={(e) => e.stopPropagation()}>
             <div className="settings-head">
@@ -221,7 +222,8 @@ function RemoteChip({ ip }: { ip: string }) {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
@@ -916,11 +918,24 @@ function PluginAutomationCard({ state, send }: { state: AppState; send: Send }) 
   );
 }
 
+type SettingsCat = "general" | "network" | "midi" | "updates" | "controls" | "lyrics" | "project";
+// Left-hand vertical tabs, in the order the user asked for.
+const SETTINGS_CATS: { id: SettingsCat; labelKey: string }[] = [
+  { id: "general", labelKey: "set.cat.general" },
+  { id: "network", labelKey: "set.cat.network" },
+  { id: "midi", labelKey: "set.cat.midi" },
+  { id: "updates", labelKey: "set.cat.updates" },
+  { id: "controls", labelKey: "set.cat.controls" },
+  { id: "lyrics", labelKey: "set.cat.lyrics" },
+  { id: "project", labelKey: "set.cat.project" },
+];
+
 function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; onClose: () => void }) {
   const { tr } = useT();
   const s = state.settings;
   const productParts = tr("settings.product").split("APICE"); // APICE rendered as a styled brand span
   const [showStopDetails, setShowStopDetails] = useState(false);
+  const [cat, setCat] = useState<SettingsCat>("general");
   const [licenseInput, setLicenseInput] = useState("");
   const tabletUrl = state.lanIp ? `http://${state.lanIp}:${typeof location !== "undefined" ? location.port || "3700" : "3700"}` : "";
   const setBool = (key: keyof Settings, v: boolean) => send({ type: "command", command: "setSetting", key, value: v });
@@ -954,6 +969,7 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
       </span>
     </label>
   );
+  const catStyle = (c: SettingsCat): CSSProperties | undefined => (cat === c ? undefined : { display: "none" });
   const t = state.transport;
   const bpb = t.sigNumerator > 0 && t.sigDenominator > 0 ? (t.sigNumerator * 4) / t.sigDenominator : 4;
   const bar = (beat: number) => Math.round(beat / bpb) + 1;
@@ -966,8 +982,14 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
           <h3>{tr("settings.title")}</h3>
           <button className="settings-close" onClick={onClose} title={tr("common.close")}>✕</button>
         </div>
-        <div className="settings-grid">
-          <section className="settings-card">
+        <div className="settings-body">
+          <nav className="settings-nav">
+            {SETTINGS_CATS.map((c) => (
+              <button key={c.id} className={"settings-nav-btn" + (cat === c.id ? " on" : "")} onClick={() => setCat(c.id)}>{tr(c.labelKey)}</button>
+            ))}
+          </nav>
+          <div className="settings-grid">
+          <section className="settings-card" style={catStyle("general")}>
             <div className="settings-section">{tr("settings.section.playback")}</div>
             {row("autoplay", "set.autoplay.label", "set.autoplay.desc")}
             {row("autoContinue", "set.autoContinue.label", "set.autoContinue.desc")}
@@ -1002,7 +1024,7 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
             </label>
           </section>
 
-          <section className="settings-card">
+          <section className="settings-card" style={catStyle("lyrics")}>
             <div className="settings-section">{tr("settings.section.lyrics")}</div>
             <div className="settings-desc-small">{tr("settings.lyrics.desc")}</div>
             <label className="setting">
@@ -1030,7 +1052,7 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
             </div>
           </section>
 
-          <section className="settings-card">
+          <section className="settings-card" style={catStyle("project")}>
             <div className="settings-section">{tr("settings.section.stop")}</div>
             <div className="settings-desc-small">{tr("settings.stop.desc")}</div>
             <label className="setting">
@@ -1077,7 +1099,7 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
             </div>
           </section>
 
-          <section className="settings-card">
+          <section className="settings-card" style={catStyle("project")}>
             <div className="settings-section">{tr("settings.section.colorSongs")}</div>
             <div className="settings-desc-small">{tr("colorSongs.desc")}</div>
             <label className="setting">
@@ -1095,7 +1117,7 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
             <button className="settings-btn" onClick={() => send({ type: "command", command: "colorizeAbleton" })}>{tr("colorSongs.btn")}</button>
           </section>
 
-          <section className="settings-card">
+          <section className="settings-card" style={catStyle("general")}>
             <div className="settings-section">{tr("settings.section.setlistColors")}</div>
             <div className="settings-desc-small">{tr("setlistColors.desc")}</div>
             <label className="setting">
@@ -1113,19 +1135,19 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
             <button className="settings-btn" onClick={() => send({ type: "command", command: "autoColorSetlist" })}>{tr("setlistColors.btn")}</button>
           </section>
 
-          <section className="settings-card">
+          <section className="settings-card" style={catStyle("project")}>
             <div className="settings-section">{tr("settings.section.project")}</div>
             <div className="settings-desc-small">{tr("project.clean.desc")}</div>
             <button className="settings-btn" onClick={() => { if (confirm(tr("project.clean.confirm"))) send({ type: "command", command: "cleanProjectClips" }); }}>{tr("project.clean.btn")}</button>
           </section>
 
-          <section className="settings-card">
+          <section className="settings-card" style={catStyle("general")}>
             <div className="settings-section">{tr("settings.section.import")}</div>
             {row("splitMedleysOnImport", "set.splitMedleys.label", "set.splitMedleys.desc")}
             {row("colorOnImport", "set.colorOnImport.label", "set.colorOnImport.desc")}
           </section>
 
-          <section className="settings-card">
+          <section className="settings-card" style={catStyle("midi")}>
             <div className="settings-section">{tr("settings.section.panic")}</div>
             <div className="settings-desc-small">{tr("panic.desc")}</div>
             <label className="setting">
@@ -1167,7 +1189,7 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
             </label>
           </section>
 
-          <section className="settings-card">
+          <section className="settings-card" style={catStyle("controls")}>
             <div className="settings-section">{tr("settings.section.shortcuts")}</div>
             <div className="settings-desc-small">{tr("shortcuts.desc")}</div>
             <ShortcutRow label={tr("action.prev")} action="prev" current={s.shortcuts.prev} send={send} />
@@ -1177,7 +1199,7 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
             <ShortcutRow label={s.panicLabel || "PULL UP"} action="panic" current={s.shortcuts.panic} send={send} />
           </section>
 
-          <section className="settings-card">
+          <section className="settings-card" style={catStyle("controls")}>
             <div className="settings-section">{tr("settings.section.pedals")}</div>
             <div className="settings-desc-small">{tr("pedals.desc.a")}<b>{tr("pedals.desc.b")}</b>{tr("pedals.desc.c")}</div>
             <ShortcutRow label={tr("action.prev")} action="prev" current={s.pedals.prev} send={send} command="setPedal" />
@@ -1187,7 +1209,7 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
             <ShortcutRow label={s.panicLabel || "PULL UP"} action="panic" current={s.pedals.panic} send={send} command="setPedal" />
           </section>
 
-          <section className="settings-card">
+          <section className="settings-card" style={catStyle("controls")}>
             <div className="settings-section">{tr("settings.section.bluetooth")}</div>
             <div className="settings-desc-small">{tr("bluetooth.desc")}</div>
             {state.bluetooth.length
@@ -1199,9 +1221,9 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
             </div>
           </section>
 
-          <PluginAutomationCard state={state} send={send} />
+          <div style={catStyle("midi")}><PluginAutomationCard state={state} send={send} /></div>
 
-          <section className="settings-card">
+          <section className="settings-card" style={catStyle("network")}>
             <div className="settings-section">{tr("settings.section.tablet")}</div>
             <div className="settings-desc-small">{tr("tablet.desc")}</div>
             {state.lanIp ? (
@@ -1217,13 +1239,13 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
             )}
           </section>
 
-          <section className="settings-card">
+          <section className="settings-card" style={catStyle("general")}>
             <div className="settings-section">{tr("settings.section.demo")}</div>
             <div className="settings-desc-small">{tr("demo.desc")}</div>
             {row("demoMode", "set.demoMode.label", "set.demoMode.desc")}
           </section>
 
-          <section className="settings-card">
+          <section className="settings-card" style={catStyle("general")}>
             <div className="settings-section">{tr("settings.section.language")}</div>
             <div className="settings-desc-small">{tr("language.desc")}</div>
             <div className="lang-row">
@@ -1235,7 +1257,7 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
             </div>
           </section>
           {LICENSING_ENABLED && (
-          <section className="settings-card">
+          <section className="settings-card" style={catStyle("updates")}>
             <div className="settings-section">{tr("settings.section.license")}</div>
             <label className="setting">
               <span className="setting-text">
@@ -1276,7 +1298,8 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
             )}
           </section>
           )}
-          <UpdatesCard />
+          <div style={catStyle("updates")}><UpdatesCard /></div>
+          </div>
         </div>
         <div className="settings-version">AbleJam v{APP_VERSION}</div>
         <a className="settings-web" href={SITE_URL} target="_blank" rel="noopener noreferrer">{SITE_LABEL}</a>

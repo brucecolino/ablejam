@@ -184,14 +184,15 @@ function refreshBT(): void {
     }
   }).catch(() => {});
 }
-let audioConnected = true; // is a USB audio interface present on the host (always-on indicator)
+let audioPresent = true; // is a USB audio interface present on the host machine (OS-level)
 function refreshAudio(): void {
   hasAudioInterface().then((now) => {
-    if (now === audioConnected) return;
-    const wasConnected = audioConnected;
-    audioConnected = now;
-    // Alert on a real present -> absent transition: the show's interface just dropped off the bus.
-    if (wasConnected && !now) toast("error", tr("host.audio.lost"));
+    if (now === audioPresent) return;
+    const wasPresent = audioPresent;
+    audioPresent = now;
+    // Alert when the interface drops WHILE Ableton is connected (i.e. mid-show): that's the case
+    // that matters. When Ableton is off there's nothing to be "operational on", so stay quiet.
+    if (bridgeConnected && wasPresent && !now) toast("error", tr("host.audio.lost"));
     broadcastState();
   }).catch(() => {});
 }
@@ -247,7 +248,9 @@ function snapshot(): AppState {
     stopPoints,
     stopDiag,
     bluetooth,
-    audioConnected,
+    // Audio is "operational on Ableton" only when Ableton is actually connected AND an interface is
+    // present — the Live API can't reveal Live's selected device, so this is the honest proxy.
+    audioConnected: bridgeConnected && audioPresent,
     trackDevices,
     abletonProject,
     abletonVersion,

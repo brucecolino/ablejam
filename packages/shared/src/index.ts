@@ -308,9 +308,9 @@ export interface AppState {
   bluetooth: string[];
   /** Tracks + their device names (for the plugin-automation device picker). */
   trackDevices: TrackDevices[];
-  /** Whether a real audio interface (a USB-class audio device) is present on the host machine.
-   * Drives the always-on top-bar audio indicator (green = present, red = none). The Live API can't
-   * reveal Ableton's selected device, so this is an OS-level presence check, not Ableton-specific. */
+  /** Whether audio is "operational on Ableton": Ableton/the bridge is connected AND a USB-class audio
+   * interface is present on the host. Drives the always-on top-bar audio indicator (green/red). The
+   * Live API can't reveal Live's selected device, so this is the honest proxy (running + interface). */
   audioConnected: boolean;
   /** Name of the Ableton Live Set currently open (from the app window title; "" = unknown). */
   abletonProject: string;

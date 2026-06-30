@@ -281,6 +281,17 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .settings-close:hover { color: var(--text); }
 .settings-grid { column-count: 2; column-gap: 18px; }
 @media (max-width: 760px) { .settings-grid { column-count: 1; } }
+.settings-body { display: flex; gap: 18px; align-items: flex-start; }
+.settings-nav { flex: 0 0 auto; display: flex; flex-direction: column; gap: 3px; min-width: 156px; position: sticky; top: 0; }
+.settings-nav-btn { text-align: left; padding: 9px 12px; background: transparent; border: 1px solid transparent; border-radius: 8px; color: var(--text-muted); font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.settings-nav-btn:hover { background: var(--surface); color: var(--text); }
+.settings-nav-btn.on { background: color-mix(in srgb, var(--accent) 15%, transparent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); color: var(--accent); }
+.settings-body .settings-grid { flex: 1; min-width: 0; column-count: 1; }
+@media (min-width: 900px) { .settings-body .settings-grid { column-count: 2; } }
+@media (max-width: 760px) {
+  .settings-body { flex-direction: column; }
+  .settings-nav { flex-direction: row; flex-wrap: wrap; min-width: 0; position: static; gap: 6px; }
+}
 .settings-card { break-inside: avoid; display: inline-block; width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 6px 14px 14px; margin-bottom: 16px; }
 .settings-card .settings-section:first-child { margin-top: 10px; }
 .settings-version { text-align: center; color: var(--text-muted); font-size: 12px; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--border); }
