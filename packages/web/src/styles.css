@@ -67,6 +67,10 @@ input[type="checkbox"]:focus-visible { outline: 2px solid color-mix(in srgb, var
 .setlist { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .rows { flex: 1; overflow-y: auto; padding: 6px 0; }
 .list-actions { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface); position: relative; }
+/* Taps must register instantly on every phone: touch-action:manipulation kills the 300ms tap
+   delay and stops iOS from eating a control tap as a double-tap-zoom gesture (a likely cause of
+   "can see but can't control" on some phones). Applies to all clickable controls. */
+button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 .act { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; background: transparent; border: 1px solid var(--border); color: var(--text); border-radius: 8px; cursor: pointer; }
 .act:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .act:disabled { opacity: 0.32; cursor: default; }
@@ -331,6 +335,10 @@ input[type="checkbox"]:focus-visible { outline: 2px solid color-mix(in srgb, var
 .conn-qr { display: flex; justify-content: center; }
 .conn-qr canvas { background: #fff; padding: 12px; border-radius: 12px; box-shadow: 0 6px 24px -8px rgba(0,0,0,0.5); }
 .conn-save { align-self: center; }
+/* The connect-device modal holds little — keep it a centered <=360px card even on phones, where
+   the generic @media(max-width:600px) rule blows every modal up to full-screen. Full-width made
+   the description text run to one line and overflow. Higher specificity beats that media rule. */
+.overlay .conn-modal { width: min(360px, calc(100% - 28px)); max-width: 360px; height: auto; max-height: 90vh; align-self: center; }
 .shortcut-btn { min-width: 120px; padding: 7px 12px; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
 .shortcut-btn:hover { border-color: var(--accent); }
 .shortcut-btn.listening { border-color: var(--accent); color: var(--accent); }
@@ -481,7 +489,7 @@ input[type="checkbox"]:focus-visible { outline: 2px solid color-mix(in srgb, var
 /* Mirror only the CONTENT for teleprompters — never the controls. */
 .stage.mirror .stage-main, .stage.mirror .stage-msg, .stage.mirror .stage-lyrics-wrap, .stage.mirror .stage-bar { transform: scaleX(-1); }
 /* Reference bar on the stage: line ticks + playhead across the current song. */
-.stage-bar { position: relative; flex: none; align-self: stretch; margin: 1.2vh 4vw 0.4vh; height: 30px; background: color-mix(in srgb, var(--text) 8%, transparent); border-radius: 8px; }
+.stage-bar { position: relative; flex: none; align-self: stretch; margin: 1.8vh 4vw 0.4vh; height: 30px; background: color-mix(in srgb, var(--text) 8%, transparent); border-radius: 8px; }
 .sb-tick { position: absolute; top: 4px; bottom: 4px; width: 2px; background: var(--text-muted); transform: translateX(-1px); cursor: ew-resize; }
 .sb-tick::before { content: ""; position: absolute; left: -5px; right: -5px; top: -4px; bottom: -4px; }
 .sb-tick:hover { background: var(--text); }
@@ -519,7 +527,9 @@ input[type="checkbox"]:focus-visible { outline: 2px solid color-mix(in srgb, var
 .lh-title { font-size: calc(2.2vw * var(--stage-scale, 1)); font-weight: 800; }
 .lh-key { font-size: calc(1.8vw * var(--stage-scale, 1)); font-weight: 700; color: var(--text-muted); }
 .lh-rem { font-size: calc(2vw * var(--stage-scale, 1)); font-weight: 800; font-variant-numeric: tabular-nums; }
-.stage-lyrics { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: calc(1vh * var(--stage-scale, 1)); padding: 32vh 4vw; scrollbar-width: none; }
+.stage-lyrics { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: calc(1vh * var(--stage-scale, 1)); padding: 26vh 4vw 8vh; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 11%, #000 82%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 11%, #000 82%, transparent 100%); }
 .stage-lyrics::-webkit-scrollbar { display: none; }
 .ly-line { font-size: calc(4.4vw * var(--stage-scale, 1)); font-weight: 700; line-height: 1.15; color: var(--text-muted); opacity: 0.4; text-align: center; transition: opacity 0.25s, color 0.25s, transform 0.25s; }
 .ly-line.past { opacity: 0.25; }
@@ -529,7 +539,7 @@ input[type="checkbox"]:focus-visible { outline: 2px solid color-mix(in srgb, var
 .lyr-chunk { display: inline-flex; flex-direction: column; align-items: flex-start; vertical-align: bottom; }
 .lyr-chord { font-size: 0.5em; font-weight: 800; color: var(--accent); line-height: 1.1; height: 1.1em; white-space: nowrap; }
 .lyr-syl { white-space: pre-wrap; }
-.stage-ly-next { flex: none; display: flex; align-items: center; justify-content: center; min-height: 5vh; padding: 0.8vh 0; font-size: calc(1.8vw * var(--stage-scale, 1)); color: var(--text-muted); border-top: 1px solid var(--border); }
+.stage-ly-next { flex: none; display: flex; align-items: center; justify-content: center; min-height: 5vh; padding: 0.8vh 0; margin-bottom: calc(0.9vh * var(--stage-scale, 1)); font-size: calc(1.8vw * var(--stage-scale, 1)); color: var(--text-muted); border-top: 1px solid var(--border); }
 .stage-ly-next b { color: var(--text); }
 
 /* ---- Lyrics editor ---- */

@@ -772,7 +772,9 @@ server.onCommand = (c: ClientCommand) => {
           userJumpToEntry(cur); // restart the current song first
         } else {
           const p = mgr.prevActiveBefore(cur < 0 ? mgr.entries.length : cur);
-          if (p >= 0) userJumpToEntry(p);
+          // Going back INTO a medley lands on the medley's first entry (not its last sub-song);
+          // medleyStartEntry returns p unchanged for a normal song. Matches stop's behaviour.
+          if (p >= 0) userJumpToEntry(mgr.medleyStartEntry(p));
         }
       }
       break;

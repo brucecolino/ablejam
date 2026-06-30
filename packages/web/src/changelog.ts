@@ -10,6 +10,25 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.19",
+    notes: {
+      it: [
+        "Card \"Connetti un dispositivo\": pulsante copia a icona e descrizione che va a capo — niente più testo che esce dalla card.",
+        "Tornando indietro (prev) o con Stop dentro un medley si va all'inizio del medley, non all'ultimo brano.",
+        "Risolto: il nome del pulsante PANIC ora è modificabile.",
+        "STAGE: i testi sfumano nel buio dietro la barra e il \"Prossimo\" non la tocca più; spazi sistemati.",
+        "Tap più reattivi su telefoni e tablet.",
+      ],
+      en: [
+        "\"Connect a device\" card: icon copy button and the description wraps — no more text spilling out of the card.",
+        "Going back (prev) or Stop into a medley now lands on the medley start, not its last song.",
+        "Fixed: the PANIC button label is now editable.",
+        "STAGE: lyrics fade into the dark behind the bar and \"Next\" no longer touches it; spacing fixed.",
+        "Snappier taps on phones and tablets.",
+      ],
+    },
+  },
+  {
     version: "0.1.18",
     notes: {
       it: ["Card \"Connetti un dispositivo\": pulsante copia compatto (icona) e indirizzo su una riga — niente più testo che sborda dalla card."],

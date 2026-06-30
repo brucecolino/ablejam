@@ -217,6 +217,26 @@ function RemoteChip({ ip }: { ip: string }) {
   );
 }
 
+// Panic-button label field. Uses LOCAL state while typing (every other text field in the app
+// does too) so the caret stays put and the host's full-state echoes don't clobber it mid-edit —
+// the previous server-bound input felt "not editable" because each keystroke round-tripped.
+function PanicLabelInput({ value, send }: { value: string; send: Send }) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  return (
+    <input
+      className="setting-select"
+      style={{ maxWidth: 150 }}
+      value={draft}
+      placeholder="PULL UP"
+      onChange={(e) => {
+        setDraft(e.target.value);
+        send({ type: "command", command: "setSetting", key: "panicLabel", value: e.target.value });
+      }}
+    />
+  );
+}
+
 function isView(v: string | null): v is View {
   return v === "setlist" || v === "performance" || v === "stage";
 }
@@ -1045,7 +1065,7 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
                 <span className="setting-label">{tr("panic.name.label")}</span>
                 <span className="setting-desc">{tr("panic.name.desc")}</span>
               </span>
-              <input className="setting-select" style={{ maxWidth: 150 }} value={s.panicLabel} placeholder="PULL UP" onChange={(e) => send({ type: "command", command: "setSetting", key: "panicLabel", value: e.target.value })} />
+              <PanicLabelInput value={s.panicLabel} send={send} />
             </label>
             <label className="setting">
               <span className="setting-text">
