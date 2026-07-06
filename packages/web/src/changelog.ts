@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.1.1",
+    notes: {
+      it: [
+        "macOS: ora si può incollare la chiave di licenza (e in qualsiasi campo) con ⌘V e con tasto destro → Incolla. Aggiunti il menu Modifica e il menu contestuale (prima su Mac mancavano).",
+      ],
+      en: [
+        "macOS: you can now paste the license key (and into any field) with ⌘V and right-click → Paste. Added the Edit menu and a context menu (they were missing on Mac).",
+      ],
+    },
+  },
+  {
     version: "1.1.0",
     notes: {
       it: [

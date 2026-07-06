@@ -168,6 +168,24 @@ function createMainWindow(): void {
     return { action: "deny" };
   });
 
+  // Right-click Cut/Copy/Paste on inputs. macOS shows NO context menu by default, so the license
+  // key field couldn't be pasted into via right-click (nor could any text field). Give editable
+  // targets the standard actions, and offer Copy when there's a selection.
+  mainWin.webContents.on("context-menu", (_e, params) => {
+    const hasSel = params.selectionText.trim().length > 0;
+    if (!params.isEditable && !hasSel) return;
+    const items: Electron.MenuItemConstructorOptions[] = params.isEditable
+      ? [
+          { role: "cut", enabled: hasSel },
+          { role: "copy", enabled: hasSel },
+          { role: "paste" },
+          { type: "separator" },
+          { role: "selectAll" },
+        ]
+      : [{ role: "copy" }];
+    Menu.buildFromTemplate(items).popup();
+  });
+
   // Cover the open-port-but-route-still-racing window with a few retries.
   let retries = 0;
   mainWin.webContents.on("did-fail-load", () => {
@@ -189,6 +207,20 @@ function buildMenu(): void {
   const isMac = process.platform === "darwin";
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(isMac ? [{ role: "appMenu" as const }] : []),
+    // Edit menu — REQUIRED on macOS for the ⌘X/⌘C/⌘V/⌘A shortcuts to work in text fields (they are
+    // routed through this menu; a custom app menu without it silently disables paste). Harmless on Windows.
+    {
+      label: "Modifica",
+      submenu: [
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "selectAll" },
+      ],
+    },
     {
       label: "AbleJam",
       submenu: [
