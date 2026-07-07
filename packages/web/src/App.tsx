@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { translate, bestMatch, LICENSING_ENABLED, type AppState, type ClientCommand, type ImportResult, type Lang, type LyricLine, type PluginRule, type Section, type Settings, type SetlistEntry, type ShortcutMap, type Song } from "@ablejam/shared";
+import { translate, bestMatch, LICENSING_ENABLED, DEFAULT_STRUCTURE_LABELS, type AppState, type ClientCommand, type ImportResult, type Lang, type LyricLine, type PluginRule, type Section, type Settings, type SetlistEntry, type ShortcutMap, type Song } from "@ablejam/shared";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 import { useAbleJam, type Toast, type Beat } from "./ws";
 import { formatDuration, formatClock, colorOf } from "./format";
@@ -167,6 +167,20 @@ function BluetoothIcon({ size = 13 }: { size?: number }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: "block", flex: "none" }}>
       <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5" />
+    </svg>
+  );
+}
+function DeviceIcon() { // tablet/phone glyph for a connected remote device
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden style={{ display: "block" }}>
+      <rect x="6" y="3" width="12" height="18" rx="2.5" /><line x1="10" y1="18.5" x2="14" y2="18.5" />
+    </svg>
+  );
+}
+function DesktopIcon() { // monitor glyph for the host PC
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden style={{ display: "block" }}>
+      <rect x="3" y="4" width="18" height="12" rx="2" /><line x1="9" y1="20" x2="15" y2="20" /><line x1="12" y1="16" x2="12" y2="20" />
     </svg>
   );
 }
@@ -355,7 +369,7 @@ function initialView(): View {
 }
 
 export function App() {
-  const { state, toasts, importResult, clearImportResult, send, beat, isMaster } = useAbleJam();
+  const { state, toasts, importResult, clearImportResult, send, beat, isMaster, selfId } = useAbleJam();
   const [view, setView] = useState<View>(initialView);
   useEffect(() => { try { localStorage.setItem("ablejam.view", view); } catch { /* ignore */ } }, [view]);
   const [edit, setEdit] = useState(false);
@@ -498,7 +512,7 @@ export function App() {
 
       {panel === "import" && <ImportPanel send={send} importResult={importResult} onClose={() => { setPanel("none"); clearImportResult(); }} />}
       {panel === "print" && <PrintView state={state} onClose={() => setPanel("none")} />}
-      {showSettings && <SettingsPanel state={state} send={send} onClose={() => setShowSettings(false)} onOpenSetup={() => { setShowSettings(false); setShowSetup(true); }} />}
+      {showSettings && <SettingsPanel state={state} send={send} onClose={() => setShowSettings(false)} onOpenSetup={() => { setShowSettings(false); setShowSetup(true); }} isMaster={isMaster} selfId={selfId} />}
       {showSetup && <SetupWizard state={state} onClose={closeSetup} />}
       {showInfo && <InfoPanel onClose={() => setShowInfo(false)} />}
       {whatsNew && <WhatsNewModal entries={whatsNew} onClose={() => setWhatsNew(null)} />}
@@ -1083,6 +1097,10 @@ function StructureEditor({ state, send, entryIndex, onClose }: { state: AppState
     return () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
   }, [dragIdx, scope.start, span]);
 
+  // Preset chips = the built-in labels (always current, incl. new ones after an update) plus any
+  // custom labels the user added — deduped, presets first.
+  const allLabels = Array.from(new Set([...DEFAULT_STRUCTURE_LABELS, ...(state.settings.structureLabels ?? [])]));
+
   const exportToAbleton = () => {
     if (!confirm(tr("structEd.export.confirm"))) return;
     // Audio guide is opt-in PER EXPORT: with the setting active, ask before laying the audio.
@@ -1113,7 +1131,7 @@ function StructureEditor({ state, send, entryIndex, onClose }: { state: AppState
 
         <div className="struct-chips">
           <button className="le-play le-iconbtn" onClick={() => { if (scope.song) { send({ type: "command", command: "jumpToEntry", index: scope.entryIndex }); send({ type: "command", command: "play" }); } }}><ActionIcon name="play" /> {tr("lyricsEd.playSong")}</button>
-          {(state.settings.structureLabels ?? []).map((label) => (
+          {allLabels.map((label) => (
             <button key={label} className="struct-chip" onClick={() => addAt(label)}>＋ {label}</button>
           ))}
           <span className="struct-custom">
@@ -1213,7 +1231,7 @@ const SETTINGS_CATS: { id: SettingsCat; labelKey: string }[] = [
   { id: "updates", labelKey: "set.cat.updates" }, // always last
 ];
 
-function SettingsPanel({ state, send, onClose, onOpenSetup }: { state: AppState; send: Send; onClose: () => void; onOpenSetup?: () => void }) {
+function SettingsPanel({ state, send, onClose, onOpenSetup, isMaster = true, selfId = "" }: { state: AppState; send: Send; onClose: () => void; onOpenSetup?: () => void; isMaster?: boolean; selfId?: string }) {
   const { tr } = useT();
   const s = state.settings;
   const productParts = tr("settings.product").split("APICE"); // APICE rendered as a styled brand span
@@ -1582,30 +1600,40 @@ function SettingsPanel({ state, send, onClose, onOpenSetup }: { state: AppState;
           <section className="settings-card" style={catStyle("network")}>
             <div className="settings-section">{tr("settings.section.devices")}</div>
             <div className="settings-desc-small">{tr("devices.desc")}</div>
-            {(state.clients ?? []).map((cl) => (
-              <div key={cl.id} className="setting" style={{ cursor: "default" }}>
-                <span className="setting-text">
-                  <span className="setting-label">{cl.name}{cl.isLocal ? ` — ${tr("devices.thisPc")}` : ""}</span>
-                  <span className="setting-desc" style={cl.isMaster ? { color: "var(--playing)" } : undefined}>{cl.isMaster ? tr("devices.master") : tr("devices.viewer")}</span>
-                </span>
-                {isDesktop && !cl.isLocal && !cl.isMaster && (
-                  <button className="settings-btn" style={{ marginTop: 0 }} onClick={() => send({ type: "command", command: "grantMaster", clientId: cl.id })}>{tr("devices.grant")}</button>
-                )}
-              </div>
-            ))}
-            {isDesktop && (s.masterDevices ?? []).length > 0 && (<>
-              <div className="settings-desc-small" style={{ marginTop: 10 }}>{tr("devices.masters")}</div>
-              {(s.masterDevices ?? []).map((m) => (
-                <div key={m.id} className="setting" style={{ cursor: "default" }}>
-                  <span className="setting-text">
-                    <span className="setting-label">{m.name}</span>
-                    <span className="setting-desc" style={{ color: "var(--playing)" }}>{tr("devices.master")}</span>
-                  </span>
-                  <button className="settings-btn" style={{ marginTop: 0 }} onClick={() => send({ type: "command", command: "revokeMaster", deviceId: m.id })}>{tr("devices.revoke")}</button>
+            {(() => {
+              const clients = state.clients ?? [];
+              const remoteMasters = clients.filter((c) => !c.isLocal && c.isMaster).length;
+              return (<>
+                <div className="dev-list">
+                  {clients.length === 0 && <div className="settings-desc-small">{tr("devices.none")}</div>}
+                  {clients.map((cl) => {
+                    const isSelf = cl.id === selfId;
+                    const canToggle = isMaster && !cl.isLocal; // masters assign roles; the host PC is fixed
+                    const atCap = !cl.isMaster && remoteMasters >= 2;
+                    return (
+                      <div key={cl.id} className={"dev-row" + (cl.isMaster ? " master" : "")}>
+                        <span className="dev-ico">{cl.isLocal ? <DesktopIcon /> : <DeviceIcon />}</span>
+                        <span className="dev-meta">
+                          <span className="dev-name">{cl.name}{isSelf ? ` · ${tr("devices.you")}` : ""}</span>
+                          <span className="dev-role">{cl.isLocal ? tr("devices.host") : cl.isMaster ? tr("devices.master") : tr("devices.viewer")}</span>
+                        </span>
+                        {cl.isLocal ? (
+                          <span className="dev-fixed">{tr("devices.master")}</span>
+                        ) : canToggle ? (
+                          <div className="dev-toggle">
+                            <button className={"dev-seg" + (!cl.isMaster ? " on" : "")} onClick={() => send({ type: "command", command: "setClientMaster", clientId: cl.id, master: false })}>{tr("devices.viewer.short")}</button>
+                            <button className={"dev-seg" + (cl.isMaster ? " on" : "")} disabled={atCap} title={atCap ? tr("master.limit") : undefined} onClick={() => send({ type: "command", command: "setClientMaster", clientId: cl.id, master: true })}>{tr("devices.master.short")}</button>
+                          </div>
+                        ) : (
+                          <span className={"dev-fixed" + (cl.isMaster ? " master" : "")}>{cl.isMaster ? tr("devices.master.short") : tr("devices.viewer.short")}</span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </>)}
-            {!isDesktop && <div className="settings-desc-small">{tr("devices.manageFromPc")}</div>}
+                <div className="settings-desc-small">{isMaster ? tr("devices.cap", { n: remoteMasters }) : tr("devices.viewerHint")}</div>
+              </>);
+            })()}
           </section>
 
           <section className="settings-card" style={catStyle("general")}>
@@ -1822,6 +1850,7 @@ function PerformanceView({ state, send }: { state: AppState; send: Send }) {
   const { tr } = useT();
   const [b, setPcfg] = usePerfConfig();
   const [showCfg, setShowCfg] = useState(false);
+  const [showStructEd, setShowStructEd] = useState(false);
   const { library, setlist, currentEntryIndex, transport } = state;
   const curEntry = setlist[currentEntryIndex];
   const curSong = songOf(state, curEntry);
@@ -1926,8 +1955,14 @@ function PerformanceView({ state, send }: { state: AppState; send: Send }) {
 
   return (
     <main className="perf">
-      {!KIOSK && <button className="stage-cfg-btn" onClick={() => setShowCfg((s) => !s)} title={tr("perf.config.title")}>⚙</button>}
+      {!KIOSK && (
+        <div className="perf-tools">
+          {curSong && <button className="perf-tool-btn" onClick={() => setShowStructEd(true)} title={tr("structEd.title")}><ActionIcon name="edit" /> {tr("perf.structure")}</button>}
+          <button className="stage-cfg-btn" onClick={() => setShowCfg((s) => !s)} title={tr("perf.config.title")}>⚙</button>
+        </div>
+      )}
       {showCfg && <PerfConfig cfg={b} setCfg={setPcfg} onClose={() => setShowCfg(false)} />}
+      {showStructEd && createPortal(<StructureEditor state={state} send={send} entryIndex={currentEntryIndex} onClose={() => setShowStructEd(false)} />, document.body)}
       <div className="perf-hero">
         {!curSong ? (
           <div className="perf-wait">{tr("perf.waiting")}</div>

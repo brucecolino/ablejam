@@ -536,7 +536,7 @@ function isMasterClient(client: ClientMeta): boolean {
 }
 /** Tell every connected client its own role (sent on hello and on every master change). */
 function sendRoles(): void {
-  for (const m of server.clients()) server.sendTo(m.opaqueId, { type: "role", isMaster: isMasterClient(m) });
+  for (const m of server.clients()) server.sendTo(m.opaqueId, { type: "role", isMaster: isMasterClient(m), selfId: m.opaqueId });
 }
 server.onClientsChanged = () => { sendRoles(); broadcastState(); };
 function broadcastState(): void {
@@ -944,23 +944,23 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
   const navBlocked = settings.safeMode && transport.isPlaying;
   if (EDITOR_EDITS.has(c.command)) mgr.pushHistory(); // record state BEFORE applying the edit
   switch (c.command) {
-    case "grantMaster": {
-      if (!client.isLocal) break; // only the host PC can hand out control
+    case "setClientMaster": {
+      // Any MASTER (the host PC — always master — or an already-authorized device) can assign roles
+      // to the CONNECTED devices, by opaque connection id (raw device ids never leave the server).
       const target = server.clients().find((m) => m.opaqueId === c.clientId);
-      if (!target || !target.deviceId || target.isLocal) break;
-      if (settings.masterDevices.some((m) => m.id === target.deviceId)) break;
-      if (settings.masterDevices.length >= 2) { toast("error", tr("master.limit")); break; }
-      settings.masterDevices = [...settings.masterDevices, { id: target.deviceId, name: target.name }];
+      if (!target || !target.deviceId || target.isLocal) break; // the host PC is always master
+      const already = settings.masterDevices.some((m) => m.id === target.deviceId);
+      if (c.master) {
+        if (already) break;
+        if (settings.masterDevices.length >= 2) { server.sendTo(client.opaqueId, { type: "toast", level: "error", message: tr("master.limit") }); break; }
+        settings.masterDevices = [...settings.masterDevices, { id: target.deviceId, name: target.name }];
+      } else {
+        settings.masterDevices = settings.masterDevices.filter((m) => m.id !== target.deviceId);
+      }
       sendRoles();
       changed();
       break;
     }
-    case "revokeMaster":
-      if (!client.isLocal) break;
-      settings.masterDevices = settings.masterDevices.filter((m) => m.id !== c.deviceId);
-      sendRoles();
-      changed();
-      break;
     case "undo": if (mgr.undo()) changed(); break;
     case "redo": if (mgr.redo()) changed(); break;
     case "setStageMessage": stageMessage = c.text.slice(0, 200); broadcastState(); break;

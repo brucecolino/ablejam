@@ -464,7 +464,7 @@ export type ServerMessage =
   | { type: "transport"; transport: Transport; currentEntryIndex: number; bridgeConnected: boolean }
   | { type: "beat"; beat: number } // 0-based beat-in-bar from Live, for the CLICK metronome visual
   | { type: "toast"; level: "info" | "error"; message: string }
-  | { type: "role"; isMaster: boolean } // per-socket: whether THIS client may control AbleJam
+  | { type: "role"; isMaster: boolean; selfId: string } // per-socket: this client's role + its own opaque id
   | { type: "importResult"; result: ImportResult };
 
 /** Client → server device introduction, sent once on connect (before any command). */
@@ -498,8 +498,7 @@ export type ClientCommand =
   | { type: "command"; command: "clearStructure" }
   | { type: "command"; command: "writeStructureClips"; lines: LyricLine[]; guide?: boolean }
   | { type: "command"; command: "setStructureLabels"; labels: string[] }
-  | { type: "command"; command: "grantMaster"; clientId: string }
-  | { type: "command"; command: "revokeMaster"; deviceId: string }
+  | { type: "command"; command: "setClientMaster"; clientId: string; master: boolean }
   | { type: "command"; command: "saveSetlist"; name: string }
   | { type: "command"; command: "loadSetlist"; name: string }
   | { type: "command"; command: "editSetlistFile"; name: string }

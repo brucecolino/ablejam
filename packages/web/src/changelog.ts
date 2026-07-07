@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.1",
+    notes: {
+      it: [
+        "Impostazioni: risolte le card che sembravano tagliate in basso — ora l'elenco scorre correttamente in ogni scheda.",
+        "Dispositivi (Impostazioni → Rete): nuova gestione Master/Visualizzazione — vedi ogni dispositivo connesso per nome, con interruttore per assegnare il controllo (max 2 oltre al PC). La lista si aggiorna dal vivo e si gestisce anche dai dispositivi Master, non solo dal PC.",
+        "Editor struttura raggiungibile direttamente dalla Performance (pulsante \"Struttura\"): aggiungi, sposta, modifica i cambi ed esportali su Ableton (clip + audio guida) senza passare dalle impostazioni. Più etichette pronte, allineate agli audio inclusi.",
+      ],
+      en: [
+        "Settings: fixed cards that looked cut off at the bottom — the list now scrolls properly in every tab.",
+        "Devices (Settings → Network): new Master/View management — see every connected device by name, with a switch to assign control (max 2 besides the PC). The list updates live and can be managed from Master devices too, not only the PC.",
+        "Structure editor reachable straight from Performance (a \"Structure\" button): add, move, edit changes and export them to Ableton (clips + audio guide) without going through Settings. More ready-made labels, aligned with the bundled audio.",
+      ],
+    },
+  },
+  {
     version: "1.3.0",
     notes: {
       it: [

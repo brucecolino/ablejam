@@ -43,6 +43,7 @@ export function useAbleJam() {
   // Master until told otherwise: an OLD host never sends "role", and its clients must stay
   // fully functional. A new host answers the hello with the real role right away.
   const [isMaster, setIsMaster] = useState(true);
+  const [selfId, setSelfId] = useState(""); // this connection's opaque id (to mark "this device" in the list)
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [beat, setBeat] = useState<Beat>({ inBar: -1, n: 0 });
@@ -84,6 +85,7 @@ export function useAbleJam() {
           setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
         } else if (msg.type === "role") {
           setIsMaster(msg.isMaster);
+          setSelfId(msg.selfId);
         } else if (msg.type === "importResult") {
           setImportResult(msg.result);
         }
@@ -101,5 +103,5 @@ export function useAbleJam() {
     if (s && s.readyState === WebSocket.OPEN) s.send(JSON.stringify(cmd));
   }, []);
 
-  return { state, connected, isMaster, toasts, importResult, clearImportResult: () => setImportResult(null), send, beat };
+  return { state, connected, isMaster, selfId, toasts, importResult, clearImportResult: () => setImportResult(null), send, beat };
 }
