@@ -12,6 +12,9 @@ import { verifyLicenseKey, isActivatedHere } from "./license";
 import { deviceId, deviceName } from "./deviceid";
 import { listBluetooth, openBluetoothSettings } from "./bluetooth";
 import { hasAudioInterface } from "./audio";
+import { defaultSpeechDir, listSpeechFiles, matchSpeechFile, installSpeechFiles } from "./speech";
+import nodePath from "node:path";
+import { existsSync } from "node:fs";
 import { readAbleton } from "./ableton";
 import {
   ADDR,
@@ -23,6 +26,7 @@ import {
   schemeHex,
   translate,
   defaultSettings,
+  DEFAULT_STRUCTURE_LABELS,
   initialTransport,
   type AppState,
   type ClientCommand,
@@ -164,6 +168,51 @@ const effectiveLyrics = (): LyricLine[] => lyricsDoc ?? lyricsFromClips;
 let structureFromClips: LyricLine[] = []; // section changes read from the STRUCTURE track's clips
 let structureDoc: LyricLine[] | null = null; // AbleJam-edited structure doc (authoritative when present)
 const effectiveStructure = (): LyricLine[] => structureDoc ?? structureFromClips;
+
+let guideAudio: { file: string; label: string }[] = []; // announcement files + matched labels (cached)
+/** Active speech folder: the user's custom one (when set and existing), else the bundled defaults. */
+function speechDir(): string {
+  const custom = (settings.guideAudioFolder || "").trim();
+  if (custom && existsSync(custom)) return custom;
+  return defaultSpeechDir("it");
+}
+/** Re-scan the speech folder and match each file to a section label (exact-first). Broadcast on change. */
+function refreshGuideAudio(): void {
+  const dir = speechDir();
+  const files = dir ? listSpeechFiles(dir) : [];
+  const byFile = new Map<string, string>();
+  // Match against the user's labels PLUS the defaults, so bundled files show their label even on
+  // settings persisted before the default list grew.
+  const labels = Array.from(new Set([...(settings.structureLabels ?? []), ...DEFAULT_STRUCTURE_LABELS]));
+  for (const l of labels) {
+    const f = matchSpeechFile(l, files);
+    if (f && !byFile.has(f)) byFile.set(f, l);
+  }
+  const next = files.map((f) => ({ file: f, label: byFile.get(f) ?? "" }));
+  const changedList = next.length !== guideAudio.length || next.some((x, i) => x.file !== guideAudio[i]?.file || x.label !== guideAudio[i]?.label);
+  guideAudio = next;
+  if (changedList) broadcastState();
+}
+/** Export the audio guide: match the doc's labels to speech files, copy them into the Ableton
+ * User Library (so Live's browser can load them), then have the bridge build the session palette
+ * and lay the clips at every change. */
+function writeGuideClips(items: { s: number; t: string }[]): void {
+  const dir = speechDir();
+  const files = dir ? listSpeechFiles(dir) : [];
+  if (!files.length) { toast("error", tr("host.guide.nofiles")); return; }
+  const labels = Array.from(new Set(items.map((i) => i.t.trim()).filter(Boolean)));
+  const palette: { label: string; item: string }[] = [];
+  const paths: string[] = [];
+  for (const l of labels) {
+    const f = matchSpeechFile(l, files);
+    if (!f) continue;
+    palette.push({ label: l, item: f.replace(/\.[a-z0-9]+$/i, "") });
+    paths.push(nodePath.join(dir, f));
+  }
+  if (!palette.length) { toast("error", tr("host.guide.nomatch")); return; }
+  if (installSpeechFiles(paths) === 0) { toast("error", tr("host.guide.nolib")); return; }
+  bridge.send(ADDR.cmdWriteGuide, [JSON.stringify({ track: settings.guideTrack, items, palette })]);
+}
 let stopDiag = ""; // raw STOP-clip reading values (debug)
 let bluetooth: string[] = []; // connected Bluetooth peripherals (host machine)
 let trackDevices: TrackDevices[] = []; // Ableton tracks + their device names (plugin-automation picker)
@@ -314,6 +363,7 @@ function snapshot(): AppState {
     lyricsEdited: lyricsDoc != null,
     structure: effectiveStructure(),
     structureEdited: structureDoc != null,
+    guideAudio,
     licensed: li.licensed,
     licenseEmail: li.email,
     activationState,
@@ -870,7 +920,7 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
 function applySetting(key: keyof Settings, value: boolean | string | number): void {
   const target = settings as unknown as Record<string, boolean | string | number>;
   if (key === "emergencyNote" || key === "stopNote") target[key] = Number(value);
-  else if (key === "emergencyPort" || key === "stopTrack" || key === "lyricsTrack" || key === "structureTrack" || key === "guideTrack" || key === "colorScheme" || key === "setlistColorScheme" || key === "panicLabel" || key === "panicColor" || key === "language" || key === "medleyDisplay" || key === "clickIndicator" || key === "licenseKey") target[key] = String(value);
+  else if (key === "emergencyPort" || key === "stopTrack" || key === "lyricsTrack" || key === "structureTrack" || key === "guideTrack" || key === "guideAudioFolder" || key === "colorScheme" || key === "setlistColorScheme" || key === "panicLabel" || key === "panicColor" || key === "language" || key === "medleyDisplay" || key === "clickIndicator" || key === "licenseKey") target[key] = String(value);
   else target[key] = Boolean(value);
 }
 
@@ -946,7 +996,8 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
       break;
     case "writeStructureClips": {
       // Export the structure to the project: named clips on the STRUCTURE track, and — when the
-      // audio guide is enabled — the palette cues on the guide track at the same beats.
+      // audio guide is enabled AND the user confirmed it for this export (c.guide) — the audio
+      // announcements on the guide track at the same beats.
       if (c.lines && c.lines.length) {
         structureDoc = c.lines.map((l) => ({ text: String(l.text ?? ""), start: Number(l.start) || 0, end: Number(l.end) || 0 }));
         saveStructureDoc(abletonProject, structureDoc);
@@ -954,12 +1005,13 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
       }
       const items = effectiveStructure().map((l) => ({ s: l.start, t: l.text }));
       bridge.send(ADDR.cmdWriteStructure, [JSON.stringify(items)]);
-      if (settings.guideAudioEnabled) bridge.send(ADDR.cmdWriteGuide, [JSON.stringify({ track: settings.guideTrack, items })]);
+      if (settings.guideAudioEnabled && c.guide) writeGuideClips(items);
       break;
     }
     case "setStructureLabels":
       settings.structureLabels = Array.from(new Set((c.labels || []).map((l) => String(l).trim()).filter(Boolean))).slice(0, 64);
       changed();
+      refreshGuideAudio(); // new labels may match different files
       break;
     case "play": {
       // PLAY plays the song SHOWN in the UI. If the playhead is already inside that song
@@ -1127,6 +1179,7 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
       if (c.key === "stopTrack" || c.key === "stopNote") sendStopConfig(); // re-read with the new track/note
       if (c.key === "lyricsTrack") sendLyricsConfig(); // re-read lyrics from the new track
       if (c.key === "structureTrack") sendStructureConfig(); // re-read the structure from the new track
+      if (c.key === "guideAudioFolder") refreshGuideAudio(); // re-scan + re-match the announcement files
       if (c.key === "automationEnabled") applyPluginAutomation(transport.isPlaying, true); // enforce on toggle
       if (c.key === "demoMode") applyDemo(); // honour the toggle (only effective when licensed)
       if (c.key === "licenseKey") {
@@ -1180,6 +1233,7 @@ export function startHost(): { ready: Promise<void>; close: () => Promise<void> 
   bridge.send(ADDR.cmdRefresh);
   refreshBT();
   btId = setInterval(refreshBT, 20000); // keep the connected-Bluetooth list fresh
+  refreshGuideAudio(); // scan the announcement audio (bundled or custom folder) once at boot
   refreshAudio();
   audioId = setInterval(refreshAudio, 5000); // watch the audio interface so a disconnect alerts fast
   refreshAbleton();

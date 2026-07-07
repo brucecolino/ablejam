@@ -202,6 +202,9 @@ export interface Settings {
   guideAudioEnabled: boolean;
   /** Name of the audio guide track. "" = automatic ("guida"/"guide" in the name). */
   guideTrack: string;
+  /** Folder holding the announcement audio files. "" = the ones bundled with AbleJam (Italian).
+   * Files auto-match the section labels by name ("SOLO DI CHITARRA.aif" ↔ "solo chitarra"). */
+  guideAudioFolder: string;
   /** Master switch for play/stop plugin automation. When off, the rules below are ignored. */
   automationEnabled: boolean;
   /** Plugin-automation rules applied on every play/stop transition (e.g. autotune ON while playing). */
@@ -252,10 +255,13 @@ export interface Settings {
   masterDevices: { id: string; name: string }[];
 }
 
-/** Preset section labels for the structure editor (user can add more in settings). */
+/** Preset section labels for the structure editor (user can add more in-app). Aligned with the
+ * bundled announcement audio (resources/speech/it) so the audio guide matches out of the box. */
 export const DEFAULT_STRUCTURE_LABELS = [
-  "strofa", "intro", "ritornello", "bridge", "finale", "tema", "pubblico",
-  "solo chitarra", "solo sax", "solo basso", "solo batteria", "solo tromba", "solo voce",
+  "strofa", "intro", "re-intro", "ritornello", "pre-chorus", "bridge", "finale", "tema",
+  "mix", "riddim", "dub", "pausa", "stacco", "stop", "colpo secco", "ancora",
+  "entriamo tutti", "pubblico",
+  "solo chitarra", "solo sax", "solo tastiera", "solo basso", "solo batteria", "solo tromba", "solo voce",
 ];
 
 export const defaultSettings: Settings = {
@@ -279,6 +285,7 @@ export const defaultSettings: Settings = {
   structureLabels: [...DEFAULT_STRUCTURE_LABELS],
   guideAudioEnabled: false,
   guideTrack: "GUIDA",
+  guideAudioFolder: "",
   automationEnabled: false,
   pluginRules: [],
   colorScheme: "rainbow",
@@ -382,6 +389,9 @@ export interface AppState {
   structure: LyricLine[];
   /** True when `structure` is an AbleJam-edited document, not raw clips. */
   structureEdited: boolean;
+  /** Announcement audio files available for the guide track (from the configured folder or the
+   * bundled defaults) with the section label each one auto-matched ("" = no matching label). */
+  guideAudio: { file: string; label: string }[];
   /** True when a valid license key is stored — the full version is unlocked. When false the app
    * is locked to the demo setlist. */
   licensed: boolean;
@@ -436,6 +446,7 @@ export const initialState: AppState = {
   lyricsEdited: false,
   structure: [],
   structureEdited: false,
+  guideAudio: [],
   licensed: false,
   licenseEmail: "",
   activationState: "",
@@ -485,7 +496,7 @@ export type ClientCommand =
   | { type: "command"; command: "writeLyricsClips"; lines: LyricLine[] }
   | { type: "command"; command: "setStructure"; lines: LyricLine[] }
   | { type: "command"; command: "clearStructure" }
-  | { type: "command"; command: "writeStructureClips"; lines: LyricLine[] }
+  | { type: "command"; command: "writeStructureClips"; lines: LyricLine[]; guide?: boolean }
   | { type: "command"; command: "setStructureLabels"; labels: string[] }
   | { type: "command"; command: "grantMaster"; clientId: string }
   | { type: "command"; command: "revokeMaster"; deviceId: string }

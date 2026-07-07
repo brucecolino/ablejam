@@ -40,6 +40,8 @@ extraResources:                                 # land in resources/ next to app
     to: "install.ps1"
   - from: "../../installer/loopMIDISetup.exe"    # loopMIDI driver installer (Windows)
     to: "installer/loopMIDISetup.exe"
+  - from: "../../resources/speech"               # default audio-guide announcements (per language)
+    to: "speech"
 
 win:
   target: ["nsis"]

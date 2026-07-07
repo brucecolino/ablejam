@@ -110,6 +110,7 @@ function configureHostEnv(): void {
   }
   process.env.ABLEJAM_DATA_DIR = path.join(app.getPath("userData"), "ablejam-data");
   process.env.ABLEJAM_WEB_DIST = path.join(process.resourcesPath, "web");
+  process.env.ABLEJAM_SPEECH_DIR = path.join(process.resourcesPath, "speech"); // default guide audio
 }
 
 // net.connect poll: resolves once something accepts on 127.0.0.1:HOST_PORT (fallback to the

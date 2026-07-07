@@ -294,6 +294,26 @@ function RemoteChip({ ip }: { ip: string }) {
   );
 }
 
+// Custom announcement-audio folder path. Local state while typing (same pattern as the panic
+// label) so the caret never jumps while the host re-scans + echoes the setting back.
+function GuideFolderInput({ value, send }: { value: string; send: Send }) {
+  const { tr } = useT();
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  return (
+    <input
+      className="setting-select"
+      style={{ maxWidth: 250, width: "100%" }}
+      value={draft}
+      placeholder={tr("set.guideFolder.placeholder")}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        send({ type: "command", command: "setSetting", key: "guideAudioFolder", value: e.target.value });
+      }}
+    />
+  );
+}
+
 // Panic-button label field. Uses LOCAL state while typing (every other text field in the app
 // does too) so the caret stays put and the host's full-state echoes don't clobber it mid-edit —
 // the previous server-bound input felt "not editable" because each keystroke round-tripped.
@@ -1065,7 +1085,9 @@ function StructureEditor({ state, send, entryIndex, onClose }: { state: AppState
 
   const exportToAbleton = () => {
     if (!confirm(tr("structEd.export.confirm"))) return;
-    send({ type: "command", command: "writeStructureClips", lines: fullDoc(linesRef.current) });
+    // Audio guide is opt-in PER EXPORT: with the setting active, ask before laying the audio.
+    const guide = state.settings.guideAudioEnabled ? confirm(tr("structEd.guide.confirm")) : false;
+    send({ type: "command", command: "writeStructureClips", lines: fullDoc(linesRef.current), guide });
   };
 
   return (
@@ -1389,6 +1411,25 @@ function SettingsPanel({ state, send, onClose, onOpenSetup }: { state: AppState;
                   {s.guideTrack && !state.tracks.includes(s.guideTrack) && <option value={s.guideTrack}>{s.guideTrack}</option>}
                 </select>
               </label>
+              <label className="setting">
+                <span className="setting-text">
+                  <span className="setting-label">{tr("set.guideFolder.label")}</span>
+                  <span className="setting-desc">{tr("set.guideFolder.desc")}</span>
+                </span>
+                <GuideFolderInput value={s.guideAudioFolder ?? ""} send={send} />
+              </label>
+              {(state.guideAudio ?? []).length > 0 ? (
+                <div className="guide-files">
+                  {(state.guideAudio ?? []).map((g) => (
+                    <div key={g.file} className="guide-file">
+                      <span className="gf-name">{g.file}</span>
+                      <span className={"gf-label" + (g.label ? "" : " none")}>{g.label ? `→ ${g.label}` : tr("guide.nolabel")}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="settings-desc-small" style={{ color: "#d66" }}>{tr("guide.nofiles")}</div>
+              )}
               <div className="settings-desc-small">{tr("structure.palette.hint")}</div>
             </>)}
             <button className="settings-btn" onClick={() => setShowStructEd(true)}><ActionIcon name="edit" /> {tr("structure.openEditor")}</button>

@@ -14,7 +14,7 @@ from .osc import OSCServer
 HOST_IP = "127.0.0.1"
 HOST_PORT = 39062     # the AbleJam host listens here for state
 LISTEN_PORT = 39061   # we listen here for commands from the host
-BRIDGE_VERSION = 48   # bump on every change; shown in the UI to confirm reloads
+BRIDGE_VERSION = 49   # bump on every change; shown in the UI to confirm reloads
 
 
 class AbleJam(ControlSurface):
@@ -999,21 +999,129 @@ class AbleJam(ControlSurface):
             pass
         return None
 
+    def _find_browser_folder(self, root, want, depth=0):
+        # Find a folder by (lowercased) name in the user library, shallow-first (max 2 levels).
+        if depth > 2:
+            return None
+        try:
+            for ch in root.iter_children:
+                try:
+                    nm = (ch.name or "").strip().lower()
+                    if nm == want and getattr(ch, "is_folder", False):
+                        return ch
+                except Exception:
+                    pass
+            for ch in root.iter_children:
+                try:
+                    if getattr(ch, "is_folder", False):
+                        found = self._find_browser_folder(ch, want, depth + 1)
+                        if found is not None:
+                            return found
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        return None
+
+    def _first_empty_slot(self, track):
+        try:
+            for slot in track.clip_slots:
+                if not slot.has_clip:
+                    return slot
+            self._song.create_scene(-1)  # all full: append a scene for a fresh empty slot
+            return track.clip_slots[len(track.clip_slots) - 1]
+        except Exception:
+            return None
+
+    def _ensure_guide_palette(self, track, mapping):
+        # Auto-build the session palette: for every label with no palette clip yet, load its
+        # announcement audio from the User Library ("AbleJam Speech", copied there by the host)
+        # into an empty session slot via Live's browser, then rename the clip to the label.
+        # Best-effort: any failure leaves the manual-palette path intact.
+        try:
+            have = set()
+            for slot in track.clip_slots:
+                try:
+                    if slot.has_clip and (slot.clip.name or "").strip():
+                        have.add((slot.clip.name or "").strip().lower())
+                except Exception:
+                    pass
+            missing = []
+            for m in mapping:
+                label = str(m.get("label", "")).strip()
+                item_name = str(m.get("item", "")).strip().lower()
+                if label and item_name and label.lower() not in have and item_name not in have:
+                    missing.append((label, item_name))
+            if not missing:
+                return
+            browser = self.application().browser
+            folder = self._find_browser_folder(browser.user_library, "ablejam speech")
+            if folder is None:
+                return
+            items_by_name = {}
+            try:
+                for it in folder.iter_children:
+                    try:
+                        if getattr(it, "is_loadable", False):
+                            items_by_name[(it.name or "").strip().lower()] = it
+                    except Exception:
+                        pass
+            except Exception:
+                return
+            view = self._song.view
+            prev_track = None
+            try:
+                prev_track = view.selected_track
+            except Exception:
+                pass
+            for label, item_name in missing:
+                it = items_by_name.get(item_name)
+                if it is None:  # browser may show the name with its extension
+                    for k, v in items_by_name.items():
+                        if k == item_name or k.startswith(item_name + "."):
+                            it = v
+                            break
+                if it is None:
+                    continue
+                slot = self._first_empty_slot(track)
+                if slot is None:
+                    continue
+                try:
+                    view.selected_track = track
+                    view.highlighted_clip_slot = slot
+                    browser.load_item(it)
+                except Exception:
+                    continue
+                try:
+                    if slot.has_clip:
+                        slot.clip.name = label
+                except Exception:
+                    pass
+            if prev_track is not None:
+                try:
+                    view.selected_track = prev_track
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
     def _write_guide(self, payload):
         # Audio guide track: duplicate the SESSION palette clip whose name matches each section
-        # label into the arrangement at the section start. The palette = the guide track's session
-        # slots (the user drags their cue audio files there ONCE, named like the labels); from then
-        # on every export lays the announcements down automatically. Idempotent like the others.
+        # label into the arrangement at the section start. The palette is BUILT AUTOMATICALLY
+        # (announcement files loaded from the User Library via the browser, see
+        # _ensure_guide_palette); a hand-made palette keeps working as before. Idempotent.
         try:
             data = json.loads(payload) if payload else {}
         except Exception:
             data = {}
         items = data.get("items") or []
+        mapping = data.get("palette") or []  # [{label, item}] announcement files per label
         track = self._find_guide_track(data.get("track") or "")
         total = len(items)
         if track is None:
             self._osc.send("/ablejam/guidewrite", [0, total, "notrack"])
             return
+        self._ensure_guide_palette(track, mapping)
         palette = {}
         try:
             for slot in track.clip_slots:
@@ -1024,6 +1132,16 @@ class AbleJam(ControlSurface):
                     pass
         except Exception:
             pass
+        # The payload mapping also resolves labels whose loaded clip kept the FILE name (rename
+        # failed / pre-existing): label -> the session clip named like its file.
+        for m in mapping:
+            try:
+                label = str(m.get("label", "")).strip().lower()
+                item_name = str(m.get("item", "")).strip().lower()
+                if label and label not in palette and item_name in palette:
+                    palette[label] = palette[item_name]
+            except Exception:
+                pass
         if not palette:
             self._osc.send("/ablejam/guidewrite", [0, total, "nopalette"])
             return

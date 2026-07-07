@@ -10,6 +10,23 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.0",
+    notes: {
+      it: [
+        "Annunci vocali inclusi (italiano): 21 audio pronti (strofa, ritornello, mix, riddim, stacco, solo…) dentro AbleJam. All'export della struttura, se l'audio guida è attiva, l'app chiede conferma e poi fa TUTTO da sola: copia gli annunci nella User Library di Ableton, li carica sulla traccia guida e crea le clip a ogni cambio.",
+        "Cartella annunci personalizzata: incolla il percorso della tua cartella e vedi subito quali file si abbinano a quali etichette (abbinamento automatico per nome, es. \"SOLO DI CHITARRA\" → \"solo chitarra\").",
+        "Più etichette pronte nell'editor struttura: mix, riddim, dub, pausa, stacco, stop, colpo secco, ancora, entriamo tutti, re-intro, pre-chorus, solo tastiera.",
+        "⚠ Richiede il bridge v49: menù AbleJam → \"Installa bridge\" e riavvia Ableton.",
+      ],
+      en: [
+        "Bundled voice announcements (Italian): 21 ready-made audio cues (verse, chorus, mix, riddim, breaks, solos…) inside AbleJam. On structure export, with the audio guide enabled, the app asks for confirmation and then does EVERYTHING by itself: copies the announcements into Ableton's User Library, loads them onto the guide track and creates the clips at every change.",
+        "Custom announcements folder: paste your folder's path and instantly see which files match which labels (auto-match by name, e.g. \"SOLO DI CHITARRA\" → \"solo chitarra\").",
+        "More ready-made labels in the structure editor: mix, riddim, dub, pausa, stacco, stop, colpo secco, ancora, entriamo tutti, re-intro, pre-chorus, solo tastiera.",
+        "⚠ Requires bridge v49: AbleJam menu → \"Install bridge\" and restart Ableton.",
+      ],
+    },
+  },
+  {
     version: "1.2.0",
     notes: {
       it: [
