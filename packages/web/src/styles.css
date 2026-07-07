@@ -331,6 +331,26 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .setting-select { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 7px 10px; font-size: 14px; max-width: 180px; }
 .settings-desc-small { font-size: 12px; color: #8a8a8a; margin: 4px 0 8px; line-height: 1.4; }
 .auto-rule { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
+/* Structure editor: label chips (tap = mark a section change at the playhead). */
+.struct-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 8px 16px; border-bottom: 1px solid var(--border); }
+.struct-chip { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 999px; padding: 7px 13px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.struct-chip:hover { border-color: var(--accent); color: var(--accent); }
+.struct-custom { display: inline-flex; align-items: center; gap: 6px; }
+/* First-run setup wizard. */
+.setup-modal { width: min(520px, 96vw); background: var(--surface); }
+.setup-step { background: var(--elevated); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px 12px; margin-top: 10px; }
+.setup-step-head { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 14px; margin-bottom: 4px; }
+.setup-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); font-size: 12px; font-weight: 800; }
+.setup-status { margin-top: 6px; font-size: 13px; font-weight: 700; color: var(--text-muted); }
+.setup-status.ok { color: var(--playing); }
+
+/* View-only device (not one of the 2 masters): controls inert + dimmed. The server gate is the
+ * real enforcement — this only makes the role visible and prevents accidental taps. */
+.viewer-badge { color: #e2a13b; border-color: color-mix(in srgb, #e2a13b 50%, transparent); font-weight: 700; }
+.app.viewer .transport .ctl, .app.viewer .perf-transport .pt, .app.viewer .stage-transport .pt,
+.app.viewer .cue-bar, .app.viewer .list-actions, .app.viewer .rows .link, .app.viewer .row-main,
+.app.viewer .click-pill, .app.viewer .click-btn, .app.viewer .medley-chip,
+.app.viewer .progress.seekable, .app.viewer .stage-bar, .app.viewer .le-bar { pointer-events: none; opacity: 0.55; }
 .auto-rule .setting-select { flex: 1 1 130px; min-width: 0; max-width: none; }
 .auto-rule .auto-del { flex: 0 0 auto; margin-top: 0; padding: 7px 11px; color: #e2503b; }
 .settings-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 13px; font-size: 14px; font-weight: 700; line-height: 1.2; cursor: pointer; margin-top: 8px; }
@@ -452,6 +472,18 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .progress { width: min(900px, 92%); height: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
 .progress.seekable { cursor: pointer; position: relative; }
 .progress.seekable:hover { border-color: var(--accent); }
+/* touch-action: none lets the pointer-scrub own the gesture (otherwise iPad scrolls instead of seeking). */
+.progress.seekable, .stage-bar, .le-bar { touch-action: none; }
+/* Ghost cursor shown under the finger/mouse while scrubbing — instant feedback, no 10 Hz wait. */
+.scrub-cursor { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; background: var(--text); border-radius: 2px; z-index: 4; box-shadow: 0 0 6px rgba(255, 255, 255, 0.7); pointer-events: none; }
+/* Song-structure section marks on the progress bars (label in the tooltip). */
+.sect-tick { position: absolute; top: 3px; bottom: 3px; width: 2px; margin-left: -1px; background: color-mix(in srgb, var(--text) 45%, transparent); border-radius: 1px; z-index: 1; pointer-events: none; }
+/* Fingers need taller bars than mouse pointers. */
+@media (pointer: coarse) {
+  .progress { height: 26px; }
+  .stage-bar { height: 40px; }
+  .le-bar { height: 38px; }
+}
 .stop-mark { position: absolute; top: -3px; bottom: -3px; width: 3px; margin-left: -1.5px; background: #ff3b3b; border-radius: 2px; z-index: 2; box-shadow: 0 0 4px #ff3b3b; }
 .progress-fill { height: 100%; transition: width 0.1s linear; }
 .next { margin-top: 8px; }

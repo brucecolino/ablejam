@@ -1,9 +1,9 @@
 import os from "node:os";
 import { pathToFileURL } from "node:url";
 import { BridgeLink } from "./bridge";
-import { Server } from "./server";
+import { Server, type ClientMeta } from "./server";
 import { SetlistManager } from "./setlist";
-import { listSetlists, saveSetlist, loadSetlist, saveSession, loadSession, loadRecents, saveRecents, setlistPath, saveImportOriginal, importOriginalPath, readImportOriginal, namesWithOriginal, importsDir, deleteSetlist, clearSetlists, saveLyricsDoc, loadLyricsDoc, deleteLyricsDoc, lyricsImportFile, readLyricsImport, type SavedItem } from "./persist";
+import { listSetlists, saveSetlist, loadSetlist, saveSession, loadSession, loadRecents, saveRecents, setlistPath, saveImportOriginal, importOriginalPath, readImportOriginal, namesWithOriginal, importsDir, deleteSetlist, clearSetlists, saveLyricsDoc, loadLyricsDoc, deleteLyricsDoc, saveStructureDoc, loadStructureDoc, deleteStructureDoc, lyricsImportFile, readLyricsImport, type SavedItem } from "./persist";
 import { watch, type FSWatcher } from "node:fs";
 import { exec as execChild } from "node:child_process";
 import { extractText, textToTitles } from "./import";
@@ -161,6 +161,9 @@ let stopPoints: number[] = []; // arrangement beats of MIDI "stop" notes (projec
 let lyricsFromClips: LyricLine[] = []; // lyrics lines read from the lyrics track's clips
 let lyricsDoc: LyricLine[] | null = null; // AbleJam-edited lyrics doc (authoritative when present)
 const effectiveLyrics = (): LyricLine[] => lyricsDoc ?? lyricsFromClips;
+let structureFromClips: LyricLine[] = []; // section changes read from the STRUCTURE track's clips
+let structureDoc: LyricLine[] | null = null; // AbleJam-edited structure doc (authoritative when present)
+const effectiveStructure = (): LyricLine[] => structureDoc ?? structureFromClips;
 let stopDiag = ""; // raw STOP-clip reading values (debug)
 let bluetooth: string[] = []; // connected Bluetooth peripherals (host machine)
 let trackDevices: TrackDevices[] = []; // Ableton tracks + their device names (plugin-automation picker)
@@ -207,7 +210,10 @@ function refreshAbleton(): void {
       const projectChanged = project !== abletonProject;
       abletonProject = project;
       abletonVersion = version;
-      if (projectChanged) lyricsDoc = (loadLyricsDoc(project) as LyricLine[] | null); // this project's edited lyrics, if any
+      if (projectChanged) {
+        lyricsDoc = (loadLyricsDoc(project) as LyricLine[] | null); // this project's edited lyrics, if any
+        structureDoc = (loadStructureDoc(project) as LyricLine[] | null); // and its edited structure
+      }
       broadcastState();
     }
   }).catch(() => {});
@@ -306,9 +312,12 @@ function snapshot(): AppState {
     stageMessage,
     lyrics: effectiveLyrics(),
     lyricsEdited: lyricsDoc != null,
+    structure: effectiveStructure(),
+    structureEdited: structureDoc != null,
     licensed: li.licensed,
     licenseEmail: li.email,
     activationState,
+    clients: server.clients().map((m) => ({ id: m.opaqueId, name: m.name, isLocal: m.isLocal, isMaster: isMasterClient(m) })),
   };
 }
 
@@ -320,6 +329,10 @@ function sendStopConfig(): void {
 /** Tell the bridge which track holds the lyrics clips (re-sent on connect + on setting change). */
 function sendLyricsConfig(): void {
   bridge.send(ADDR.cmdLyricsConfig, [settings.lyricsTrack]);
+}
+/** Tell the bridge which track marks the song structure (re-sent on connect + on setting change). */
+function sendStructureConfig(): void {
+  bridge.send(ADDR.cmdStructureConfig, [settings.structureTrack]);
 }
 /** Write the edited lyrics TEXT back onto the lyrics-track clips, matched by position (the bridge
  * pairs each clip with the nearest line). Timing can't be written — Live's API can't move
@@ -464,6 +477,18 @@ function writeKeysToMarkers(): void {
 }
 
 const server = new Server(snapshot);
+// LAN clients never see the license secrets nor the raw master device ids (anti-spoofing: a
+// viewer that could read a master's id could replay it in its own hello and self-promote).
+server.redactForRemote = (s) => ({ ...s, settings: { ...s.settings, licenseKey: "", activationToken: "", masterDevices: [] } });
+/** Master = the host PC itself (loopback) or one of the (max 2) authorized remote devices. */
+function isMasterClient(client: ClientMeta): boolean {
+  return client.isLocal || (!!client.deviceId && settings.masterDevices.some((m) => m.id === client.deviceId));
+}
+/** Tell every connected client its own role (sent on hello and on every master change). */
+function sendRoles(): void {
+  for (const m of server.clients()) server.sendTo(m.opaqueId, { type: "role", isMaster: isMasterClient(m) });
+}
+server.onClientsChanged = () => { sendRoles(); broadcastState(); };
 function broadcastState(): void {
   server.broadcast(snapshot());
 }
@@ -497,7 +522,12 @@ function buildLibrary(): void {
   const wasAuto = fromDisk ? pendingRestoreAuto : mgr.medleysAreAuto; // restore/keep the auto flag
   pendingRestoreItems = null; // consume the disk snapshot once
   mgr.setLibrary(lib);
-  if (saved.length > 0) mgr.restoreFromSession(saved); // re-map onto the new library
+  if (saved.length > 0) {
+    const r = mgr.restoreFromSession(saved); // re-map onto the new library
+    // Unmatched items are dropped silently by the re-map (title no longer in the library) —
+    // warn, because a dropped entry also breaks any medley link that pointed into it.
+    if (r.matched < r.total) toast("error", tr("host.restore.dropped", { n: r.total - r.matched }));
+  }
   mgr.medleysAreAuto = wasAuto;
   mgr.autoDetectMedleys(); // on a fresh/auto setlist, derive medleys from the `-` locator marks
   ensureColoredIfSet(); // colour the (re)built setlist if "colour on import" is on
@@ -566,13 +596,12 @@ function stopToMedleyStart(): void {
   stopAtEntry(mgr.currentEntry);
 }
 
-let lastArmedStop: number | null = null;
-/** Arm (or clear) the bridge's precise stop beat — only re-sent when it changes. The bridge
- * halts EXACTLY at this beat via its fast playhead listener, so there is no 10 Hz detection
- * lag and no OSC round-trip: the song stops right on the note instead of a few clicks past. */
+/** Arm (or clear) the bridge's precise stop beat. Sent UNCONDITIONALLY on every transport tick
+ * (10 Hz, one tiny UDP datagram; bridge-side it's a plain assignment): the old change-debounced
+ * version skipped re-sending the DISARM after bridge reloads/jumps, leaving stale arms that
+ * stopped manually-linked medleys. The bridge halts EXACTLY at this beat via its fast playhead
+ * listener, so there is no 10 Hz detection lag and no OSC round-trip. */
 function armStop(beat: number | null): void {
-  if (beat === lastArmedStop) return;
-  lastArmedStop = beat;
   bridge.send(ADDR.cmdArmStop, [beat == null ? -1 : beat]);
 }
 
@@ -594,22 +623,32 @@ function prepareNextAfterStop(fromEntry: number): void {
   } else {
     bridge.send(ADDR.cmdStop); // last song: just stop
   }
-  lastArmedStop = null; // force a fresh arm for the new song once it plays
   broadcastTransport();
 }
 
-/** Auto behaviour at the end of a song. Run BEFORE re-syncing the current entry
- * to the playhead, so it sees the song that is actually ending. */
-function handleAuto(time: number, isPlaying: boolean): void {
+/** Auto behaviour at the end of a song. Run BEFORE re-syncing the current entry to the
+ * playhead, so it sees the song that is actually ending. `songIndex` = library index of the
+ * song UNDER THE PLAYHEAD (locateCurrent): everything below derives from THAT song's entry,
+ * not from the user selection — after a setlist rebuild `currentEntry` can lag or point at a
+ * duplicate, and arming a stop from the wrong entry is exactly what used to kill manually
+ * linked medleys ("stops after the first song"). */
+function handleAuto(time: number, isPlaying: boolean, songIndex: number): void {
   if (!isPlaying) { armStop(null); return; }
-  const ce = mgr.currentEntry;
+  // Resolve the entry that actually contains the playhead; fall back to the selection.
+  const at = mgr.entryAtPlayhead(songIndex);
+  const ce = at.index >= 0 ? at.index : mgr.currentEntry;
   if (ce < 0) { armStop(null); return; }
+  if (at.ambiguous) { armStop(null); return; } // duplicates disagree on the link -> NEVER stop a possible medley
   const s = mgr.songOf(ce);
   if (!s || s.endBeat == null) { armStop(null); return; }
   if (prevTime < s.startBeat - 1e-6) return; // playhead not inside this song yet
 
   const next = mgr.nextActiveAfter(ce);
-  const linked = !!mgr.entries[ce]?.linkedNext && next >= 0; // medley: continuous
+  // Medley: continuous. The resolved entry's link is authoritative; the song's own
+  // continuesNext only counts when the playhead song has NO entry at all (unresolvable) —
+  // ORing it in always would override a deliberate manual unlink.
+  const entryLinked = at.index >= 0 ? !!mgr.entries[ce]?.linkedNext : !!(mgr.entries[ce]?.linkedNext || s.continuesNext);
+  const linked = entryLinked && next >= 0;
   const songEnd = s.endBeat;
   // A MIDI "stop" note inside this song stops it precisely. ARM the bridge to halt exactly
   // at that beat (bridge-side, no latency); it notifies us (/ablejam/midistop) to advance.
@@ -648,6 +687,7 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
       console.log(`[host] bridge: ${args[0]} (v${bridgeVersion})`);
       sendStopConfig(); // let the (re)connected bridge know which track/note marks stops
       sendLyricsConfig(); // and which track holds the lyrics clips
+      sendStructureConfig(); // and which track marks the song structure
       broadcastState();
       break;
     case ADDR.setlist:
@@ -684,10 +724,26 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
         // ignore
       }
       break;
-    case ADDR.midiStop:
-      // The bridge halted precisely on a MIDI stop note. Advance to the next song.
-      prepareNextAfterStop(mgr.currentEntry);
+    case ADDR.midiStop: {
+      // The bridge halted on an ARMED stop beat (only _check_armed_stop emits this — the user's
+      // stop/panic commands never do). Resolve the song FROM the stop beat itself: stop notes
+      // often sit exactly on endBeat == the next song's startBeat, so probe a hair before it.
+      const stopBeat = Number(args[0]);
+      const probe = Number.isFinite(stopBeat) ? stopBeat - 0.05 : transport.time;
+      const at = mgr.entryAtPlayhead(locateCurrent(mgr.library, probe).songIndex);
+      const fromEntry = at.index >= 0 ? at.index : mgr.currentEntry;
+      const next = mgr.nextActiveAfter(fromEntry);
+      if (!settings.alwaysStop && next >= 0 && !!mgr.entries[fromEntry]?.linkedNext) {
+        // SPURIOUS stop: the host never arms a stop for a linked song, so this came from a
+        // stale arm (old bridge, race). Resume the medley immediately — worst case a
+        // micro-hiccup, never a dead stop mid-show.
+        doJumpToEntry(next);
+        bridge.send(ADDR.cmdPlay);
+      } else {
+        prepareNextAfterStop(fromEntry);
+      }
       break;
+    }
     case ADDR.stopDiag: {
       const d = String(args[0] ?? "");
       if (d !== stopDiag) { stopDiag = d; broadcastState(); }
@@ -739,6 +795,35 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
         // ignore
       }
       break;
+    case ADDR.structure:
+      try {
+        const next = (JSON.parse(String(args[0] ?? "[]")) as LyricLine[]).filter((l) => l && typeof l.text === "string");
+        const changed = next.length !== structureFromClips.length || next.some((l, i) => l.text !== structureFromClips[i]?.text || l.start !== structureFromClips[i]?.start || l.end !== structureFromClips[i]?.end);
+        structureFromClips = next;
+        // An AbleJam-edited doc is authoritative — clip changes don't override it.
+        if (changed && structureDoc == null) broadcastState();
+      } catch {
+        // ignore
+      }
+      break;
+    case ADDR.structureWrite: {
+      const n = Number(args[0] ?? 0);
+      const total = Number(args[1] ?? n);
+      const reason = String(args[2] ?? "");
+      if (n > 0) toast("info", tr("host.structure.written", { n, total }));
+      else if (reason === "notrack" || reason === "empty") toast("error", tr("host.structure.writeFail"));
+      else toast("info", tr("host.structure.writeNothing"));
+      break;
+    }
+    case ADDR.guideWrite: {
+      const n = Number(args[0] ?? 0);
+      const total = Number(args[1] ?? n);
+      const reason = String(args[2] ?? "");
+      if (n > 0) toast("info", tr("host.guide.written", { n, total }));
+      else if (reason === "notrack") toast("error", tr("host.guide.notrack"));
+      else if (reason === "nopalette") toast("error", tr("host.guide.nopalette"));
+      break;
+    }
     case ADDR.stopPoints:
       try {
         const next = (JSON.parse(String(args[0] ?? "[]")) as unknown[]).map(Number).filter((n) => Number.isFinite(n));
@@ -760,8 +845,10 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
       const tnum = Number(time);
       const isPlaying = Number(playing) !== 0;
       applyPluginAutomation(isPlaying); // fires only on a real play<->stop transition (de-duped)
-      handleAuto(tnum, isPlaying); // before syncing the current entry
+      // locateCurrent BEFORE handleAuto: the auto-stop logic resolves its entry from the song
+      // actually under the playhead (not the possibly-lagging selection). Sync stays AFTER.
       const { songIndex, sectionIndex } = locateCurrent(mgr.library, tnum);
+      handleAuto(tnum, isPlaying, songIndex); // before syncing the current entry
       mgr.syncFromPlayhead(songIndex, isPlaying);
       transport.isPlaying = isPlaying;
       transport.time = tnum;
@@ -783,7 +870,7 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
 function applySetting(key: keyof Settings, value: boolean | string | number): void {
   const target = settings as unknown as Record<string, boolean | string | number>;
   if (key === "emergencyNote" || key === "stopNote") target[key] = Number(value);
-  else if (key === "emergencyPort" || key === "stopTrack" || key === "lyricsTrack" || key === "colorScheme" || key === "setlistColorScheme" || key === "panicLabel" || key === "panicColor" || key === "language" || key === "medleyDisplay" || key === "clickIndicator" || key === "licenseKey") target[key] = String(value);
+  else if (key === "emergencyPort" || key === "stopTrack" || key === "lyricsTrack" || key === "structureTrack" || key === "guideTrack" || key === "colorScheme" || key === "setlistColorScheme" || key === "panicLabel" || key === "panicColor" || key === "language" || key === "medleyDisplay" || key === "clickIndicator" || key === "licenseKey") target[key] = String(value);
   else target[key] = Boolean(value);
 }
 
@@ -791,10 +878,39 @@ function applySetting(key: keyof Settings, value: boolean | string | number): vo
 // here — those clear the history inside the manager (their old snapshots reference a stale library).
 const EDITOR_EDITS = new Set(["reorder", "moveBlock", "setActive", "toggleLink", "setEntryColor", "autoColorSetlist", "addSong", "clear", "addAll", "resetToTimeline", "sortAZ"]);
 
-server.onCommand = (c: ClientCommand) => {
+const lastViewerToastMs = new Map<string, number>(); // rate-limit the "view only" toast per client
+server.onCommand = (c: ClientCommand, client: ClientMeta) => {
+  // MASTER GATE (server-side — the UI lockdown is only cosmetic): every command mutates, so a
+  // non-master device gets nothing through. Checked BEFORE pushHistory so rejected edits never
+  // pollute the undo stack. The host PC (loopback) is always master.
+  if (!isMasterClient(client)) {
+    const now = Date.now();
+    if (now - (lastViewerToastMs.get(client.opaqueId) ?? 0) > 3000) {
+      lastViewerToastMs.set(client.opaqueId, now);
+      server.sendTo(client.opaqueId, { type: "toast", level: "error", message: tr("viewer.blocked") });
+    }
+    return;
+  }
   const navBlocked = settings.safeMode && transport.isPlaying;
   if (EDITOR_EDITS.has(c.command)) mgr.pushHistory(); // record state BEFORE applying the edit
   switch (c.command) {
+    case "grantMaster": {
+      if (!client.isLocal) break; // only the host PC can hand out control
+      const target = server.clients().find((m) => m.opaqueId === c.clientId);
+      if (!target || !target.deviceId || target.isLocal) break;
+      if (settings.masterDevices.some((m) => m.id === target.deviceId)) break;
+      if (settings.masterDevices.length >= 2) { toast("error", tr("master.limit")); break; }
+      settings.masterDevices = [...settings.masterDevices, { id: target.deviceId, name: target.name }];
+      sendRoles();
+      changed();
+      break;
+    }
+    case "revokeMaster":
+      if (!client.isLocal) break;
+      settings.masterDevices = settings.masterDevices.filter((m) => m.id !== c.deviceId);
+      sendRoles();
+      changed();
+      break;
     case "undo": if (mgr.undo()) changed(); break;
     case "redo": if (mgr.redo()) changed(); break;
     case "setStageMessage": stageMessage = c.text.slice(0, 200); broadcastState(); break;
@@ -817,6 +933,33 @@ server.onCommand = (c: ClientCommand) => {
         broadcastState();
       }
       writeLyricsClips();
+      break;
+    case "setStructure":
+      structureDoc = c.lines.map((l) => ({ text: String(l.text ?? ""), start: Number(l.start) || 0, end: Number(l.end) || 0 }));
+      saveStructureDoc(abletonProject, structureDoc);
+      broadcastState();
+      break;
+    case "clearStructure":
+      structureDoc = null;
+      deleteStructureDoc(abletonProject);
+      broadcastState(); // fall back to the raw clips
+      break;
+    case "writeStructureClips": {
+      // Export the structure to the project: named clips on the STRUCTURE track, and — when the
+      // audio guide is enabled — the palette cues on the guide track at the same beats.
+      if (c.lines && c.lines.length) {
+        structureDoc = c.lines.map((l) => ({ text: String(l.text ?? ""), start: Number(l.start) || 0, end: Number(l.end) || 0 }));
+        saveStructureDoc(abletonProject, structureDoc);
+        broadcastState();
+      }
+      const items = effectiveStructure().map((l) => ({ s: l.start, t: l.text }));
+      bridge.send(ADDR.cmdWriteStructure, [JSON.stringify(items)]);
+      if (settings.guideAudioEnabled) bridge.send(ADDR.cmdWriteGuide, [JSON.stringify({ track: settings.guideTrack, items })]);
+      break;
+    }
+    case "setStructureLabels":
+      settings.structureLabels = Array.from(new Set((c.labels || []).map((l) => String(l).trim()).filter(Boolean))).slice(0, 64);
+      changed();
       break;
     case "play": {
       // PLAY plays the song SHOWN in the UI. If the playhead is already inside that song
@@ -983,6 +1126,7 @@ server.onCommand = (c: ClientCommand) => {
       applySetting(c.key, c.value);
       if (c.key === "stopTrack" || c.key === "stopNote") sendStopConfig(); // re-read with the new track/note
       if (c.key === "lyricsTrack") sendLyricsConfig(); // re-read lyrics from the new track
+      if (c.key === "structureTrack") sendStructureConfig(); // re-read the structure from the new track
       if (c.key === "automationEnabled") applyPluginAutomation(transport.isPlaying, true); // enforce on toggle
       if (c.key === "demoMode") applyDemo(); // honour the toggle (only effective when licensed)
       if (c.key === "licenseKey") {

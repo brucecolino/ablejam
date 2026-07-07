@@ -13,6 +13,7 @@ const SESSION = path.join(ROOT, "session.json");
 const RECENTS = path.join(ROOT, "recents.json");
 const IMPORTS = path.join(ROOT, "imports");
 const LYRICS = path.join(ROOT, "lyrics");
+const STRUCTURE = path.join(ROOT, "structure");
 const LYRICS_IMPORT = path.join(ROOT, "lyrics-import.txt");
 
 function ensure(): void {
@@ -131,6 +132,21 @@ export function deleteLyricsDoc(project: string): void {
   const p = path.join(LYRICS, sanitize(project || "default") + ".json");
   if (existsSync(p)) try { unlinkSync(p); } catch { /* ignore */ }
 }
+// ---- song-structure document (AbleJam-authoritative labels + timing), keyed by project name ----
+export function saveStructureDoc(project: string, lines: unknown): void {
+  mkdirSync(STRUCTURE, { recursive: true });
+  writeFileSync(path.join(STRUCTURE, sanitize(project || "default") + ".json"), JSON.stringify(lines), "utf8");
+}
+export function loadStructureDoc(project: string): unknown[] | null {
+  const p = path.join(STRUCTURE, sanitize(project || "default") + ".json");
+  if (!existsSync(p)) return null;
+  try { const d = JSON.parse(readFileSync(p, "utf8")) as unknown; return Array.isArray(d) ? d : null; } catch { return null; }
+}
+export function deleteStructureDoc(project: string): void {
+  const p = path.join(STRUCTURE, sanitize(project || "default") + ".json");
+  if (existsSync(p)) try { unlinkSync(p); } catch { /* ignore */ }
+}
+
 /** A drop-in lyrics file (`#Song` headers + lines) that AbleJam watches and auto-imports. */
 export function lyricsImportFile(): string {
   ensure();

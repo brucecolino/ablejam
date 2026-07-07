@@ -33,6 +33,9 @@ export const ADDR = {
   devices: "/ablejam/devices",
   lyrics: "/ablejam/lyrics",
   lyricsWrite: "/ablejam/lyricswrite",
+  structure: "/ablejam/structure",
+  structureWrite: "/ablejam/structurewrite",
+  guideWrite: "/ablejam/guidewrite",
   midiStop: "/ablejam/midistop",
   transport: "/ablejam/transport",
   cmdPlay: "/ablejam/cmd/play",
@@ -43,6 +46,9 @@ export const ADDR = {
   cmdSetSelected: "/ablejam/cmd/setSelected",
   cmdStopConfig: "/ablejam/cmd/stopConfig",
   cmdLyricsConfig: "/ablejam/cmd/lyricsConfig",
+  cmdStructureConfig: "/ablejam/cmd/structureConfig",
+  cmdWriteStructure: "/ablejam/cmd/writeStructure",
+  cmdWriteGuide: "/ablejam/cmd/writeGuide",
   cmdRenameLyrics: "/ablejam/cmd/renameLyrics",
   cmdWriteLyrics: "/ablejam/cmd/writeLyrics",
   cmdColorize: "/ablejam/cmd/colorize",
@@ -184,6 +190,18 @@ export interface Settings {
   /** Name of the Ableton track whose arrangement clips hold the lyrics (one clip per line).
    * "" = automatic (the first track with "lyrics" in its name). */
   lyricsTrack: string;
+  /** Name of the Ableton track whose arrangement clips mark the song STRUCTURE (clip name =
+   * section label, clip start = the change). "" = automatic ("structure"/"struttura" in the name). */
+  structureTrack: string;
+  /** Show the song structure (sections) in Performance/Stage + as ticks on the progress bar. */
+  showStructure: boolean;
+  /** Section labels offered by the structure editor (presets + user-added). */
+  structureLabels: string[];
+  /** On structure export, ALSO lay the audio cues (session palette clips named like the labels)
+   * on the guide track at each section change. */
+  guideAudioEnabled: boolean;
+  /** Name of the audio guide track. "" = automatic ("guida"/"guide" in the name). */
+  guideTrack: string;
   /** Master switch for play/stop plugin automation. When off, the rules below are ignored. */
   automationEnabled: boolean;
   /** Plugin-automation rules applied on every play/stop transition (e.g. autotune ON while playing). */
@@ -228,7 +246,17 @@ export interface Settings {
    * online, when the key is entered (max 3 devices per key); afterwards the app verifies it offline
    * to unlock Pro with no internet. Empty until the device is activated. */
   activationToken: string;
+  /** Remote devices allowed to CONTROL AbleJam (max 2) — everyone else on the LAN is view-only.
+   * The host PC itself is always master. Raw device ids stay server-side: this list is REDACTED
+   * from the state sent to remote clients (anti-spoofing). */
+  masterDevices: { id: string; name: string }[];
 }
+
+/** Preset section labels for the structure editor (user can add more in settings). */
+export const DEFAULT_STRUCTURE_LABELS = [
+  "strofa", "intro", "ritornello", "bridge", "finale", "tema", "pubblico",
+  "solo chitarra", "solo sax", "solo basso", "solo batteria", "solo tromba", "solo voce",
+];
 
 export const defaultSettings: Settings = {
   autoplay: false,
@@ -246,6 +274,11 @@ export const defaultSettings: Settings = {
   stopTrack: "",
   stopNote: -1,
   lyricsTrack: "LYRICS",
+  structureTrack: "",
+  showStructure: true,
+  structureLabels: [...DEFAULT_STRUCTURE_LABELS],
+  guideAudioEnabled: false,
+  guideTrack: "GUIDA",
   automationEnabled: false,
   pluginRules: [],
   colorScheme: "rainbow",
@@ -263,6 +296,7 @@ export const defaultSettings: Settings = {
   demoMode: false,
   licenseKey: "",
   activationToken: "",
+  masterDevices: [],
 };
 
 /** A colour ("#rrggbb") for item `i` of `n` under a scheme. "contrast" (default) uses the
@@ -280,6 +314,15 @@ export function schemeHex(scheme: string, i: number, n: number, nonce = 0): stri
   const f = (x: number) => l - a * Math.max(-1, Math.min(k(x) - 3, Math.min(9 - k(x), 1)));
   const ch = (x: number) => Math.round(255 * f(x)).toString(16).padStart(2, "0");
   return `#${ch(0)}${ch(8)}${ch(4)}`;
+}
+
+/** A device currently connected to the host, as shown in the Settings → Network list. `id` is an
+ * OPAQUE per-connection id assigned by the server — never the raw device id (anti-spoofing). */
+export interface ClientInfo {
+  id: string;
+  name: string;
+  isLocal: boolean;
+  isMaster: boolean;
 }
 
 export interface AppState {
@@ -334,6 +377,11 @@ export interface AppState {
   lyrics: LyricLine[];
   /** True when `lyrics` is an AbleJam-edited document (timing recorded in AbleJam), not raw clips. */
   lyricsEdited: boolean;
+  /** Song-structure changes (section label + absolute beat range): the AbleJam-edited doc if there
+   * is one, else read live from the STRUCTURE track's clips. Same line shape as lyrics. */
+  structure: LyricLine[];
+  /** True when `structure` is an AbleJam-edited document, not raw clips. */
+  structureEdited: boolean;
   /** True when a valid license key is stored — the full version is unlocked. When false the app
    * is locked to the demo setlist. */
   licensed: boolean;
@@ -343,6 +391,8 @@ export interface AppState {
    * "limit" (the key's 3 devices are used), "offline" (couldn't reach the server to activate),
    * "invalid" (key rejected). The licensed flag above is the source of truth for the gate. */
   activationState: string;
+  /** Devices currently connected over the LAN (for the Settings → Network master list). */
+  clients: ClientInfo[];
 }
 
 export const initialTransport: Transport = {
@@ -384,9 +434,12 @@ export const initialState: AppState = {
   stageMessage: "",
   lyrics: [],
   lyricsEdited: false,
+  structure: [],
+  structureEdited: false,
   licensed: false,
   licenseEmail: "",
   activationState: "",
+  clients: [],
 };
 
 export interface ImportResult {
@@ -400,7 +453,15 @@ export type ServerMessage =
   | { type: "transport"; transport: Transport; currentEntryIndex: number; bridgeConnected: boolean }
   | { type: "beat"; beat: number } // 0-based beat-in-bar from Live, for the CLICK metronome visual
   | { type: "toast"; level: "info" | "error"; message: string }
+  | { type: "role"; isMaster: boolean } // per-socket: whether THIS client may control AbleJam
   | { type: "importResult"; result: ImportResult };
+
+/** Client → server device introduction, sent once on connect (before any command). */
+export interface HelloMessage {
+  type: "hello";
+  deviceId: string;
+  deviceName: string;
+}
 
 export type ClientCommand =
   | { type: "command"; command: "play" | "pause" | "stop" | "next" | "prev" | "refresh" | "panic" }
@@ -422,6 +483,12 @@ export type ClientCommand =
   | { type: "command"; command: "setLyrics"; lines: LyricLine[] }
   | { type: "command"; command: "clearLyrics" }
   | { type: "command"; command: "writeLyricsClips"; lines: LyricLine[] }
+  | { type: "command"; command: "setStructure"; lines: LyricLine[] }
+  | { type: "command"; command: "clearStructure" }
+  | { type: "command"; command: "writeStructureClips"; lines: LyricLine[] }
+  | { type: "command"; command: "setStructureLabels"; labels: string[] }
+  | { type: "command"; command: "grantMaster"; clientId: string }
+  | { type: "command"; command: "revokeMaster"; deviceId: string }
   | { type: "command"; command: "saveSetlist"; name: string }
   | { type: "command"; command: "loadSetlist"; name: string }
   | { type: "command"; command: "editSetlistFile"; name: string }

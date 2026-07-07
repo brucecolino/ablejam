@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type AppState, type ClientCommand, type ImportResult, type ServerMessage, initialState, PORTS } from "@ablejam/shared";
+import { type AppState, type ClientCommand, type HelloMessage, type ImportResult, type ServerMessage, initialState, PORTS } from "@ablejam/shared";
 
 export interface Toast {
   id: number;
@@ -9,9 +9,40 @@ export interface Toast {
 
 export interface Beat { inBar: number; n: number } // 0-based beat-in-bar + a monotonic counter (retrigger)
 
+/** Persistent per-browser device id (survives reloads) — the host counts THIS as "a device"
+ * for the master/viewer roles. Only ever sent to the host, never displayed. */
+function deviceId(): string {
+  try {
+    const k = "ablejam.deviceId";
+    let v = localStorage.getItem(k);
+    if (!v) {
+      v = (crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      localStorage.setItem(k, v);
+    }
+    return v;
+  } catch {
+    return "no-storage";
+  }
+}
+/** A friendly label for the device list, derived from the user agent (e.g. "iPad · Safari"). */
+function deviceName(): string {
+  try {
+    const ua = navigator.userAgent;
+    const dev = /iPad/i.test(ua) ? "iPad" : /iPhone/i.test(ua) ? "iPhone" : /Android/i.test(ua) ? "Android"
+      : /Macintosh/i.test(ua) ? "Mac" : /Windows/i.test(ua) ? "PC Windows" : "Dispositivo";
+    const br = /Electron/i.test(ua) ? "AbleJam" : /CriOS|Chrome/i.test(ua) ? "Chrome" : /Firefox|FxiOS/i.test(ua) ? "Firefox" : /Safari/i.test(ua) ? "Safari" : "";
+    return br ? `${dev} · ${br}` : dev;
+  } catch {
+    return "Dispositivo";
+  }
+}
+
 export function useAbleJam() {
   const [state, setState] = useState<AppState>(initialState);
   const [connected, setConnected] = useState(false);
+  // Master until told otherwise: an OLD host never sends "role", and its clients must stay
+  // fully functional. A new host answers the hello with the real role right away.
+  const [isMaster, setIsMaster] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [beat, setBeat] = useState<Beat>({ inBar: -1, n: 0 });
@@ -24,7 +55,12 @@ export function useAbleJam() {
     const connect = () => {
       socket = new WebSocket(`ws://${location.hostname}:${PORTS.http}`);
       ref.current = socket;
-      socket.onopen = () => setConnected(true);
+      socket.onopen = () => {
+        setConnected(true);
+        // Introduce this device (before any command — WS preserves per-socket order).
+        const hello: HelloMessage = { type: "hello", deviceId: deviceId(), deviceName: deviceName() };
+        socket.send(JSON.stringify(hello));
+      };
       socket.onclose = () => {
         setConnected(false);
         if (!stopped) setTimeout(connect, 1000);
@@ -46,6 +82,8 @@ export function useAbleJam() {
           const id = ++toastId.current;
           setToasts((t) => [...t, { id, level: msg.level, message: msg.message }]);
           setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
+        } else if (msg.type === "role") {
+          setIsMaster(msg.isMaster);
         } else if (msg.type === "importResult") {
           setImportResult(msg.result);
         }
@@ -63,5 +101,5 @@ export function useAbleJam() {
     if (s && s.readyState === WebSocket.OPEN) s.send(JSON.stringify(cmd));
   }, []);
 
-  return { state, connected, toasts, importResult, clearImportResult: () => setImportResult(null), send, beat };
+  return { state, connected, isMaster, toasts, importResult, clearImportResult: () => setImportResult(null), send, beat };
 }

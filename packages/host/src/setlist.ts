@@ -106,6 +106,27 @@ export class SetlistManager {
     // song only changes via explicit navigation or natural one-step forward progression.
   }
 
+  /** The entry that best matches the playhead's song — nearest ACTIVE occurrence to the current
+   * selection — WITHOUT touching the selection (read-only twin of deriveFromPlayhead). `ambiguous`
+   * flags duplicate occurrences that DISAGREE on linkedNext: the caller must then never arm a stop
+   * (mid-medley, continuing on a doubt is safe; stopping is not). Used by the auto-stop logic so a
+   * misaligned currentEntry (setlist rebuild, duplicates) can't arm a stop on a linked medley. */
+  entryAtPlayhead(libIndex: number): { index: number; ambiguous: boolean } {
+    let best = -1;
+    let bestDist = Infinity;
+    let sawLinked = false;
+    let sawUnlinked = false;
+    if (libIndex >= 0) {
+      this.entries.forEach((e, i) => {
+        if (!e.active || e.libIndex !== libIndex) return;
+        if (e.linkedNext) sawLinked = true; else sawUnlinked = true;
+        const d = this.currentEntry >= 0 ? Math.abs(i - this.currentEntry) : i;
+        if (d < bestDist) { bestDist = d; best = i; }
+      });
+    }
+    return { index: best, ambiguous: sawLinked && sawUnlinked };
+  }
+
   private deriveFromPlayhead(libIndex: number): void {
     let best = -1;
     if (libIndex >= 0) {
@@ -291,6 +312,15 @@ export class SetlistManager {
   }
 
   applyTitles(titles: string[], linkMedleys = false): { matched: number; total: number; unmatched: string[] } {
+    // Snapshot the MANUAL medley links before rebuilding: every re-import used to recreate all
+    // entries with linkedNext=false, silently unlinking hand-made medleys on each Word save — the
+    // first song then stopped on its stop note again. Pairs still adjacent after the re-import
+    // (same songs, same order) get their link back below.
+    const prevPairs = new Set<string>();
+    for (let i = 0; i < this.entries.length - 1; i++) {
+      const e = this.entries[i]!;
+      if (e.linkedNext) prevPairs.add(`${e.libIndex}>${this.entries[i + 1]!.libIndex}`);
+    }
     const libTitles = this.library.map((s) => s.title);
     const parsed = titles
       .map((t) => this.parseImportLine(t))
@@ -339,6 +369,10 @@ export class SetlistManager {
       for (let i = 0; i < entries.length - 1; i++) {
         if (groupIds[i] === groupIds[i + 1]) entries[i]!.linkedNext = true;
       }
+    }
+    // Preserve manual medley links across the re-import (pairs still adjacent, see snapshot above).
+    for (let i = 0; i < entries.length - 1; i++) {
+      if (prevPairs.has(`${entries[i]!.libIndex}>${entries[i + 1]!.libIndex}`)) entries[i]!.linkedNext = true;
     }
 
     this.library.forEach((_, i) => {

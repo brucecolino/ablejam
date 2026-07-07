@@ -14,7 +14,7 @@ from .osc import OSCServer
 HOST_IP = "127.0.0.1"
 HOST_PORT = 39062     # the AbleJam host listens here for state
 LISTEN_PORT = 39061   # we listen here for commands from the host
-BRIDGE_VERSION = 47   # bump on every change; shown in the UI to confirm reloads
+BRIDGE_VERSION = 48   # bump on every change; shown in the UI to confirm reloads
 
 
 class AbleJam(ControlSurface):
@@ -36,6 +36,8 @@ class AbleJam(ControlSurface):
         self._stop_note = -1           # configured stop pitch (-1 = any note)
         self._lyrics_track_name = ""   # configured lyrics track ("" = auto: name contains "lyrics")
         self._last_lyrics_sig = ""     # signature of lyrics clips, to re-send on live edits
+        self._structure_track_name = ""  # configured song-structure track ("" = auto: "structure"/"struttura")
+        self._last_structure_sig = ""    # signature of structure clips, to re-send on live edits
         self._lyrics_tick = 0          # throttle for polling lyrics clips
         self._armed_stop = None        # beat to stop AT precisely (armed by host), None = off
         self._prev_time = 0.0          # last playhead position, for tight stop-crossing detection
@@ -57,6 +59,7 @@ class AbleJam(ControlSurface):
         self._send_midi_tracks()
         self._send_stop_points()
         self._send_lyrics()
+        self._send_structure()
         self._send_devices()
         # NOTE: AbleJam never touches song.metronome — the user (or their click-automation
         # track) owns it. Toggling it here made the metronome button flicker on every play.
@@ -92,6 +95,7 @@ class AbleJam(ControlSurface):
             if self._lyrics_tick >= 3:
                 self._lyrics_tick = 0
                 self._check_lyrics()  # live-refresh lyrics as the user renames/moves clips
+                self._check_structure()  # same live refresh for the song-structure track
         except Exception:
             pass
         self.schedule_message(1, self._tick)  # ~100 ms per tick
@@ -151,6 +155,9 @@ class AbleJam(ControlSurface):
         o.on("/ablejam/cmd/setSelected", lambda a: self._set_selected(float(a[0]) if a else 0.0))
         o.on("/ablejam/cmd/stopConfig", lambda a: self._stop_config(a))
         o.on("/ablejam/cmd/lyricsConfig", lambda a: self._lyrics_config(a))
+        o.on("/ablejam/cmd/structureConfig", lambda a: self._structure_config(a))
+        o.on("/ablejam/cmd/writeStructure", lambda a: self._write_structure(a[0] if a else "[]"))
+        o.on("/ablejam/cmd/writeGuide", lambda a: self._write_guide(a[0] if a else "{}"))
         o.on("/ablejam/cmd/renameLyrics", lambda a: self._rename_lyrics(a[0] if a else "[]"))
         o.on("/ablejam/cmd/writeLyrics", lambda a: self._write_lyrics_clips(a[0] if a else "[]"))
         o.on("/ablejam/cmd/colorize", lambda a: self._colorize(a[0] if a else "[]"))
@@ -174,6 +181,7 @@ class AbleJam(ControlSurface):
         self._send_midi_tracks()
         self._send_stop_points()
         self._send_lyrics()
+        self._send_structure()
         self._send_autotune_diag()
         self._send_devices()
 
@@ -304,6 +312,7 @@ class AbleJam(ControlSurface):
         # (the audible wrong-position blip + click) before snapping. The fix: seat the insert
         # marker on the song's locator with cue_point.jump() FIRST, then start_playing() —
         # the engine never starts from a wrong marker, so no roll, no click, no master mute.
+        self._armed_stop = None  # fresh start: the host re-arms the right stop within 100 ms
         target = self._resume_time if self._resume_time is not None else self._selected_time
         self._resume_time = None
         self._seek_ticks = 0
@@ -490,6 +499,7 @@ class AbleJam(ControlSurface):
     def _stop(self):
         # Stop and return to the START of the SELECTED song (not wherever the
         # playhead drifted, and not the first song).
+        self._armed_stop = None  # stopped: nothing left to arm against
         self._resume_time = None
         self._play_ticks = 0  # cancel any pending play window so Stop isn't undone
         self._unmute_master()  # safety: never leave the master muted on stop
@@ -537,6 +547,7 @@ class AbleJam(ControlSurface):
         # race between stopping and seeking: the old "send cmdStop then cmdJumpToTime"
         # let the jump re-arm play (is_playing still True for a tick) and undo the stop
         # -> Stop appeared to work only ~1 time in 5. Here nothing checks is_playing.
+        self._armed_stop = None    # a stop/park invalidates any armed MIDI stop
         beats = max(0.0, beats)
         self._resume_time = None
         self._play_ticks = 0       # cancel any pending play window
@@ -562,6 +573,12 @@ class AbleJam(ControlSurface):
     def _jump_to_time(self, beats):
         # Select a song. Any jump (select / next / prev / Restart) clears the pause
         # memory, so the song begins from its start — resume is only for play/pause.
+        # DISARM FIRST: a jump invalidates any armed MIDI stop (the host re-arms within
+        # 100 ms with fresh data). _arm_play_target/_request_seek mutate current_song_time
+        # SYNCHRONOUSLY, which fires _on_song_time -> _check_armed_stop — with a stale arm
+        # between the old and new position, that used to stop playback mid-jump (the
+        # "medley dies after the first song" spurious stop).
+        self._armed_stop = None
         beats = max(0.0, beats)
         self._selected_time = beats
         self._resume_time = None
@@ -842,6 +859,205 @@ class AbleJam(ControlSurface):
         sig = "|".join("%s@%.3f-%.3f" % (nm, s, e) for (s, e, nm) in items)
         if sig != self._last_lyrics_sig:
             self._send_lyrics()
+
+    # ---- Song structure: a track (auto-name "structure"/"struttura", configurable) whose
+    # arrangement clips mark the song sections — clip NAME = section label ("Intro", "Ritornello"…),
+    # clip start = the section change. Mirrors the lyrics-track machinery exactly.
+    def _structure_config(self, a):
+        try:
+            self._structure_track_name = (str(a[0]).strip() if a and a[0] is not None else "")
+        except Exception:
+            pass
+        self._send_structure()
+
+    def _find_structure_track(self):
+        want = (self._structure_track_name or "").strip().lower()
+        try:
+            if want:
+                for t in self._song.tracks:
+                    if (t.name or "").strip().lower() == want:
+                        return t
+                return None
+            for t in self._song.tracks:
+                nm = (t.name or "").strip().lower()
+                if "structure" in nm or "struttura" in nm:
+                    return t
+        except Exception:
+            pass
+        return None
+
+    def _send_structure(self):
+        lines = []
+        track = self._find_structure_track()
+        if track is not None:
+            try:
+                for clip in track.arrangement_clips:
+                    try:
+                        text = clip.name or ""
+                        if not text.strip():
+                            continue
+                        lines.append({"text": text, "start": float(clip.start_time), "end": float(clip.end_time)})
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        lines.sort(key=lambda x: x["start"])
+        self._last_structure_sig = "|".join("%s@%.3f-%.3f" % (l["text"], l["start"], l["end"]) for l in lines)
+        self._osc.send("/ablejam/structure", [json.dumps(lines)])
+
+    def _check_structure(self):
+        # Cheap signature so renames/moves on the structure track reach AbleJam live.
+        track = self._find_structure_track()
+        items = []
+        if track is not None:
+            try:
+                for clip in track.arrangement_clips:
+                    try:
+                        nm = clip.name or ""
+                        if nm.strip():
+                            items.append((float(clip.start_time), float(clip.end_time), nm))
+                    except Exception:
+                        pass
+            except Exception:
+                return
+        items.sort(key=lambda x: x[0])
+        sig = "|".join("%s@%.3f-%.3f" % (nm, s, e) for (s, e, nm) in items)
+        if sig != self._last_structure_sig:
+            self._send_structure()
+
+    def _write_structure(self, payload):
+        # Create one named clip per section change on the STRUCTURE track (the app's structure
+        # editor exports here). Same idempotent pattern as _write_lyrics_clips: never places a
+        # clip where one already exists. Reports [created, total, reason] on /ablejam/structurewrite.
+        try:
+            items = json.loads(payload) if payload else []
+        except Exception:
+            items = []
+        track = self._find_structure_track()
+        total = len(items)
+        if track is None:
+            self._osc.send("/ablejam/structurewrite", [0, total, "notrack"])
+            return
+        if not items:
+            self._osc.send("/ablejam/structurewrite", [0, 0, ""])
+            return
+        occupied = []
+        try:
+            for c in track.arrangement_clips:
+                try:
+                    occupied.append(float(c.start_time))
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        template, temp_slot, fresh = self._lyrics_template(track)
+        if template is None:
+            self._osc.send("/ablejam/structurewrite", [0, total, "empty"])
+            return
+        created = 0
+        tol = 0.25
+        for it in sorted(items, key=lambda x: float(x.get("s", 0.0))):
+            try:
+                start = float(it.get("s", 0.0))
+                if any(abs(o - start) < tol for o in occupied):
+                    continue
+                new_clip = track.duplicate_clip_to_arrangement(template, start)
+                try:
+                    if new_clip is not None:
+                        new_clip.name = str(it.get("t", ""))
+                        if not fresh and getattr(new_clip, "is_midi_clip", False):
+                            try:
+                                new_clip.remove_notes_extended(0, 128, 0.0, 1.0e9)
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+                occupied.append(start)
+                created += 1
+            except Exception:
+                pass
+        if temp_slot is not None:
+            try:
+                temp_slot.delete_clip()
+            except Exception:
+                pass
+        self._send_structure()
+        self._osc.send("/ablejam/structurewrite", [created, total, ""])
+
+    def _find_guide_track(self, want_name):
+        want = (want_name or "").strip().lower()
+        try:
+            if want:
+                for t in self._song.tracks:
+                    if (t.name or "").strip().lower() == want:
+                        return t
+            for t in self._song.tracks:
+                nm = (t.name or "").strip().lower()
+                if "guida" in nm or "guide" in nm:
+                    return t
+        except Exception:
+            pass
+        return None
+
+    def _write_guide(self, payload):
+        # Audio guide track: duplicate the SESSION palette clip whose name matches each section
+        # label into the arrangement at the section start. The palette = the guide track's session
+        # slots (the user drags their cue audio files there ONCE, named like the labels); from then
+        # on every export lays the announcements down automatically. Idempotent like the others.
+        try:
+            data = json.loads(payload) if payload else {}
+        except Exception:
+            data = {}
+        items = data.get("items") or []
+        track = self._find_guide_track(data.get("track") or "")
+        total = len(items)
+        if track is None:
+            self._osc.send("/ablejam/guidewrite", [0, total, "notrack"])
+            return
+        palette = {}
+        try:
+            for slot in track.clip_slots:
+                try:
+                    if slot.has_clip and (slot.clip.name or "").strip():
+                        palette[(slot.clip.name or "").strip().lower()] = slot.clip
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        if not palette:
+            self._osc.send("/ablejam/guidewrite", [0, total, "nopalette"])
+            return
+        occupied = []
+        try:
+            for c in track.arrangement_clips:
+                try:
+                    occupied.append(float(c.start_time))
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        created = 0
+        tol = 0.25
+        for it in items:
+            try:
+                start = float(it.get("s", 0.0))
+                label = str(it.get("t", "")).strip().lower()
+                if not label or any(abs(o - start) < tol for o in occupied):
+                    continue
+                clip = palette.get(label)
+                if clip is None:  # tolerant match: palette name contained in label or vice versa
+                    for k, c in palette.items():
+                        if k in label or label in k:
+                            clip = c
+                            break
+                if clip is None:
+                    continue
+                track.duplicate_clip_to_arrangement(clip, start)
+                occupied.append(start)
+                created += 1
+            except Exception:
+                pass
+        self._osc.send("/ablejam/guidewrite", [created, total, ""])
 
     def _stop_config(self, a):
         # Host tells us which track + note mark song endings. Re-read immediately.

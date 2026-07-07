@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { translate, bestMatch, LICENSING_ENABLED, type AppState, type ClientCommand, type ImportResult, type Lang, type LyricLine, type PluginRule, type Settings, type SetlistEntry, type ShortcutMap, type Song } from "@ablejam/shared";
+import { translate, bestMatch, LICENSING_ENABLED, type AppState, type ClientCommand, type ImportResult, type Lang, type LyricLine, type PluginRule, type Section, type Settings, type SetlistEntry, type ShortcutMap, type Song } from "@ablejam/shared";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 import { useAbleJam, type Toast, type Beat } from "./ws";
 import { formatDuration, formatClock, colorOf } from "./format";
@@ -27,6 +27,71 @@ function useT(): { lang: Lang; tr: TFn } {
 
 function songOf(state: AppState, entry: SetlistEntry | undefined): Song | undefined {
   return entry ? state.library[entry.libIndex] : undefined;
+}
+/** The song's sections MERGED with the app-level structure lines (STRUCTURE track clips or the
+ * AbleJam structure doc) that fall inside it — the single list Performance/Stage display and the
+ * bar ticks draw from. Gated by the "show structure" setting; locator `>` sections always show. */
+function mergedSections(state: AppState, song: Song | undefined): Section[] {
+  if (!song) return [];
+  const base = song.sections;
+  if (!state.settings.showStructure || !state.structure?.length) return base; // ?. = old-host state
+  const end = song.endBeat ?? Infinity;
+  const extra: Section[] = state.structure
+    .filter((l) => l.text.trim() && l.start >= song.startBeat - 1e-6 && l.start < end - 1e-6)
+    .map((l) => ({ title: l.text, startBeat: l.start, kind: "section" as const, color: null, description: null, flags: [], transitionTarget: null }));
+  if (!extra.length) return base;
+  // Merge + drop near-duplicates (a locator section and a clip on the same beat).
+  const all = [...base, ...extra].sort((a, b) => a.startBeat - b.startBeat);
+  return all.filter((s, i) => i === 0 || Math.abs(s.startBeat - all[i - 1]!.startBeat) > 0.26);
+}
+/** Index of the section under the playhead in a merged list (-1 = before the first). */
+function sectionIndexAt(secs: Section[], time: number): number {
+  let idx = -1;
+  for (let i = 0; i < secs.length; i++) { if (secs[i]!.startBeat <= time + 1e-6) idx = i; else break; }
+  return idx;
+}
+
+/** Pointer-based scrubbing for a horizontal bar — mouse AND touch (iPad). While the finger is
+ * down the returned `frac` tracks it live (the bar renders a ghost fill/cursor from it, no 10 Hz
+ * transport wait); on release `onRelease(frac)` fires once with the exact spot. A plain tap is
+ * just a zero-length drag. Spread `props` on the bar (which needs CSS `touch-action: none`). */
+function useBarScrub(onRelease: (frac: number) => void): {
+  frac: number | null;
+  props: {
+    onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
+    onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => void;
+    onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => void;
+    onPointerCancel: () => void;
+  };
+} {
+  const [frac, setFrac] = useState<number | null>(null);
+  const fracRef = useRef(0);
+  const releaseRef = useRef(onRelease); releaseRef.current = onRelease;
+  const at = (e: React.PointerEvent<HTMLDivElement>): number => {
+    const r = e.currentTarget.getBoundingClientRect();
+    return r.width > 0 ? Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) : 0;
+  };
+  return {
+    frac,
+    props: {
+      onPointerDown: (e) => {
+        e.preventDefault();
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* unsupported */ }
+        const f = at(e); fracRef.current = f; setFrac(f);
+      },
+      onPointerMove: (e) => {
+        if (!e.currentTarget.hasPointerCapture?.(e.pointerId)) return; // hover, not a drag
+        const f = at(e); fracRef.current = f; setFrac(f);
+      },
+      onPointerUp: (e) => {
+        if (!e.currentTarget.hasPointerCapture?.(e.pointerId)) return;
+        try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+        setFrac(null);
+        releaseRef.current(fracRef.current);
+      },
+      onPointerCancel: () => setFrac(null),
+    },
+  };
 }
 function nextActive(setlist: SetlistEntry[], from: number): number {
   for (let k = from + 1; k < setlist.length; k++) if (setlist[k]!.active) return k;
@@ -270,7 +335,7 @@ function initialView(): View {
 }
 
 export function App() {
-  const { state, toasts, importResult, clearImportResult, send, beat } = useAbleJam();
+  const { state, toasts, importResult, clearImportResult, send, beat, isMaster } = useAbleJam();
   const [view, setView] = useState<View>(initialView);
   useEffect(() => { try { localStorage.setItem("ablejam.view", view); } catch { /* ignore */ } }, [view]);
   const [edit, setEdit] = useState(false);
@@ -278,6 +343,12 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [whatsNew, setWhatsNew] = useState<ChangelogEntry[] | null>(null);
+  // First-run setup wizard: desktop app only, once (any close counts as "seen"), reopenable
+  // from Settings → Ableton project. Never in kiosk mode.
+  const [showSetup, setShowSetup] = useState<boolean>(() => {
+    try { return !KIOSK && !!getBridge() && localStorage.getItem("ablejam.setupDone") !== "1"; } catch { return false; }
+  });
+  const closeSetup = () => { try { localStorage.setItem("ablejam.setupDone", "1"); } catch { /* ignore */ } setShowSetup(false); };
   // Show "what's new" once after an update: compare the last-seen version (per device) with the
   // current one. First run (no stored version) records it silently — no modal on a fresh install.
   useEffect(() => {
@@ -309,8 +380,10 @@ export function App() {
   settingsOpenRef.current = showSettings;
   const playingRef = useRef(state.transport.isPlaying);
   playingRef.current = state.transport.isPlaying;
+  const masterRef = useRef(isMaster); masterRef.current = isMaster;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!masterRef.current) return; // viewer: a paired pedal/keyboard must not fire transport commands
       if (e.repeat || settingsOpenRef.current) return;
       const el = e.target as HTMLElement | null;
       const tag = el?.tagName;
@@ -340,6 +413,7 @@ export function App() {
     const onSave = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
         e.preventDefault();
+        if (!masterRef.current) return; // viewer: read-only
         const st = stateRef.current;
         const name = st.currentSetlistName || window.prompt(translate(st.settings.language, "save.prompt")) || "";
         if (name) sendRef.current({ type: "command", command: "saveSetlist", name });
@@ -363,7 +437,7 @@ export function App() {
   return (
     <LangCtx.Provider value={lang}>
     <BeatCtx.Provider value={beat}>
-    <div className={"app" + (getBridge()?.platform === "darwin" ? " mac" : "") + (KIOSK ? " kiosk" : "")}>
+    <div className={"app" + (getBridge()?.platform === "darwin" ? " mac" : "") + (KIOSK ? " kiosk" : "") + (isMaster ? "" : " viewer")}>
       {!KIOSK && <header className="topbar">
         <span className="brand" title={`AbleJam v${APP_VERSION} · Bridge ${state.bridgeVersion ? tr("settings.bridge.connected", { n: state.bridgeVersion }) : tr("settings.bridge.disconnected")}`}>
           <img className="brand-mark" src="/logo-grid.svg" width={26} height={26} alt="" />
@@ -375,6 +449,7 @@ export function App() {
           <button className={view === "stage" ? "tab on" : "tab"} onClick={() => setView("stage")}>{tr("tab.stage")}</button>
         </nav>
         <span className="status">
+          {!isMaster && <span className="dot viewer-badge" title={tr("viewer.badge.title")}>{tr("viewer.badge")}</span>}
           {state.settings.showClock && <Clock />}
           <button className={"bt-chip" + (state.bluetooth.length ? " on" : "")}
             title={state.bluetooth.length ? tr("bt.connected.title", { list: state.bluetooth.join("\n• ") }) : tr("bt.none.title")}
@@ -403,7 +478,8 @@ export function App() {
 
       {panel === "import" && <ImportPanel send={send} importResult={importResult} onClose={() => { setPanel("none"); clearImportResult(); }} />}
       {panel === "print" && <PrintView state={state} onClose={() => setPanel("none")} />}
-      {showSettings && <SettingsPanel state={state} send={send} onClose={() => setShowSettings(false)} />}
+      {showSettings && <SettingsPanel state={state} send={send} onClose={() => setShowSettings(false)} onOpenSetup={() => { setShowSettings(false); setShowSetup(true); }} />}
+      {showSetup && <SetupWizard state={state} onClose={closeSetup} />}
       {showInfo && <InfoPanel onClose={() => setShowInfo(false)} />}
       {whatsNew && <WhatsNewModal entries={whatsNew} onClose={() => setWhatsNew(null)} />}
       <Toasts toasts={toasts} />
@@ -862,6 +938,191 @@ function UpdatesCard() {
   );
 }
 
+/** First-run setup wizard (desktop app only): guides the user through installing the Ableton
+ * bridge and confirms LIVE when Ableton connects. On mac the DMG can't run installers, so this IS
+ * the installation step; the MIDI port needs no install at all (AbleJam opens a virtual CoreMIDI
+ * port by itself — loopMIDI is Windows-only and ships with the Windows installer). */
+function SetupWizard({ state, onClose }: { state: AppState; onClose: () => void }) {
+  const { tr } = useT();
+  const api = getBridge();
+  const mac = api?.platform === "darwin";
+  const [installing, setInstalling] = useState(false);
+  const install = async () => {
+    setInstalling(true);
+    try { await api?.installBridge?.(); } catch { /* dialog shown by main */ }
+    setTimeout(() => setInstalling(false), 1500);
+  };
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal setup-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="settings-head">
+          <h3>{tr("setup.title")}</h3>
+          <button className="settings-close" onClick={onClose} title={tr("common.close")}>✕</button>
+        </div>
+        <div className="settings-desc-small">{tr("setup.intro")}</div>
+
+        <div className="setup-step">
+          <div className="setup-step-head"><span className="setup-num">1</span> {tr("setup.step1.title")}</div>
+          <div className="settings-desc-small">{mac ? tr("setup.step1.desc.mac") : tr("setup.step1.desc.win")}</div>
+          <button className="settings-btn" disabled={installing} onClick={() => void install()}>
+            {installing ? "…" : `⬇ ${tr("setup.step1.btn")}`}
+          </button>
+        </div>
+
+        <div className="setup-step">
+          <div className="setup-step-head"><span className="setup-num">2</span> {tr("setup.step2.title")}</div>
+          <div className="settings-desc-small">{tr("setup.step2.desc")}{mac ? ` ${tr("setup.step2.mac.restart")}` : ""}</div>
+          <div className={"setup-status" + (state.bridgeConnected ? " ok" : "")}>
+            {state.bridgeConnected ? `✓ ${tr("setup.step2.connected")}` : `● ${tr("setup.step2.waiting")}`}
+          </div>
+        </div>
+
+        <div className="setup-step">
+          <div className="setup-step-head"><span className="setup-num">3</span> {tr("setup.step3.title")}</div>
+          <div className="settings-desc-small">{mac ? tr("setup.step3.desc.mac") : tr("setup.step3.desc.win")}</div>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+          <button className="settings-btn" style={{ background: "color-mix(in srgb, var(--accent) 16%, transparent)", borderColor: "color-mix(in srgb, var(--accent) 50%, transparent)", color: "var(--accent)" }} onClick={onClose}>
+            {state.bridgeConnected ? tr("setup.done") : tr("setup.later")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Structure editor: mark the section changes (intro / strofa / ritornello…) of ONE song directly
+ * in AbleJam — tap a label chip at the right moment while the song plays (live "tap-record"), drag
+ * the ticks to fine-tune — then export everything to the project as named clips on the STRUCTURE
+ * track (+ the audio-guide cues when enabled). Same scoping model as the lyrics editor: only this
+ * song's marks are edited; the other songs' marks are kept aside and merged back on every save. */
+function StructureEditor({ state, send, entryIndex, onClose }: { state: AppState; send: Send; entryIndex: number; onClose: () => void }) {
+  const { tr } = useT();
+  const scopeRef = useRef<{ song: Song | undefined; entryIndex: number; start: number; end: number } | null>(null);
+  if (scopeRef.current === null) {
+    const e = state.setlist[entryIndex];
+    const sg = e ? state.library[e.libIndex] : undefined;
+    const start = sg ? sg.startBeat : 0;
+    const end = sg ? (sg.endBeat ?? sg.startBeat + 64) : start + 64;
+    scopeRef.current = { song: sg, entryIndex, start, end };
+  }
+  const scope = scopeRef.current;
+  const inSong = (l: LyricLine) => l.start >= scope.start - 1e-6 && l.start < scope.end - 1e-6;
+  const [lines, setLines] = useState<LyricLine[]>(() => (state.structure ?? []).filter(inSong).map((l) => ({ ...l })));
+  const otherRef = useRef<LyricLine[]>((state.structure ?? []).filter((l) => !inSong(l)).map((l) => ({ ...l })));
+  const linesRef = useRef(lines); linesRef.current = lines;
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [custom, setCustom] = useState("");
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const saveTimer = useRef<number | null>(null);
+
+  const fullDoc = (ls: LyricLine[]) => [...otherRef.current, ...ls].sort((a, b) => a.start - b.start);
+  const push = (next: LyricLine[]) => {
+    const sorted = [...next].sort((a, b) => a.start - b.start);
+    linesRef.current = sorted; // update NOW (not at next render) so back-to-back taps both land
+    setLines(sorted);
+    if (saveTimer.current != null) clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => send({ type: "command", command: "setStructure", lines: fullDoc(sorted) }), 400);
+  };
+
+  const span = (scope.end - scope.start) || 1;
+  const pct = (beat: number) => Math.max(0, Math.min(100, ((beat - scope.start) / span) * 100));
+  const fmt = (beat: number) => formatDuration(Math.max(0, beatsToSec(beat - scope.start, state.transport.tempo)));
+
+  // Tap a label = a section change at the CURRENT playhead (live while playing, or parked).
+  // linesRef (not the render's `lines`): two taps inside one render batch must BOTH land.
+  const addAt = (label: string) => {
+    const at = Math.max(scope.start, Math.min(scope.end - 0.5, state.transport.time));
+    push([...linesRef.current.map((l) => ({ ...l })), { text: label, start: at, end: at + 1 }]);
+  };
+  const addCustomLabel = () => {
+    const label = custom.trim();
+    if (!label) return;
+    const known = state.settings.structureLabels ?? [];
+    if (!known.some((l) => l.toLowerCase() === label.toLowerCase())) {
+      send({ type: "command", command: "setStructureLabels", labels: [...known, label] });
+    }
+    setCustom("");
+    addAt(label);
+  };
+
+  // Drag a tick to move a change (pointer events -> works on iPad).
+  useEffect(() => {
+    if (dragIdx == null) return;
+    const onMove = (e: PointerEvent) => {
+      const r = barRef.current?.getBoundingClientRect(); if (!r || r.width <= 0) return;
+      const f = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+      const ls = linesRef.current.map((l) => ({ ...l }));
+      if (dragIdx < ls.length) ls[dragIdx]!.start = scope.start + f * span;
+      setLines(ls);
+    };
+    const onUp = () => { push(linesRef.current.map((l) => ({ ...l }))); setDragIdx(null); };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
+  }, [dragIdx, scope.start, span]);
+
+  const exportToAbleton = () => {
+    if (!confirm(tr("structEd.export.confirm"))) return;
+    send({ type: "command", command: "writeStructureClips", lines: fullDoc(linesRef.current) });
+  };
+
+  return (
+    <div className="overlay" onClick={(e) => { e.stopPropagation(); onClose(); }}>
+      <div className="lyrics-editor" onClick={(e) => e.stopPropagation()}>
+        <div className="le-head">
+          <span className="le-title">{tr("structEd.title")}</span>
+          {scope.song && <span className="le-song">{scope.song.title}</span>}
+          <span className="le-spacer" />
+          <button className="act" onClick={() => { if (confirm(tr("structEd.clearAll.confirm"))) push([]); }} title={tr("structEd.clearAll")} disabled={!lines.length}><ActionIcon name="reset" /></button>
+          <button className="act" onClick={onClose} title={tr("lyricsEd.close")}><ActionIcon name="close" /></button>
+        </div>
+        <div className="settings-desc-small" style={{ margin: "6px 16px" }}>{tr("structEd.desc")}</div>
+
+        <div className="le-bar" ref={barRef}
+          onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); const f = (e.clientX - r.left) / r.width; send({ type: "command", command: "seek", beat: scope.start + f * span }); }}>
+          {lines.map((l, i) => (
+            <span key={i} className={"le-tick" + (i === dragIdx ? " drag" : "")} style={{ left: pct(l.start) + "%" }} title={l.text}
+              onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); setDragIdx(i); }} />
+          ))}
+          <span className="le-playhead" style={{ left: pct(state.transport.time) + "%" }} />
+        </div>
+
+        <div className="struct-chips">
+          <button className="le-play le-iconbtn" onClick={() => { if (scope.song) { send({ type: "command", command: "jumpToEntry", index: scope.entryIndex }); send({ type: "command", command: "play" }); } }}><ActionIcon name="play" /> {tr("lyricsEd.playSong")}</button>
+          {(state.settings.structureLabels ?? []).map((label) => (
+            <button key={label} className="struct-chip" onClick={() => addAt(label)}>＋ {label}</button>
+          ))}
+          <span className="struct-custom">
+            <input className="setting-select" style={{ maxWidth: 140 }} value={custom} placeholder={tr("structEd.custom.placeholder")}
+              onChange={(e) => setCustom(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") addCustomLabel(); }} />
+            <button className="settings-btn" style={{ marginTop: 0 }} disabled={!custom.trim()} onClick={addCustomLabel}>＋</button>
+          </span>
+        </div>
+
+        <div className="le-lines">
+          {lines.length === 0 && <div className="le-empty">{tr("structEd.empty")}</div>}
+          {lines.map((l, i) => (
+            <div key={i} className="le-line">
+              <input className="le-text" value={l.text} onChange={(e) => { const ls = lines.map((x) => ({ ...x })); ls[i]!.text = e.target.value; push(ls); }} />
+              <button className="le-time" onClick={() => { const ls = lines.map((x) => ({ ...x })); ls[i]!.start = state.transport.time; push(ls); }} title={tr("lyricsEd.setStart.title")}>{fmt(l.start)}</button>
+              <button className="le-rowbtn" onClick={() => push(lines.filter((_, k) => k !== i))} title={tr("structEd.delete")}><ActionIcon name="close" /></button>
+            </div>
+          ))}
+        </div>
+
+        <div className="li-foot">
+          <button className="settings-btn" style={{ marginTop: 0, background: "color-mix(in srgb, var(--accent) 16%, transparent)", borderColor: "color-mix(in srgb, var(--accent) 50%, transparent)", color: "var(--accent)" }} disabled={!fullDoc(lines).length} onClick={exportToAbleton}>
+            ✚ {tr("structEd.export")}{state.settings.guideAudioEnabled ? ` ${tr("structEd.export.withGuide")}` : ""}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Settings card for play/stop plugin automation: a master toggle plus a list of rules, each
  * pinning an Ableton device on/off to the play state (e.g. autotune ON while the sequence runs). */
 function PluginAutomationCard({ state, send }: { state: AppState; send: Send }) {
@@ -930,13 +1191,15 @@ const SETTINGS_CATS: { id: SettingsCat; labelKey: string }[] = [
   { id: "updates", labelKey: "set.cat.updates" }, // always last
 ];
 
-function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; onClose: () => void }) {
+function SettingsPanel({ state, send, onClose, onOpenSetup }: { state: AppState; send: Send; onClose: () => void; onOpenSetup?: () => void }) {
   const { tr } = useT();
   const s = state.settings;
   const productParts = tr("settings.product").split("APICE"); // APICE rendered as a styled brand span
   const [showStopDetails, setShowStopDetails] = useState(false);
   const [cat, setCat] = useState<SettingsCat>("general");
+  const [showStructEd, setShowStructEd] = useState(false);
   const [licenseInput, setLicenseInput] = useState("");
+  const isDesktop = !!getBridge(); // master management is only offered on the host PC itself
   const tabletUrl = state.lanIp ? `http://${state.lanIp}:${typeof location !== "undefined" ? location.port || "3700" : "3700"}` : "";
   const setBool = (key: keyof Settings, v: boolean) => send({ type: "command", command: "setSetting", key, value: v });
   // Lyrics backup: download the whole project's lyrics (text + timing) to a JSON file, and
@@ -1100,6 +1363,38 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
           </section>
 
           <section className="settings-card" style={catStyle("project")}>
+            <div className="settings-section">{tr("settings.section.structure")}</div>
+            <div className="settings-desc-small">{tr("structure.desc")}</div>
+            <label className="setting">
+              <span className="setting-text">
+                <span className="setting-label">{tr("set.structureTrack.label")}</span>
+                <span className="setting-desc">{tr("set.structureTrack.desc")}</span>
+              </span>
+              <select className="setting-select" value={s.structureTrack} onChange={(e) => send({ type: "command", command: "setSetting", key: "structureTrack", value: e.target.value })}>
+                <option value="">{tr("set.structureTrack.auto")}</option>
+                {state.tracks.map((tk) => <option key={tk} value={tk}>{tk}</option>)}
+              </select>
+            </label>
+            {row("showStructure", "set.showStructure.label", "set.showStructure.desc")}
+            {row("guideAudioEnabled", "set.guideAudio.label", "set.guideAudio.desc")}
+            {s.guideAudioEnabled && (<>
+              <label className="setting">
+                <span className="setting-text">
+                  <span className="setting-label">{tr("set.guideTrack.label")}</span>
+                  <span className="setting-desc">{tr("set.guideTrack.desc")}</span>
+                </span>
+                <select className="setting-select" value={s.guideTrack} onChange={(e) => send({ type: "command", command: "setSetting", key: "guideTrack", value: e.target.value })}>
+                  <option value="">{tr("set.guideTrack.auto")}</option>
+                  {state.tracks.map((tk) => <option key={tk} value={tk}>{tk}</option>)}
+                  {s.guideTrack && !state.tracks.includes(s.guideTrack) && <option value={s.guideTrack}>{s.guideTrack}</option>}
+                </select>
+              </label>
+              <div className="settings-desc-small">{tr("structure.palette.hint")}</div>
+            </>)}
+            <button className="settings-btn" onClick={() => setShowStructEd(true)}><ActionIcon name="edit" /> {tr("structure.openEditor")}</button>
+          </section>
+
+          <section className="settings-card" style={catStyle("project")}>
             <div className="settings-section">{tr("settings.section.colorSongs")}</div>
             <div className="settings-desc-small">{tr("colorSongs.desc")}</div>
             <label className="setting">
@@ -1139,6 +1434,10 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
             <div className="settings-section">{tr("settings.section.project")}</div>
             <div className="settings-desc-small">{tr("project.clean.desc")}</div>
             <button className="settings-btn" onClick={() => { if (confirm(tr("project.clean.confirm"))) send({ type: "command", command: "cleanProjectClips" }); }}>{tr("project.clean.btn")}</button>
+            {isDesktop && onOpenSetup && (<>
+              <div className="settings-desc-small" style={{ marginTop: 12 }}>{tr("setup.reopen.desc")}</div>
+              <button className="settings-btn" onClick={onOpenSetup}>{tr("setup.reopen")}</button>
+            </>)}
           </section>
 
           <section className="settings-card" style={catStyle("general")}>
@@ -1239,6 +1538,35 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
             )}
           </section>
 
+          <section className="settings-card" style={catStyle("network")}>
+            <div className="settings-section">{tr("settings.section.devices")}</div>
+            <div className="settings-desc-small">{tr("devices.desc")}</div>
+            {(state.clients ?? []).map((cl) => (
+              <div key={cl.id} className="setting" style={{ cursor: "default" }}>
+                <span className="setting-text">
+                  <span className="setting-label">{cl.name}{cl.isLocal ? ` — ${tr("devices.thisPc")}` : ""}</span>
+                  <span className="setting-desc" style={cl.isMaster ? { color: "var(--playing)" } : undefined}>{cl.isMaster ? tr("devices.master") : tr("devices.viewer")}</span>
+                </span>
+                {isDesktop && !cl.isLocal && !cl.isMaster && (
+                  <button className="settings-btn" style={{ marginTop: 0 }} onClick={() => send({ type: "command", command: "grantMaster", clientId: cl.id })}>{tr("devices.grant")}</button>
+                )}
+              </div>
+            ))}
+            {isDesktop && (s.masterDevices ?? []).length > 0 && (<>
+              <div className="settings-desc-small" style={{ marginTop: 10 }}>{tr("devices.masters")}</div>
+              {(s.masterDevices ?? []).map((m) => (
+                <div key={m.id} className="setting" style={{ cursor: "default" }}>
+                  <span className="setting-text">
+                    <span className="setting-label">{m.name}</span>
+                    <span className="setting-desc" style={{ color: "var(--playing)" }}>{tr("devices.master")}</span>
+                  </span>
+                  <button className="settings-btn" style={{ marginTop: 0 }} onClick={() => send({ type: "command", command: "revokeMaster", deviceId: m.id })}>{tr("devices.revoke")}</button>
+                </div>
+              ))}
+            </>)}
+            {!isDesktop && <div className="settings-desc-small">{tr("devices.manageFromPc")}</div>}
+          </section>
+
           <section className="settings-card" style={catStyle("general")}>
             <div className="settings-section">{tr("settings.section.demo")}</div>
             <div className="settings-desc-small">{tr("demo.desc")}</div>
@@ -1308,6 +1636,10 @@ function SettingsPanel({ state, send, onClose }: { state: AppState; send: Send; 
           <div style={catStyle("updates")}><UpdatesCard /></div>
           </div>
         </div>
+        {showStructEd && createPortal(
+          <StructureEditor state={state} send={send} entryIndex={state.currentEntryIndex} onClose={() => setShowStructEd(false)} />,
+          document.body,
+        )}
         <div className="settings-version">AbleJam v{APP_VERSION}</div>
         <a className="settings-web" href={SITE_URL} target="_blank" rel="noopener noreferrer">{SITE_LABEL}</a>
         <div className="settings-product">{productParts[0]}<span className="apice">APICE</span>{productParts[1]}</div>
@@ -1511,6 +1843,24 @@ function PerformanceView({ state, send }: { state: AppState; send: Send }) {
     ? (medleySeg.offset + Math.min(medleySeg.len, Math.max(0, transport.time - medleySeg.song.startBeat))) / medley.total
     : 0;
 
+  // Touch/mouse scrubbing (iPad): the ghost cursor follows the finger, the seek fires on release
+  // at the exact spot — Play then starts from there (the bridge parks the playhead while stopped).
+  const songScrub = useBarScrub((frac) => {
+    if (!curSong || curSong.endBeat == null || curSong.endBeat <= curSong.startBeat) return;
+    send({ type: "command", command: "seek", beat: curSong.startBeat + frac * (curSong.endBeat - curSong.startBeat) });
+  });
+  const medleyScrub = useBarScrub((frac) => {
+    if (!medley) return;
+    const tg = frac * medley.total;
+    const seg = medley.songs.find((s) => tg < s.offset + s.len) ?? medley.songs[medley.songs.length - 1]!;
+    // Release inside the playing song -> seek precisely within it; on another song -> start that song.
+    if (seg.idx === currentEntryIndex) {
+      send({ type: "command", command: "seek", beat: seg.song.startBeat + Math.min(seg.len, Math.max(0, tg - seg.offset)) });
+    } else {
+      send({ type: "command", command: "jumpToEntry", index: seg.idx });
+    }
+  });
+
   let setRemaining = remainingSec ?? 0;
   let songsLeft = 0;
   for (let k = Math.max(currentEntryIndex, 0); k < setlist.length; k++) {
@@ -1522,8 +1872,12 @@ function PerformanceView({ state, send }: { state: AppState; send: Send }) {
   for (const e of setlist) if (e.active) totalSec += library[e.libIndex]?.durationSec ?? 0;
   const elapsedSec = Math.max(0, totalSec - setRemaining);
 
-  const curSection = curSong?.sections[transport.currentSectionIndex];
-  const nextSection = curSong?.sections[transport.currentSectionIndex + 1];
+  // Sections = locator `>` markers MERGED with the structure track/doc; index computed locally
+  // from the merged list (transport.currentSectionIndex only knows the locator ones).
+  const perfSections = useMemo(() => mergedSections(state, curSong), [state, curSong]);
+  const perfSecIdx = sectionIndexAt(perfSections, transport.time);
+  const curSection = perfSections[perfSecIdx];
+  const nextSection = perfSections[perfSecIdx + 1];
   const pos = currentEntryIndex >= 0 ? `${currentEntryIndex + 1} / ${setlist.filter((e) => e.active).length || setlist.length}` : "";
 
   const headOn = b.pos || b.title || b.key || b.desc || b.tempo || b.meter || b.duration || b.remaining || b.click || b.sections;
@@ -1571,20 +1925,10 @@ function PerformanceView({ state, send }: { state: AppState; send: Send }) {
                 {b.bar && <div
                   className="progress medley-bar seekable"
                   title={tr("perf.seekMedley.title")}
-                  onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-                    const tg = frac * medley.total;
-                    const seg = medley.songs.find((s) => tg < s.offset + s.len) ?? medley.songs[medley.songs.length - 1]!;
-                    // Click inside the playing song -> seek precisely within it; on another song -> start that song.
-                    if (seg.idx === currentEntryIndex) {
-                      send({ type: "command", command: "seek", beat: seg.song.startBeat + Math.min(seg.len, Math.max(0, tg - seg.offset)) });
-                    } else {
-                      send({ type: "command", command: "jumpToEntry", index: seg.idx });
-                    }
-                  }}
+                  {...medleyScrub.props}
                 >
-                  <div className="progress-fill" style={{ width: `${medleyFill * 100}%`, background: accent }} />
+                  <div className="progress-fill" style={{ width: `${(medleyScrub.frac ?? medleyFill) * 100}%`, background: accent }} />
+                  {medleyScrub.frac != null && <span className="scrub-cursor" style={{ left: `${medleyScrub.frac * 100}%` }} />}
                   {medley.songs.map((sg) => {
                     const left = (sg.offset / medley.total) * 100;
                     if (left < 0.5) return null;
@@ -1594,10 +1938,14 @@ function PerformanceView({ state, send }: { state: AppState; send: Send }) {
                         className="medley-tick"
                         style={{ left: `${left}%` }}
                         title={tr("perf.tick.title", { title: sg.song.title })}
-                        onClick={(ev) => { ev.stopPropagation(); send({ type: "command", command: "jumpToEntry", index: sg.idx }); }}
                       />
                     );
                   })}
+                  {b.sections && medley.songs.flatMap((sg) => mergedSections(state, sg.song).map((sec, k) => {
+                    const left = ((sg.offset + Math.max(0, sec.startBeat - sg.song.startBeat)) / medley.total) * 100;
+                    if (left < 0.5 || left > 99.5) return null;
+                    return <span key={`${sg.idx}-${k}`} className="sect-tick" style={{ left: `${left}%` }} title={sec.title} />;
+                  }))}
                 </div>}
                 {b.medleyList && <div className="medley-list">
                   {medley.songs.map((sg, n) => (
@@ -1618,14 +1966,10 @@ function PerformanceView({ state, send }: { state: AppState; send: Send }) {
               b.bar && <div
                 className="progress seekable"
                 title={tr("perf.seek.title")}
-                onClick={(e) => {
-                  if (!curSong || curSong.endBeat == null || curSong.endBeat <= curSong.startBeat) return;
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-                  send({ type: "command", command: "seek", beat: curSong.startBeat + frac * (curSong.endBeat - curSong.startBeat) });
-                }}
+                {...songScrub.props}
               >
-                <div className="progress-fill" style={{ width: `${progress * 100}%`, background: accent }} />
+                <div className="progress-fill" style={{ width: `${(songScrub.frac ?? progress) * 100}%`, background: accent }} />
+                {songScrub.frac != null && <span className="scrub-cursor" style={{ left: `${songScrub.frac * 100}%` }} />}
                 {curStop != null && curSong && curSong.endBeat != null && curSong.endBeat > curSong.startBeat && (
                   <span
                     className="stop-mark"
@@ -1633,6 +1977,11 @@ function PerformanceView({ state, send }: { state: AppState; send: Send }) {
                     title={tr("perf.stopMark.title", { bar: Math.round(curStop / stopBpb) + 1 })}
                   />
                 )}
+                {b.sections && curSong && curSong.endBeat != null && curSong.endBeat > curSong.startBeat && perfSections.map((sec, k) => {
+                  const left = ((sec.startBeat - curSong.startBeat) / ((curSong.endBeat as number) - curSong.startBeat)) * 100;
+                  if (left < 0.5 || left > 99.5) return null;
+                  return <span key={k} className="sect-tick" style={{ left: `${left}%` }} title={sec.title} />;
+                })}
               </div>
             )}
             {b.medleyBanner && <div className={"perf-medley " + (curContinues ? "cont" : "stops")}>
@@ -1816,7 +2165,9 @@ function StageView({ state, send, kiosk }: { state: AppState; send: Send; kiosk:
   const accent = curEntry?.color ?? colorOf(curSong?.color) ?? "var(--playing)";
   const remainingSec = curSong && curSong.endBeat != null ? beatsToSec(curSong.endBeat - transport.time, transport.tempo) : null;
   const curKey = curSong?.key || curEntry?.key || "";
-  const curSection = curSong?.sections[transport.currentSectionIndex];
+  // Locator sections merged with the structure track/doc (same list Performance shows).
+  const stageSections = useMemo(() => mergedSections(state, curSong), [state, curSong]);
+  const curSection = stageSections[sectionIndexAt(stageSections, transport.time)];
   const [cfg, setCfg] = useStageConfig();
   const [showCfg, setShowCfg] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
@@ -1852,15 +2203,18 @@ function StageView({ state, send, kiosk }: { state: AppState; send: Send; kiosk:
   const barRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (dragIdx == null) return;
-    const onMove = (e: MouseEvent) => { const r = barRef.current?.getBoundingClientRect(); if (!r || r.width <= 0) return; const f = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)); setDragBeat(bStart + f * (bEnd - bStart)); };
+    // Pointer events so the tick drag works on iPad too (mouse events never fire from touch).
+    const onMove = (e: PointerEvent) => { const r = barRef.current?.getBoundingClientRect(); if (!r || r.width <= 0) return; const f = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)); setDragBeat(bStart + f * (bEnd - bStart)); };
     const onUp = () => {
       const line = songLyrics[dragIdx]; const nb = dragBeatRef.current;
       if (line && Math.abs(nb - line.start) > 1e-6) send({ type: "command", command: "setLyrics", lines: state.lyrics.map((l) => l === line ? { ...l, start: nb } : l).sort((a, b) => a.start - b.start) });
       setDragIdx(null);
     };
-    window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
-    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+    window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", onUp);
+    return () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
   }, [dragIdx, bStart, bEnd, songLyrics, state.lyrics, send]);
+  // Touch/mouse scrubbing on the stage bar: ghost cursor under the finger, seek on release.
+  const stageScrub = useBarScrub((f) => send({ type: "command", command: "seek", beat: bStart + f * (bEnd - bStart) }));
 
   return (
     <main className={"stage" + (cfg.mirror ? " mirror" : "")} style={{ "--stage-scale": cfg.scale } as CSSProperties}>
@@ -1899,13 +2253,14 @@ function StageView({ state, send, kiosk }: { state: AppState; send: Send; kiosk:
       {/* Reference bar + transport live at the stage level so they show with OR without lyrics. */}
       {showBar && (
         <div className="stage-bar" ref={barRef} title={tr("stage.bar.title")}
-          onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); const f = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)); send({ type: "command", command: "seek", beat: bStart + f * (bEnd - bStart) }); }}
+          {...stageScrub.props}
           onDoubleClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); const f = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)); send({ type: "command", command: "seek", beat: bStart + f * (bEnd - bStart) }); send({ type: "command", command: "play" }); }}>
           {songLyrics.map((l, i) => (
             <span key={i} className={"sb-tick" + (i === activeIdx ? " on" : "") + (i === dragIdx ? " drag" : "")}
               style={{ left: barPct(i === dragIdx ? dragBeat : l.start) + "%" }} title={l.text}
-              onMouseDown={(e) => { e.preventDefault(); setDragBeat(l.start); setDragIdx(i); }} onClick={(e) => e.stopPropagation()} />
+              onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setDragBeat(l.start); setDragIdx(i); }} onClick={(e) => e.stopPropagation()} />
           ))}
+          {stageScrub.frac != null && <span className="scrub-cursor" style={{ left: `${stageScrub.frac * 100}%` }} />}
           <span className="sb-ph" style={{ left: barPct(effTime) + "%" }} />
         </div>
       )}
@@ -2095,9 +2450,10 @@ function LyricsEditor({ state, send, entryIndex, onClose }: { state: AppState; s
   }, [recording]);
 
   // Drag a marker on the bar to move that line's start (live; sorted + saved on release).
+  // Pointer events so it works on iPad too (mouse events never fire from touch).
   useEffect(() => {
     if (dragIdx == null) return;
-    const onMove = (e: MouseEvent) => {
+    const onMove = (e: PointerEvent) => {
       const r = barRef.current?.getBoundingClientRect(); if (!r || r.width <= 0) return;
       const f = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
       const ls = linesRef.current.map((l) => ({ ...l }));
@@ -2105,9 +2461,9 @@ function LyricsEditor({ state, send, entryIndex, onClose }: { state: AppState; s
       setLines(ls);
     };
     const onUp = () => { push(linesRef.current.map((l) => ({ ...l })).sort((a, b) => a.start - b.start)); setDragIdx(null); };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
   }, [dragIdx, rangeStart, span]);
 
   // Ctrl/Cmd+Z = undo, Ctrl+Y / Ctrl+Shift+Z = redo. Capture phase so it beats the setlist handler;
@@ -2189,7 +2545,7 @@ function LyricsEditor({ state, send, entryIndex, onClose }: { state: AppState; s
           {lines.map((l, i) => (
             <span key={i} className={"le-tick" + (i === sel ? " sel" : "") + (recording && i === recIdx ? " next" : "") + (i === dragIdx ? " drag" : "")} style={{ left: pct(l.start) + "%" }}
               title={tr("lyricsEd.tick.title")}
-              onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setSel(i); setDragIdx(i); }} />
+              onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); setSel(i); setDragIdx(i); }} />
           ))}
           <span className="le-playhead" style={{ left: pct(state.transport.time) + "%" }} />
         </div>

@@ -3,7 +3,20 @@ import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { WebSocketServer, WebSocket } from "ws";
-import { type AppState, type ClientCommand, type ServerMessage, PORTS } from "@ablejam/shared";
+import { type AppState, type ClientCommand, type HelloMessage, type ServerMessage, PORTS } from "@ablejam/shared";
+
+/** Per-connection identity, kept SERVER-SIDE. `deviceId` is the client's persistent id (raw —
+ * never broadcast, so a viewer can't copy a master's id); `opaqueId` is what the UI sees. */
+export interface ClientMeta {
+  opaqueId: string;
+  deviceId: string;
+  name: string;
+  isLocal: boolean;
+}
+
+function isLoopback(addr: string | undefined): boolean {
+  return addr === "127.0.0.1" || addr === "::1" || addr === "::ffff:127.0.0.1";
+}
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // Built web UI directory. In dev it's the sibling packages/web/dist; when packaged the
@@ -20,11 +33,18 @@ const MIME: Record<string, string> = {
   ".ico": "image/x-icon",
 };
 
-/** HTTP (serves the built web UI in production) + WebSocket broadcast. */
+/** HTTP (serves the built web UI in production) + WebSocket broadcast, with per-client identity
+ * so the host can gate commands (master vs view-only devices). */
 export class Server {
   private readonly http: http.Server;
   private readonly wss: WebSocketServer;
-  onCommand: (c: ClientCommand) => void = () => {};
+  private readonly meta = new Map<WebSocket, ClientMeta>();
+  private opaqueSeq = 0;
+  onCommand: (c: ClientCommand, client: ClientMeta) => void = () => {};
+  /** Fired after a client introduces itself (hello) or disconnects — the host re-broadcasts. */
+  onClientsChanged: () => void = () => {};
+  /** State transform applied for NON-local clients (redacts license secrets + master ids). */
+  redactForRemote: (state: AppState) => AppState = (s) => s;
 
   constructor(private readonly getState: () => AppState) {
     this.http = http.createServer((req, res) => this.serveStatic(req, res));
@@ -36,16 +56,41 @@ export class Server {
     this.wss.on("error", (err) => {
       console.error(`[host] server error on :${PORTS.http}:`, (err as Error)?.message ?? err);
     });
-    this.wss.on("connection", (ws) => {
-      ws.send(this.stateMessage(this.getState()));
+    this.wss.on("connection", (ws, req) => {
+      const isLocal = isLoopback(req.socket.remoteAddress ?? undefined);
+      const m: ClientMeta = { opaqueId: `c${++this.opaqueSeq}`, deviceId: "", name: isLocal ? "PC host" : (req.socket.remoteAddress ?? "?"), isLocal };
+      this.meta.set(ws, m);
+      ws.send(this.stateFor(m));
+      ws.on("close", () => { this.meta.delete(ws); this.onClientsChanged(); });
       ws.on("message", (data) => {
         try {
-          this.onCommand(JSON.parse(data.toString()) as ClientCommand);
+          const msg = JSON.parse(data.toString()) as ClientCommand | HelloMessage;
+          if ((msg as HelloMessage).type === "hello") {
+            // Device introduction: record identity server-side, never forwarded as a command.
+            const h = msg as HelloMessage;
+            m.deviceId = String(h.deviceId ?? "").slice(0, 80);
+            if (h.deviceName) m.name = String(h.deviceName).slice(0, 60);
+            this.onClientsChanged();
+            return;
+          }
+          this.onCommand(msg as ClientCommand, m);
         } catch {
           // ignore malformed messages
         }
       });
     });
+  }
+
+  /** Connected clients (server-side meta, raw device ids included — host use only). */
+  clients(): ClientMeta[] {
+    return [...this.meta.values()];
+  }
+
+  /** Send a message to one client (by its opaque connection id). */
+  sendTo(opaqueId: string, msg: ServerMessage): void {
+    for (const [ws, m] of this.meta) {
+      if (m.opaqueId === opaqueId && ws.readyState === WebSocket.OPEN) { ws.send(JSON.stringify(msg)); return; }
+    }
   }
 
   listen(onReady?: () => void): void {
@@ -72,7 +117,13 @@ export class Server {
   }
 
   broadcast(state: AppState): void {
-    this.broadcastMessage({ type: "state", state });
+    // Two serializations: the local desktop gets the full state, LAN clients get the redacted
+    // one (license secrets + raw master device ids stripped). Built once each, not per socket.
+    const full = JSON.stringify({ type: "state", state } satisfies ServerMessage);
+    const redacted = JSON.stringify({ type: "state", state: this.redactForRemote(state) } satisfies ServerMessage);
+    for (const [ws, m] of this.meta) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(m.isLocal ? full : redacted);
+    }
   }
 
   broadcastMessage(msg: ServerMessage): void {
@@ -82,8 +133,9 @@ export class Server {
     }
   }
 
-  private stateMessage(state: AppState): string {
-    return JSON.stringify({ type: "state", state } satisfies ServerMessage);
+  private stateFor(m: ClientMeta): string {
+    const s = this.getState();
+    return JSON.stringify({ type: "state", state: m.isLocal ? s : this.redactForRemote(s) } satisfies ServerMessage);
   }
 
   private serveStatic(req: http.IncomingMessage, res: http.ServerResponse): void {

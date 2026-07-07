@@ -60,9 +60,8 @@ function installBridgeMac(resourcesRoot: string): void {
       "Passi finali:\n" +
       "1. Esci e riapri Ableton Live 12.\n" +
       "2. Settings → Link, Tempo & MIDI → Control Surface: seleziona \"AbleJam\".\n" +
-      "3. Per il PANIC: Audio MIDI Setup → finestra IAC Driver → spunta \"Device is online\".\n" +
-      "4. In Live instrada la traccia drum: MIDI From = IAC Driver, Monitor = In.\n" +
-      "5. In AbleJam → Impostazioni → Panic: porta = IAC Driver (o Automatico).",
+      "3. La porta MIDI \"AbleJam\" viene creata automaticamente all'avvio dell'app (niente IAC/loopMIDI).\n" +
+      "4. Per il PANIC: nella traccia drum imposta MIDI From = AbleJam, Monitor = In.",
   });
 }
 

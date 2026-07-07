@@ -10,6 +10,27 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.2.0",
+    notes: {
+      it: [
+        "Medley a prova di palco: i brani legati a mano non si fermano più a metà (difese multiple contro le note stop residue; se uno stop spurio sfugge, il medley riparte da solo). I link manuali sopravvivono anche al re-import della scaletta.",
+        "Struttura brani: nuovo editor (Impostazioni → Progetto Ableton) con etichette pronte (strofa, ritornello, bridge…) e personalizzate — premi Play e tocca l'etichetta a ogni cambio. Esporta tutto sul progetto come clip nominate e, se vuoi, genera anche la traccia audio-guida con i tuoi annunci. Sezioni visibili in Performance/Stage e come tacche sulla barra.",
+        "iPad e touch: le barre di avanzamento ora si trascinano col dito — il cursore ti segue e al rilascio il Play parte esattamente da lì. Barre più alte sui touch screen.",
+        "Master e spettatori: solo il PC e fino a 2 dispositivi autorizzati (Impostazioni → Rete) controllano AbleJam; chiunque altro conosca l'IP può solo guardare.",
+        "Nuovo wizard al primo avvio (soprattutto per Mac): installa il bridge e ti guida passo-passo, confermando da solo quando Ableton si collega.",
+        "⚠ Per medley robusto e struttura: menù AbleJam → \"Installa bridge\" e riavvia Ableton (bridge v48).",
+      ],
+      en: [
+        "Stage-proof medleys: hand-linked songs no longer stop mid-way (multiple defenses against stale stop notes; if a spurious stop slips through, the medley resumes by itself). Manual links now survive setlist re-imports too.",
+        "Song structure: new editor (Settings → Ableton project) with ready-made labels (verse, chorus, bridge…) and custom ones — press Play and tap the label at every change. Export everything to the project as named clips and, optionally, generate the audio guide track with your announcements. Sections show in Performance/Stage and as ticks on the bar.",
+        "iPad & touch: the progress bars now scrub under your finger — the cursor follows and on release Play starts exactly there. Taller bars on touch screens.",
+        "Masters & viewers: only the PC and up to 2 authorized devices (Settings → Network) control AbleJam; anyone else with the IP can only watch.",
+        "New first-run wizard (especially for Mac): installs the bridge and walks you through, confirming by itself when Ableton connects.",
+        "⚠ For robust medleys and structure: AbleJam menu → \"Install bridge\" and restart Ableton (bridge v48).",
+      ],
+    },
+  },
+  {
     version: "1.1.1",
     notes: {
       it: [
