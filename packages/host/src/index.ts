@@ -995,15 +995,20 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
       broadcastState(); // fall back to the raw clips
       break;
     case "writeStructureClips": {
-      // Export the structure to the project: named clips on the STRUCTURE track, and — when the
-      // audio guide is enabled AND the user confirmed it for this export (c.guide) — the audio
-      // announcements on the guide track at the same beats.
+      // Export the structure to the project: named clips on the STRUCTURE track (auto-created if
+      // missing), and — when the audio guide is enabled AND the user confirmed it (c.guide) — the
+      // audio announcements on the guide track at the same beats.
+      // The write (and auto-create) needs the current control surface. If Ableton isn't connected or
+      // the bridge is stale, nothing would happen silently — tell the user exactly what to do.
+      if (!bridgeConnected) { toast("error", tr("host.structure.noableton")); break; }
+      if (bridgeVersion > 0 && bridgeVersion < 50) { toast("error", tr("host.structure.oldbridge")); break; }
       if (c.lines && c.lines.length) {
         structureDoc = c.lines.map((l) => ({ text: String(l.text ?? ""), start: Number(l.start) || 0, end: Number(l.end) || 0 }));
         saveStructureDoc(abletonProject, structureDoc);
         broadcastState();
       }
       const items = effectiveStructure().map((l) => ({ s: l.start, t: l.text }));
+      if (!items.length) { toast("error", tr("host.structure.nolabels")); break; }
       bridge.send(ADDR.cmdWriteStructure, [JSON.stringify(items)]);
       if (settings.guideAudioEnabled && c.guide) writeGuideClips(items);
       break;

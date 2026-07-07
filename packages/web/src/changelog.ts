@@ -10,6 +10,23 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.4.0",
+    notes: {
+      it: [
+        "Struttura → \"Scrivi su Ableton\" ora crea da solo la traccia STRUCTURE (e la traccia GUIDA audio) se non esistono: prima, senza quelle tracce, il pulsante non faceva nulla in silenzio. Ora scrive sempre le clip.",
+        "Se qualcosa impedisce la scrittura te lo diciamo subito: Ableton non collegato, bridge da aggiornare o nessuna etichetta da esportare — niente più clic \"a vuoto\".",
+        "Lettura dei marker all'avvio di nuovo immediata: i titoli e le posizioni compaiono subito, le analisi pesanti (dispositivi, autotune) sono spostate appena dopo e non bloccano più la partenza.",
+        "⚠ Richiede il bridge v50: menù AbleJam → \"Installa bridge\" e riavvia Ableton.",
+      ],
+      en: [
+        "Structure → \"Write to Ableton\" now creates the STRUCTURE track (and the audio GUIDE track) by itself when missing: previously, without those tracks, the button silently did nothing. It now always writes the clips.",
+        "If anything blocks the write we tell you right away: Ableton not connected, bridge needs updating, or no labels to export — no more dead clicks.",
+        "Marker reading at startup is immediate again: titles and positions show up instantly; the heavy scans (devices, autotune) now run just after and no longer block the start.",
+        "⚠ Requires bridge v50: AbleJam menu → \"Install bridge\" and restart Ableton.",
+      ],
+    },
+  },
+  {
     version: "1.3.1",
     notes: {
       it: [

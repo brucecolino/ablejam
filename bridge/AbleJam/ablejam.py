@@ -14,7 +14,7 @@ from .osc import OSCServer
 HOST_IP = "127.0.0.1"
 HOST_PORT = 39062     # the AbleJam host listens here for state
 LISTEN_PORT = 39061   # we listen here for commands from the host
-BRIDGE_VERSION = 49   # bump on every change; shown in the UI to confirm reloads
+BRIDGE_VERSION = 50   # bump on every change; shown in the UI to confirm reloads
 
 
 class AbleJam(ControlSurface):
@@ -54,13 +54,16 @@ class AbleJam(ControlSurface):
     # ---- lifecycle ----
     def _announce(self):
         self._osc.send("/ablejam/hello", ["AbleJam bridge connected", BRIDGE_VERSION])
-        self._send_setlist()
+        self._send_setlist()  # markers FIRST — must reach the UI immediately
         self._send_tracks()
         self._send_midi_tracks()
         self._send_stop_points()
         self._send_lyrics()
         self._send_structure()
-        self._send_devices()
+        # Device + autotune enumeration walks EVERY track's devices/parameters — slow on a real
+        # project and it would block the main thread right after the markers, making startup feel
+        # frozen. Defer it a beat so the markers/setlist render instantly.
+        self.schedule_message(2, self._send_deferred)
         # NOTE: AbleJam never touches song.metronome — the user (or their click-automation
         # track) owns it. Toggling it here made the metronome button flicker on every play.
         try:
@@ -182,6 +185,10 @@ class AbleJam(ControlSurface):
         self._send_stop_points()
         self._send_lyrics()
         self._send_structure()
+        self.schedule_message(2, self._send_deferred)  # heavy device/autotune scan off the critical path
+
+    def _send_deferred(self):
+        # The heavy enumerations, run a beat after the light state so markers/setlist appear instantly.
         self._send_autotune_diag()
         self._send_devices()
 
@@ -886,6 +893,24 @@ class AbleJam(ControlSurface):
             pass
         return None
 
+    def _ensure_structure_track(self):
+        # The STRUCTURE track, CREATING one (empty MIDI track) if the project has none — so
+        # "Write to Ableton" just works without the user setting up a track first.
+        t = self._find_structure_track()
+        if t is not None:
+            return t
+        name = (self._structure_track_name or "").strip() or "STRUCTURE"
+        try:
+            self._song.create_midi_track(-1)
+            t = self._song.tracks[len(self._song.tracks) - 1]
+            try:
+                t.name = name
+            except Exception:
+                pass
+            return t
+        except Exception:
+            return None
+
     def _send_structure(self):
         lines = []
         track = self._find_structure_track()
@@ -933,7 +958,7 @@ class AbleJam(ControlSurface):
             items = json.loads(payload) if payload else []
         except Exception:
             items = []
-        track = self._find_structure_track()
+        track = self._ensure_structure_track()  # find or create the STRUCTURE track
         total = len(items)
         if track is None:
             self._osc.send("/ablejam/structurewrite", [0, total, "notrack"])
@@ -998,6 +1023,23 @@ class AbleJam(ControlSurface):
         except Exception:
             pass
         return None
+
+    def _ensure_guide_track(self, want_name):
+        # The audio guide track, creating an AUDIO track if none exists (announcement clips are audio).
+        t = self._find_guide_track(want_name)
+        if t is not None:
+            return t
+        name = (want_name or "").strip() or "GUIDA"
+        try:
+            self._song.create_audio_track(-1)
+            t = self._song.tracks[len(self._song.tracks) - 1]
+            try:
+                t.name = name
+            except Exception:
+                pass
+            return t
+        except Exception:
+            return None
 
     def _find_browser_folder(self, root, want, depth=0):
         # Find a folder by (lowercased) name in the user library, shallow-first (max 2 levels).
@@ -1116,7 +1158,7 @@ class AbleJam(ControlSurface):
             data = {}
         items = data.get("items") or []
         mapping = data.get("palette") or []  # [{label, item}] announcement files per label
-        track = self._find_guide_track(data.get("track") or "")
+        track = self._ensure_guide_track(data.get("track") or "")  # find or create the GUIDA audio track
         total = len(items)
         if track is None:
             self._osc.send("/ablejam/guidewrite", [0, total, "notrack"])
