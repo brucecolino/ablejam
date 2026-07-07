@@ -10,19 +10,32 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.4.1",
+    notes: {
+      it: [
+        "Nuovo pulsante \"Installa / aggiorna bridge Ableton\" in Impostazioni → Progetto Ableton: su Windows la barra dei menù è nascosta, quindi il vecchio \"menù AbleJam → Installa bridge\" non si trovava. Ora è un pulsante sempre visibile nell'app.",
+        "I messaggi che chiedono di aggiornare il bridge ora indicano il percorso giusto (Impostazioni → Progetto Ableton), non più un menù invisibile.",
+      ],
+      en: [
+        "New \"Install / update Ableton bridge\" button in Settings → Ableton project: on Windows the menu bar is hidden, so the old \"AbleJam menu → Install bridge\" was impossible to find. It's now an always-visible button in the app.",
+        "Messages asking to update the bridge now point to the right place (Settings → Ableton project), no longer to an invisible menu.",
+      ],
+    },
+  },
+  {
     version: "1.4.0",
     notes: {
       it: [
         "Struttura → \"Scrivi su Ableton\" ora crea da solo la traccia STRUCTURE (e la traccia GUIDA audio) se non esistono: prima, senza quelle tracce, il pulsante non faceva nulla in silenzio. Ora scrive sempre le clip.",
         "Se qualcosa impedisce la scrittura te lo diciamo subito: Ableton non collegato, bridge da aggiornare o nessuna etichetta da esportare — niente più clic \"a vuoto\".",
         "Lettura dei marker all'avvio di nuovo immediata: i titoli e le posizioni compaiono subito, le analisi pesanti (dispositivi, autotune) sono spostate appena dopo e non bloccano più la partenza.",
-        "⚠ Richiede il bridge v50: menù AbleJam → \"Installa bridge\" e riavvia Ableton.",
+        "⚠ Richiede il bridge v50: Impostazioni → Progetto Ableton → \"Installa / aggiorna bridge Ableton\" e riavvia Ableton.",
       ],
       en: [
         "Structure → \"Write to Ableton\" now creates the STRUCTURE track (and the audio GUIDE track) by itself when missing: previously, without those tracks, the button silently did nothing. It now always writes the clips.",
         "If anything blocks the write we tell you right away: Ableton not connected, bridge needs updating, or no labels to export — no more dead clicks.",
         "Marker reading at startup is immediate again: titles and positions show up instantly; the heavy scans (devices, autotune) now run just after and no longer block the start.",
-        "⚠ Requires bridge v50: AbleJam menu → \"Install bridge\" and restart Ableton.",
+        "⚠ Requires bridge v50: Settings → Ableton project → \"Install / update Ableton bridge\" and restart Ableton.",
       ],
     },
   },

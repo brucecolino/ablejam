@@ -1491,6 +1491,14 @@ function SettingsPanel({ state, send, onClose, onOpenSetup, isMaster = true, sel
 
           <section className="settings-card" style={catStyle("project")}>
             <div className="settings-section">{tr("settings.section.project")}</div>
+            {isDesktop && (<>
+              {/* Direct bridge (re)install — the Windows app hides its menu bar (autoHideMenuBar),
+                  so "AbleJam menu → Install bridge" is invisible unless you press Alt. This button
+                  is the always-visible path, needed whenever the bridge version bumps. */}
+              <div className="settings-desc-small">{tr("project.bridge.desc")}</div>
+              <button className="settings-btn" onClick={() => { void getBridge()?.installBridge?.(); }}>⬇ {tr("project.bridge.btn")}</button>
+              <div style={{ height: 1, background: "var(--border)", margin: "14px 0" }} />
+            </>)}
             <div className="settings-desc-small">{tr("project.clean.desc")}</div>
             <button className="settings-btn" onClick={() => { if (confirm(tr("project.clean.confirm"))) send({ type: "command", command: "cleanProjectClips" }); }}>{tr("project.clean.btn")}</button>
             {isDesktop && onOpenSetup && (<>
