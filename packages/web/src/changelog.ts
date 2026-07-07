@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.8.0",
+    notes: {
+      it: [
+        "🔌 Bridge Ableton automatico (plug & play): quando un aggiornamento dell'app include un nuovo bridge, viene installato DA SOLO all'avvio. Tu installi solo l'app; se serve, ti chiediamo soltanto di riavviare Ableton. Basta \"Installa bridge\" a mano.",
+        "Voci Azure: nuovo pulsante \"Salva\". Chiave e Regione ora restano salvate per sempre — non le reinserisci mai più. Premi Salva e le voci si caricano.",
+        "Etichette medley più chiare sulla barra: i nomi dei BRANI sono arancioni in grassetto, le SEZIONI bianche più piccole (tutto maiuscolo) — distingui a colpo d'occhio un nuovo brano da un cambio di sezione.",
+      ],
+      en: [
+        "🔌 Automatic Ableton bridge (plug & play): when an app update ships a new bridge, it's installed BY ITSELF on launch. You just install the app; if needed we only ask you to restart Ableton. No more manual \"Install bridge\".",
+        "Azure voices: new \"Save\" button. Key and Region now stay saved forever — you never re-enter them. Press Save and the voices load.",
+        "Clearer medley labels on the bar: SONG names are orange bold, SECTIONS are smaller white (all uppercase) — tell a new song from a section change at a glance.",
+      ],
+    },
+  },
+  {
     version: "1.7.3",
     notes: {
       it: [

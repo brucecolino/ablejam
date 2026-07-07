@@ -335,20 +335,6 @@ function langName(l: string): string {
 // The in-app neural voice generator (Piper). Pick accent + gender, download the voice on first use,
 // tune speed/expressiveness, preview ("Ascolta"), and save/recall presets. Generated announcements
 // then replace the folder-of-files on the SPEECH/guide track at export time.
-// One Azure credential field (key/region): local draft while typing, committed on blur so the host
-// only re-fetches the voice list when you finish editing.
-function AzureField({ label, value, placeholder, keyName, send, password }: { label: string; value: string; placeholder: string; keyName: keyof Settings; send: Send; password?: boolean }) {
-  const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
-  return (
-    <label className="setting">
-      <span className="setting-text"><span className="setting-label">{label}</span></span>
-      <input className="setting-select" style={{ maxWidth: 250, width: "100%" }} type={password ? "password" : "text"}
-        value={draft} placeholder={placeholder} onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => { if (draft !== value) send({ type: "command", command: "setSetting", key: keyName, value: draft }); }} />
-    </label>
-  );
-}
 
 function VoiceGenerator({ state, send }: { state: AppState; send: Send }) {
   const { tr } = useT();
@@ -375,6 +361,17 @@ function VoiceGenerator({ state, send }: { state: AppState; send: Send }) {
   const commit = (key: keyof Settings, value: string | number) => send({ type: "command", command: "setSetting", key, value });
 
   const [sample, setSample] = useState("");
+  // Azure credentials: local draft, saved (persisted) on the explicit "Salva" button so the user
+  // never has to re-enter them and it's obvious how to load the voices.
+  const [keyDraft, setKeyDraft] = useState(s.azureKey ?? "");
+  const [regionDraft, setRegionDraft] = useState(s.azureRegion ?? "");
+  useEffect(() => setKeyDraft(s.azureKey ?? ""), [s.azureKey]);
+  useEffect(() => setRegionDraft(s.azureRegion ?? ""), [s.azureRegion]);
+  const saveAzure = () => {
+    send({ type: "command", command: "setSetting", key: "azureKey", value: keyDraft.trim() });
+    send({ type: "command", command: "setSetting", key: "azureRegion", value: regionDraft.trim().toLowerCase() });
+  };
+  const azureSaved = !!s.azureKey && (s.azureKey ?? "") === keyDraft.trim() && (s.azureRegion ?? "") === regionDraft.trim().toLowerCase();
   const [presetName, setPresetName] = useState("");
   const savePreset = () => {
     const name = presetName.trim();
@@ -405,8 +402,18 @@ function VoiceGenerator({ state, send }: { state: AppState; send: Send }) {
       </label>
       {engine === "azure" ? (<>
         <div className="settings-desc-small">{tr("tts.azure.note")}</div>
-        <AzureField label={tr("tts.azure.key")} value={s.azureKey ?? ""} placeholder={tr("tts.azure.keyph")} keyName="azureKey" send={send} password />
-        <AzureField label={tr("tts.azure.region")} value={s.azureRegion ?? ""} placeholder={tr("tts.azure.regionph")} keyName="azureRegion" send={send} />
+        <label className="setting">
+          <span className="setting-text"><span className="setting-label">{tr("tts.azure.key")}</span></span>
+          <input className="setting-select" style={{ maxWidth: 250, width: "100%" }} type="password" autoComplete="off" value={keyDraft} placeholder={tr("tts.azure.keyph")} onChange={(e) => setKeyDraft(e.target.value)} />
+        </label>
+        <label className="setting">
+          <span className="setting-text"><span className="setting-label">{tr("tts.azure.region")}</span></span>
+          <input className="setting-select" style={{ maxWidth: 250, width: "100%" }} value={regionDraft} placeholder={tr("tts.azure.regionph")} onChange={(e) => setRegionDraft(e.target.value)} />
+        </label>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "2px 0 8px" }}>
+          <button className="settings-btn" style={{ marginTop: 0 }} disabled={!keyDraft.trim() || !regionDraft.trim()} onClick={saveAzure}>💾 {tr("tts.azure.save")}</button>
+          {azureSaved && <span className="tts-status ok">{state.azureReady ? tr("tts.azure.count", { n: (state.azureVoices ?? []).length }) : `✓ ${tr("tts.azure.saved")}`}</span>}
+        </div>
       </>) : (
         <div className="settings-desc-small">{tr("tts.enginenote")}</div>
       )}
@@ -2180,7 +2187,38 @@ function PerformanceView({ state, send }: { state: AppState; send: Send }) {
             <div className="perf-body">
             {medley ? (
               <>
-                {b.bar && <div
+                {b.bar && (<>
+                  {b.sections && medley.songs.length > 0 && (() => {
+                    // One labels row over the medley bar: a mark per SONG start (orange/bold) and per
+                    // section change (white/small), so a new song is instantly distinct from a section.
+                    const marks: { type: "song" | "section"; title: string; left: number; beat: number }[] = [];
+                    medley.songs.forEach((sg) => {
+                      const songLeft = (sg.offset / medley.total) * 100;
+                      marks.push({ type: "song", title: sg.song.title, left: songLeft, beat: sg.song.startBeat });
+                      mergedSections(state, sg.song).forEach((sec) => {
+                        const l = ((sg.offset + Math.max(0, sec.startBeat - sg.song.startBeat)) / medley.total) * 100;
+                        if (Math.abs(l - songLeft) < 0.6) return; // a section on the song start IS the song marker
+                        marks.push({ type: "section", title: sec.title, left: l, beat: sec.startBeat });
+                      });
+                    });
+                    marks.sort((a, b) => a.left - b.left);
+                    return (
+                      <div className="sect-labels">
+                        {marks.map((m, i) => {
+                          if (m.left > 99.5) return null;
+                          const next = i + 1 < marks.length ? marks[i + 1]!.left : 100;
+                          return (
+                            <button key={i} className={"sect-label" + (m.type === "song" ? " song" : "")} title={m.title}
+                              style={{ left: `${Math.max(0, m.left)}%`, width: `${Math.max(0, next - Math.max(0, m.left))}%` }}
+                              onClick={() => send({ type: "command", command: "seek", beat: m.beat })}>
+                              {m.title}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                  <div
                   className="progress medley-bar seekable"
                   title={tr("perf.seekMedley.title")}
                   {...medleyScrub.props}
@@ -2204,7 +2242,8 @@ function PerformanceView({ state, send }: { state: AppState; send: Send }) {
                     if (left < 0.5 || left > 99.5) return null;
                     return <span key={`${sg.idx}-${k}`} className="sect-tick" style={{ left: `${left}%` }} title={sec.title} />;
                   }))}
-                </div>}
+                  </div>
+                </>)}
                 {b.medleyList && <div className="medley-list">
                   {medley.songs.map((sg, n) => (
                     <button

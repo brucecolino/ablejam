@@ -68,6 +68,69 @@ function copyControlSurfaceWin(src: string): string[] {
   return written;
 }
 
+/** Parse BRIDGE_VERSION from an ablejam.py in `dir` (0 if absent/unreadable). */
+function readBridgeVersionIn(dir: string): number {
+  try {
+    const m = readFileSync(path.join(dir, "ablejam.py"), "utf8").match(/BRIDGE_VERSION\s*=\s*(\d+)/);
+    return m ? parseInt(m[1] ?? "0", 10) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Where the AbleJam control surface lives once installed (to read the installed version + copy to). */
+function bridgeInstallDirs(): string[] {
+  if (process.platform === "darwin") {
+    return [path.join(os.homedir(), "Music", "Ableton", "User Library", "Remote Scripts", "AbleJam")];
+  }
+  const dirs: string[] = [];
+  for (const base of documentsBases()) {
+    const userLib = path.join(base, "Ableton", "User Library");
+    if (existsSync(userLib)) dirs.push(path.join(userLib, "Remote Scripts", "AbleJam"));
+  }
+  return dirs;
+}
+
+/** Highest BRIDGE_VERSION currently installed in any Ableton User Library (0 = not installed). */
+export function installedBridgeVersion(): number {
+  let max = 0;
+  for (const d of bridgeInstallDirs()) max = Math.max(max, readBridgeVersionIn(d));
+  return max;
+}
+
+/** BRIDGE_VERSION shipped inside this app build. */
+export function bundledBridgeVersionNum(resourcesRoot: string): number {
+  return readBridgeVersionIn(resolveResource(resourcesRoot, path.join("bridge", "AbleJam")));
+}
+
+/** Copy the control surface into the Ableton User Library (all of them on Windows). Cross-platform,
+ * silent — used by both the manual install and the automatic startup update. */
+function copyControlSurface(src: string): string[] {
+  if (process.platform === "win32") return copyControlSurfaceWin(src);
+  const written: string[] = [];
+  const dest = path.join(os.homedir(), "Music", "Ableton", "User Library", "Remote Scripts", "AbleJam");
+  try {
+    mkdirSync(path.dirname(dest), { recursive: true });
+    if (existsSync(dest)) rmSync(dest, { recursive: true, force: true });
+    cpSync(src, dest, { recursive: true });
+    written.push(dest);
+  } catch { /* ignore */ }
+  return written;
+}
+
+/** Plug-and-play: if the app ships a newer bridge than what's installed, (re)install it silently on
+ * startup so the user never has to click "Install bridge". They only restart Ableton to load it. */
+export function autoUpdateBridge(resourcesRoot: string): { updated: boolean; bundled: number; installed: number } {
+  const src = resolveResource(resourcesRoot, path.join("bridge", "AbleJam"));
+  const bundled = readBridgeVersionIn(src);
+  const installed = installedBridgeVersion();
+  if (bundled > 0 && bundled > installed && existsSync(src)) {
+    const dests = copyControlSurface(src);
+    return { updated: dests.length > 0, bundled, installed };
+  }
+  return { updated: false, bundled, installed };
+}
+
 /** Run the Windows installer (loopMIDI + AbleJam control surface into Ableton's User Library).
  * install.ps1 uses $PSScriptRoot to find installer\loopMIDISetup.exe and bridge\install.ps1 as
  * SIBLINGS — extraResources preserves that layout. macOS uses the IAC Driver instead. */

@@ -661,6 +661,16 @@ server.redactForRemote = (s) => ({ ...s, settings: { ...s.settings, licenseKey: 
 function isMasterClient(client: ClientMeta): boolean {
   return client.isLocal || (!!client.deviceId && settings.masterDevices.some((m) => m.id === client.deviceId));
 }
+// The desktop app silently (re)installs the bundled bridge on startup and passes its version here.
+// If Ableton is still running an OLDER bridge, prompt (once) to restart Ableton to load the new one.
+let bridgeRestartWarned = false;
+function maybeWarnBridgeRestart(): void {
+  const bundled = Number(process.env.ABLEJAM_BRIDGE_VERSION ?? 0);
+  if (!bridgeRestartWarned && bundled > 0 && bridgeVersion > 0 && bridgeVersion < bundled) {
+    bridgeRestartWarned = true;
+    toast("info", tr("host.bridge.restartNeeded"));
+  }
+}
 /** Tell every connected client its own role (sent on hello and on every master change). */
 function sendRoles(): void {
   for (const m of server.clients()) server.sendTo(m.opaqueId, { type: "role", isMaster: isMasterClient(m), selfId: m.opaqueId });
@@ -862,6 +872,7 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
       // doesn't get stuck at v0). Don't request a refresh here — that would loop.
       bridgeVersion = Number(args[1] ?? 0);
       console.log(`[host] bridge: ${args[0]} (v${bridgeVersion})`);
+      maybeWarnBridgeRestart(); // the app auto-installed a newer bridge but Ableton still runs the old one
       sendStopConfig(); // let the (re)connected bridge know which track/note marks stops
       sendLyricsConfig(); // and which track holds the lyrics clips
       sendStructureConfig(); // and which track marks the song structure

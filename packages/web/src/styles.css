@@ -518,12 +518,16 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 /* Section name labels above the progress bar (always visible, click to jump). Each fills its
    region up to the next change, so the names read like a timeline. */
 .sect-labels { position: relative; width: min(900px, 92%); height: 19px; margin-bottom: 4px; }
+/* Section labels = white, UPPERCASE, small (normal weight). Song markers (in a medley) = orange,
+   UPPERCASE, bold — so you can tell a section change from a new song at a glance. */
 .sect-label { position: absolute; top: 0; height: 19px; line-height: 18px; padding: 0 6px; box-sizing: border-box;
-  font-size: 11px; color: var(--text-muted); background: transparent; border: 0;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.02em; font-weight: 500;
+  color: var(--text); background: transparent; border: 0;
   border-left: 2px solid color-mix(in srgb, var(--text) 32%, transparent);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; cursor: pointer; }
-.sect-label:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 15%, transparent); }
-.sect-label.on { color: var(--accent); font-weight: 700; border-left-color: var(--accent); }
+.sect-label:hover { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.sect-label.on { font-weight: 700; }
+.sect-label.song { color: var(--accent); font-weight: 700; border-left-color: var(--accent); }
 /* Fingers need taller bars than mouse pointers. */
 @media (pointer: coarse) {
   .progress { height: 26px; }

@@ -12,7 +12,7 @@ import path from "node:path";
 import net from "node:net";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { installBridge, openDataFolder, lanUrl } from "./install";
+import { installBridge, openDataFolder, lanUrl, autoUpdateBridge } from "./install";
 import { checkForUpdate, downloadAndInstall } from "./update";
 
 const HOST_PORT = 3700;
@@ -241,6 +241,14 @@ function buildMenu(): void {
 
 async function boot(): Promise<void> {
   configureHostEnv();
+  // Plug-and-play: silently (re)install the Ableton control surface whenever this app build ships a
+  // newer bridge than what's installed — the user never clicks "Install bridge", they just restart
+  // Ableton when the app tells them to. The bundled version is passed to the host so it can detect a
+  // still-running old bridge and prompt for the restart.
+  try {
+    const b = autoUpdateBridge(resourcesRoot);
+    process.env.ABLEJAM_BRIDGE_VERSION = String(b.bundled);
+  } catch { /* non-fatal */ }
   createSplash();
   buildMenu();
 
