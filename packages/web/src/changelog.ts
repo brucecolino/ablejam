@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.6.1",
+    notes: {
+      it: [
+        "Generatore voce (TTS): reso affidabile su macOS. Su Apple Silicon la voce gira tramite Rosetta 2, che l'app installa da sola al primo uso se manca; se non è possibile, ora te lo dice chiaramente invece di fallire in silenzio.",
+        "Corretto il rilevamento degli errori di generazione: un motore che non parte non viene più scambiato per un successo.",
+      ],
+      en: [
+        "Voice generator (TTS): made reliable on macOS. On Apple Silicon the voice runs through Rosetta 2, which the app installs by itself on first use if missing; if that's not possible it now tells you clearly instead of failing silently.",
+        "Fixed generation error detection: an engine that can't start is no longer mistaken for success.",
+      ],
+    },
+  },
+  {
     version: "1.6.0",
     notes: {
       it: [

@@ -26,7 +26,9 @@ const PIPER_RELEASE = "2023.11.14-2";
 function piperArchiveUrl(): string | null {
   const base = `https://github.com/rhasspy/piper/releases/download/${PIPER_RELEASE}/`;
   if (process.platform === "win32") return base + "piper_windows_amd64.zip";
-  if (process.platform === "darwin") return base + (process.arch === "arm64" ? "piper_macos_aarch64.tar.gz" : "piper_macos_x64.tar.gz");
+  // BOTH macOS archives ship an x86_64 Mach-O (the "aarch64" one is mislabeled — verified by header),
+  // so always take the x64 build; on Apple Silicon it runs under Rosetta 2 (ensured after extract).
+  if (process.platform === "darwin") return base + "piper_macos_x64.tar.gz";
   if (process.platform === "linux") return base + (process.arch === "arm64" ? "piper_linux_aarch64.tar.gz" : "piper_linux_x86_64.tar.gz");
   return null;
 }
@@ -152,6 +154,51 @@ function extract(archive: string, destDir: string): Promise<number> {
   return run("tar", ["-xzf", archive, "-C", destDir]);
 }
 
+/** Is Rosetta 2 able to run x86 code on this machine? (`arch -x86_64 true` succeeds only if so.) */
+function rosettaOk(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const c = spawn("/usr/bin/arch", ["-x86_64", "/usr/bin/true"], { windowsHide: true });
+    c.on("error", () => resolve(false));
+    c.on("close", (code) => resolve(code === 0));
+  });
+}
+
+/** Apple Silicon runs the x86_64 Piper binary through Rosetta 2 — install it if missing (best-effort;
+ * needs network + admin the first time, so it may prompt or fail, in which case synthesis surfaces it). */
+async function ensureRosetta(): Promise<void> {
+  if (process.arch !== "arm64") return;
+  if (await rosettaOk()) return;
+  try { await run("/usr/sbin/softwareupdate", ["--install-rosetta", "--agree-to-license"]); } catch { /* surfaced on synth failure */ }
+}
+
+// Make the downloaded macOS Piper binary actually runnable. `tar` (unlike Finder) does NOT propagate
+// the archive's quarantine to extracted files, and Piper's Mach-O carries a clang ad-hoc signature, so
+// on an untouched binary this is mostly belt-and-suspenders. The real Apple-Silicon requirement is
+// Rosetta 2 (the binary is x86_64). chmod does not invalidate signatures; codesign is best-effort
+// (it's a no-op on Macs without the Xcode command-line tools, and unnecessary when the embedded
+// signature is intact).
+async function prepareMac(dir: string): Promise<void> {
+  try { await run("xattr", ["-dr", "com.apple.quarantine", dir]); } catch { /* ignore */ }
+  for (const exe of ["piper", "piper_phonemize", "espeak-ng"]) {
+    try { await run("chmod", ["+x", path.join(dir, exe)]); } catch { /* ignore */ }
+  }
+  try {
+    await run("/bin/sh", ["-c",
+      'cd "$1" || exit 0; for f in piper piper_phonemize espeak-ng *.dylib; do [ -f "$f" ] && codesign --force --sign - "$f" 2>/dev/null; done; true',
+      "ablejam", dir]);
+  } catch { /* ignore */ }
+  await ensureRosetta();
+}
+
+// Safety net: re-prepare once per host session before the first synthesis, so a Mac that was missing
+// Rosetta at download time (engineReady stays true) gets it ensured before piper is spawned.
+let macPrepared = false;
+async function ensureMacReady(): Promise<void> {
+  if (process.platform !== "darwin" || macPrepared || !engineReady()) return;
+  macPrepared = true;
+  await prepareMac(path.join(BIN_DIR, "piper"));
+}
+
 // ---- public API -----------------------------------------------------------
 
 /** Ensure the Piper engine is present (download + extract on first use). */
@@ -164,11 +211,8 @@ export async function ensureEngine(onProgress?: (p: DlProgress) => void): Promis
   await download(url, archive, onProgress);
   await extract(archive, BIN_DIR);
   try { rmSync(archive); } catch { /* ignore */ }
-  if (process.platform !== "win32") {
-    // Downloaded macOS binaries are quarantined by Gatekeeper; strip it and ensure +x.
-    try { await run("xattr", ["-dr", "com.apple.quarantine", path.join(BIN_DIR, "piper")]); } catch { /* ignore */ }
-    try { await run("chmod", ["+x", piperExe()]); } catch { /* ignore */ }
-  }
+  if (process.platform === "darwin") await prepareMac(path.join(BIN_DIR, "piper"));
+  else if (process.platform === "linux") { try { await run("chmod", ["+x", piperExe()]); } catch { /* ignore */ } }
   return engineReady();
 }
 
@@ -201,6 +245,7 @@ function clamp(n: number, lo: number, hi: number): number { return Math.max(lo, 
 export async function synthesize(text: string, opts: SynthOpts, outPath: string): Promise<boolean> {
   const v = voiceById(opts.voiceId);
   if (!v || !engineReady()) return false;
+  await ensureMacReady(); // macOS: unquarantine + ensure Rosetta 2 (x86_64 binary) before spawning
   const model = voiceModelPath(v.id);
   if (!existsSync(model)) return false;
   const lengthScale = clamp(1 / (opts.speed && opts.speed > 0 ? opts.speed : 1), 0.3, 3);
@@ -214,8 +259,26 @@ export async function synthesize(text: string, opts: SynthOpts, outPath: string)
       "--output_file", outPath,
     ], { windowsHide: true });
     c.on("error", () => resolve(false));
-    c.on("close", (code) => resolve(code === 0 || code === null));
+    // Success = clean exit 0. A signal (code null + signal, e.g. Apple-Silicon SIGKILL on a binary
+    // that can't run without Rosetta) must count as failure, not success.
+    c.on("close", (code, signal) => resolve(code === 0 && !signal));
     try { c.stdin.write(text.replace(/\r?\n/g, " ").trim() + "\n"); c.stdin.end(); } catch { resolve(false); }
   });
   return ok && existsSync(outPath);
+}
+
+/** Can the Piper binary actually execute here? Detects an OS that kills it at exec (e.g. Apple
+ * Silicon with no Rosetta 2, or a bad signature) — a clean diagnostic vs. a silent synth failure. */
+export async function engineCanRun(): Promise<boolean> {
+  if (!engineReady()) return false;
+  await ensureMacReady();
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v: boolean) => { if (!done) { done = true; resolve(v); } };
+    const c = spawn(piperExe(), ["--help"], { windowsHide: true });
+    c.on("error", () => finish(false));
+    c.on("close", (_code, signal) => finish(!signal)); // any exit WITHOUT a kill-signal = it can execute
+    try { c.stdin.end(); } catch { /* ignore */ }
+    setTimeout(() => { try { c.kill(); } catch { /* ignore */ } finish(true); }, 4000); // still running → it ran
+  });
 }

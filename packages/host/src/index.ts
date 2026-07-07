@@ -13,7 +13,7 @@ import { deviceId, deviceName } from "./deviceid";
 import { listBluetooth, openBluetoothSettings } from "./bluetooth";
 import { hasAudioInterface } from "./audio";
 import { defaultSpeechDir, listSpeechFiles, matchSpeechFile, installSpeechFiles } from "./speech";
-import { VOICE_CATALOG, voiceById, installedVoices, engineReady, ensureEngine, ensureVoice, synthesize, ttsCacheDir, type DlProgress } from "./tts";
+import { VOICE_CATALOG, voiceById, installedVoices, engineReady, engineCanRun, ensureEngine, ensureVoice, synthesize, ttsCacheDir, type DlProgress } from "./tts";
 import nodePath from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import { readAbleton } from "./ableton";
@@ -268,6 +268,7 @@ async function downloadTtsVoice(voiceId: string): Promise<void> {
     ttsBusy = { kind: "voice", voiceId, pct: 0 }; broadcastState();
     const ok = await ensureVoice(voiceId, (p: DlProgress) => { ttsBusy = { kind: "voice", voiceId, pct: p.pct }; broadcastState(); });
     ttsBusy = null; broadcastState();
+    if (ok && !(await engineCanRun())) { toast("error", tr("host.tts.macengine")); return; } // downloaded but the OS won't run it (e.g. Apple Silicon w/o Rosetta)
     toast(ok ? "info" : "error", ok ? tr("host.tts.voiceready", { v: v.label }) : tr("host.tts.voicefail"));
   } catch {
     ttsBusy = null; broadcastState();
