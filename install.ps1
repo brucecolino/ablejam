@@ -9,7 +9,8 @@
 #   ./install.ps1 -PortName AbleJam  # change the virtual port name
 param(
   [string]$PortName = "AbleJam",
-  [switch]$SkipLoopMidi
+  [switch]$SkipLoopMidi,
+  [switch]$SkipBridge   # when the app already copied the control surface itself (Windows), do only loopMIDI
 )
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
@@ -61,10 +62,11 @@ function Install-LoopMidi {
   }
 }
 
-if (-not $SkipLoopMidi) { Install-LoopMidi -PortName $PortName }
+# loopMIDI must never abort the control-surface install — wrap it so a driver/UAC hiccup is non-fatal.
+if (-not $SkipLoopMidi) { try { Install-LoopMidi -PortName $PortName } catch { Write-Warning "loopMIDI step failed (non-fatal): $_" } }
 
-# Install the Ableton control surface (reuse the existing bridge installer).
-& (Join-Path $root "bridge\install.ps1")
+# Install the Ableton control surface (reuse the existing bridge installer), unless the app already did it.
+if (-not $SkipBridge) { & (Join-Path $root "bridge\install.ps1") }
 
 Write-Host ""
 Write-Host "One-time MIDI routing in Ableton (for the Panic note):" -ForegroundColor Cyan

@@ -1491,6 +1491,14 @@ function SettingsPanel({ state, send, onClose, onOpenSetup, isMaster = true, sel
 
           <section className="settings-card" style={catStyle("project")}>
             <div className="settings-section">{tr("settings.section.project")}</div>
+            {/* Visible bridge version — so a stale copy loaded from another User Library is obvious
+                at a glance (also shown in Live's status bar as "AbleJam bridge vNN connesso"). */}
+            <div className="settings-desc-small" style={{ marginBottom: 10 }}>
+              {tr("project.bridge.status")}:{" "}
+              <b style={{ color: state.bridgeVersion ? "var(--accent)" : "#d66" }}>
+                {state.bridgeVersion ? tr("settings.bridge.connected", { n: state.bridgeVersion }) : tr("settings.bridge.disconnected")}
+              </b>
+            </div>
             {isDesktop && (<>
               {/* Direct bridge (re)install — the Windows app hides its menu bar (autoHideMenuBar),
                   so "AbleJam menu → Install bridge" is invisible unless you press Alt. This button

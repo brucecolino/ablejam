@@ -14,7 +14,7 @@ from .osc import OSCServer
 HOST_IP = "127.0.0.1"
 HOST_PORT = 39062     # the AbleJam host listens here for state
 LISTEN_PORT = 39061   # we listen here for commands from the host
-BRIDGE_VERSION = 50   # bump on every change; shown in the UI to confirm reloads
+BRIDGE_VERSION = 51   # bump on every change; shown in the UI to confirm reloads
 
 
 class AbleJam(ControlSurface):
@@ -67,7 +67,9 @@ class AbleJam(ControlSurface):
         # NOTE: AbleJam never touches song.metronome — the user (or their click-automation
         # track) owns it. Toggling it here made the metronome button flicker on every play.
         try:
-            self.show_message("AbleJam connected")
+            # Show the version in Live's status bar so the user can confirm which bridge is loaded
+            # (a stale copy in another User Library is the classic "why didn't my update take" trap).
+            self.show_message("AbleJam bridge v%d connesso" % BRIDGE_VERSION)
         except Exception:
             pass
 

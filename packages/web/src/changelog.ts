@@ -10,6 +10,23 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.4.2",
+    notes: {
+      it: [
+        "Il pulsante \"Installa / aggiorna bridge Ableton\" ora funziona davvero e te lo conferma: copia la control surface (anche nella cartella OneDrive\\Documenti da cui Ableton la carica) e mostra una finestra con i percorsi e la versione installata. Prima, su Windows, poteva non fare nulla in silenzio.",
+        "Versione del bridge ora VISIBILE: in Impostazioni → Progetto Ableton vedi \"Bridge caricato in Ableton: vNN\" — così capisci subito se l'aggiornamento è andato a buon fine o se Ableton sta ancora caricando una copia vecchia.",
+        "Anche Ableton lo mostra: alla connessione, nella barra di stato di Live compare \"AbleJam bridge vNN connesso\".",
+        "⚠ Richiede il bridge v51: Impostazioni → Progetto Ableton → \"Installa / aggiorna bridge Ableton\", poi ESCI COMPLETAMENTE e riapri Ableton.",
+      ],
+      en: [
+        "The \"Install / update Ableton bridge\" button now actually works and confirms it: it copies the control surface (including into the OneDrive\\Documents folder Ableton loads from) and shows a dialog with the paths and installed version. On Windows it could previously do nothing silently.",
+        "Bridge version is now VISIBLE: Settings → Ableton project shows \"Bridge loaded in Ableton: vNN\" — so you instantly know whether the update took or Ableton is still loading an old copy.",
+        "Ableton shows it too: on connect, Live's status bar reads \"AbleJam bridge vNN connesso\".",
+        "⚠ Requires bridge v51: Settings → Ableton project → \"Install / update Ableton bridge\", then FULLY QUIT and reopen Ableton.",
+      ],
+    },
+  },
+  {
     version: "1.4.1",
     notes: {
       it: [
