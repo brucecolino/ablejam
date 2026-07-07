@@ -277,6 +277,36 @@ function pitchResampleWav(wavPath: string, factor: number): void {
   writeFileSync(wavPath, Buffer.concat([h, body]));
 }
 
+/** Append trailing silence so the WAV lasts at least `targetSec`. Used to make each guide
+ * announcement long enough to fill its section (the bridge then trims the clip to the exact gap),
+ * so the SPEECH clips abut like the STRUCTURE clips instead of being tiny. Any sample rate / mono 16-bit. */
+export function padWavToSeconds(wavPath: string, targetSec: number): void {
+  try {
+    const b = readFileSync(wavPath);
+    let off = 12, dataOff = -1, dataLen = 0, sampleRate = 22050, channels = 1, bits = 16;
+    while (off + 8 <= b.length) {
+      const id = b.toString("ascii", off, off + 4);
+      const sz = b.readUInt32LE(off + 4);
+      if (id === "fmt ") { channels = b.readUInt16LE(off + 10); sampleRate = b.readUInt32LE(off + 12); bits = b.readUInt16LE(off + 22); }
+      else if (id === "data") { dataOff = off + 8; dataLen = sz; break; }
+      off += 8 + sz + (sz & 1);
+    }
+    if (dataOff < 0 || bits !== 16 || channels !== 1) return;
+    const curSec = dataLen / 2 / sampleRate;
+    if (targetSec <= curSec + 0.01) return;
+    const padSamples = Math.round((targetSec - curSec) * sampleRate);
+    const audio = b.subarray(dataOff, dataOff + dataLen);
+    const silence = Buffer.alloc(padSamples * 2); // zeroed 16-bit samples
+    const body = Buffer.concat([audio, silence]);
+    const h = Buffer.alloc(44);
+    h.write("RIFF", 0); h.writeUInt32LE(36 + body.length, 4); h.write("WAVE", 8);
+    h.write("fmt ", 12); h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(1, 22);
+    h.writeUInt32LE(sampleRate, 24); h.writeUInt32LE(sampleRate * 2, 28); h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34);
+    h.write("data", 36); h.writeUInt32LE(body.length, 40);
+    writeFileSync(wavPath, Buffer.concat([h, body]));
+  } catch { /* leave the WAV as-is on any parse failure */ }
+}
+
 /** Synthesize `text` to a WAV at `outPath`. `speed` (0.5..2.0, 1 = normal) maps to Piper's
  * length_scale (inverse); `expr` (0..1.5, ~0.667 default) maps to noise_scale; `pitch` (semitones,
  * −12..12) is applied by a host-side varispeed resample. */

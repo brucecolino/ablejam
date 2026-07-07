@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.7.1",
+    notes: {
+      it: [
+        "Clip vocali (SPEECH) contigue: gli annunci generati ora riempiono la timeline dall'inizio all'inizio del cambio successivo, come le clip di struttura — non più clip minuscole. L'annuncio si sente all'inizio di ogni sezione, il resto è silenzio.",
+        "⚠ Richiede il bridge v53: Impostazioni → Progetto Ableton → \"Installa / aggiorna bridge Ableton\", poi ESCI COMPLETAMENTE e riapri Ableton.",
+      ],
+      en: [
+        "Contiguous voice (SPEECH) clips: generated announcements now fill the timeline from each change to the next one's start, like the structure clips — no more tiny clips. The announcement plays at the start of each section, the rest is silence.",
+        "⚠ Requires bridge v53: Settings → Ableton project → \"Install / update Ableton bridge\", then FULLY QUIT and reopen Ableton.",
+      ],
+    },
+  },
+  {
     version: "1.7.0",
     notes: {
       it: [

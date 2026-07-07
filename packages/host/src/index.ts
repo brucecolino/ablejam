@@ -13,7 +13,7 @@ import { deviceId, deviceName } from "./deviceid";
 import { listBluetooth, openBluetoothSettings } from "./bluetooth";
 import { hasAudioInterface } from "./audio";
 import { defaultSpeechDir, listSpeechFiles, matchSpeechFile, installSpeechFiles } from "./speech";
-import { VOICE_CATALOG, voiceById, installedVoices, engineReady, engineCanRun, ensureEngine, ensureVoice, synthesize, ttsCacheDir, type DlProgress } from "./tts";
+import { VOICE_CATALOG, voiceById, installedVoices, engineReady, engineCanRun, ensureEngine, ensureVoice, synthesize, padWavToSeconds, ttsCacheDir, type DlProgress } from "./tts";
 import { fetchAzureVoices, azureSynthesize, type AzureVoice } from "./azuretts";
 import nodePath from "node:path";
 import { existsSync, readFileSync } from "node:fs";
@@ -244,7 +244,15 @@ async function writeGuideClipsTts(items: { s: number; t: string }[]): Promise<vo
     toast("error", tr("host.tts.novoice"));
     return;
   }
-  const labels = Array.from(new Set(items.map((i) => i.t.trim()).filter(Boolean)));
+  // Sort by beat and compute each change's gap to the NEXT one, so the SPEECH clips can be made to
+  // ABUT (fill the timeline up to the next clip) like the STRUCTURE clips — instead of tiny clips.
+  const ordered = [...items].sort((a, b) => a.s - b.s);
+  const DEFAULT_LAST = 4; // the final change has no "next" — give it a bar-ish tail
+  const gaps = ordered.map((it, i) => (i + 1 < ordered.length ? ordered[i + 1]!.s - it.s : DEFAULT_LAST));
+  const maxGapBeats = Math.max(DEFAULT_LAST, ...gaps);
+  const tempo = transport.tempo > 0 ? transport.tempo : 120;
+  const padSec = (maxGapBeats * 60) / tempo; // pad every announcement long enough to cover the biggest gap
+  const labels = Array.from(new Set(ordered.map((i) => i.t.trim()).filter(Boolean)));
   if (!labels.length) { toast("error", tr("host.guide.nomatch")); return; }
   const palette: { label: string; item: string }[] = [];
   const paths: string[] = [];
@@ -255,7 +263,7 @@ async function writeGuideClipsTts(items: { s: number; t: string }[]): Promise<vo
     const base = ttsFileBase(l);
     const wav = nodePath.join(ttsCacheDir(), `${base}.wav`);
     const ok = await synthLabel(l, wav);
-    if (ok) { palette.push({ label: l, item: base }); paths.push(wav); }
+    if (ok) { padWavToSeconds(wav, padSec); palette.push({ label: l, item: base }); paths.push(wav); }
     done++;
     ttsBusy = { kind: "generate", pct: Math.floor((done / labels.length) * 100) };
     broadcastState();
@@ -264,8 +272,10 @@ async function writeGuideClipsTts(items: { s: number; t: string }[]): Promise<vo
   broadcastState();
   if (!palette.length) { toast("error", tr("host.tts.genfail")); return; }
   if (installSpeechFiles(paths) === 0) { toast("error", tr("host.guide.nolib")); return; }
-  // TTS announcements land on the SPEECH track by default (auto-created by the bridge if missing).
-  bridge.send(ADDR.cmdWriteGuide, [JSON.stringify({ track: settings.guideTrack || "SPEECH", items, palette })]);
+  // Send each occurrence with its end beat `e` (= start of the next change) so the bridge trims the
+  // padded clip to exactly fill the gap. TTS announcements land on the SPEECH track (auto-created).
+  const outItems = ordered.map((it, i) => ({ s: it.s, t: it.t, e: it.s + gaps[i]! }));
+  bridge.send(ADDR.cmdWriteGuide, [JSON.stringify({ track: settings.guideTrack || "SPEECH", items: outItems, palette })]);
 }
 
 /** Fetch the Azure voice catalog for the current key+region (on key/region change or manual refresh). */

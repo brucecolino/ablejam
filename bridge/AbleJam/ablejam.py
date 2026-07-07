@@ -14,7 +14,7 @@ from .osc import OSCServer
 HOST_IP = "127.0.0.1"
 HOST_PORT = 39062     # the AbleJam host listens here for state
 LISTEN_PORT = 39061   # we listen here for commands from the host
-BRIDGE_VERSION = 52   # bump on every change; shown in the UI to confirm reloads
+BRIDGE_VERSION = 53   # bump on every change; shown in the UI to confirm reloads
 
 
 class AbleJam(ControlSurface):
@@ -1246,7 +1246,23 @@ class AbleJam(ControlSurface):
                             break
                 if clip is None:
                     continue
-                track.duplicate_clip_to_arrangement(clip, start)
+                new_clip = track.duplicate_clip_to_arrangement(clip, start)
+                # The announcement WAV is silence-padded (host side) so it's long enough; TRIM it to
+                # exactly the gap to the next change so the SPEECH clips ABUT like the STRUCTURE ones.
+                try:
+                    end = float(it.get("e", 0.0))
+                    length = end - start
+                    if new_clip is not None and length > 0.0:
+                        try:
+                            new_clip.looping = False
+                        except Exception:
+                            pass
+                        try:
+                            new_clip.end_marker = length
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
                 occupied.append(start)
                 created += 1
             except Exception:
