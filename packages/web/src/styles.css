@@ -515,6 +515,15 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .scrub-cursor { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; background: var(--text); border-radius: 2px; z-index: 4; box-shadow: 0 0 6px rgba(255, 255, 255, 0.7); pointer-events: none; }
 /* Song-structure section marks on the progress bars (label in the tooltip). */
 .sect-tick { position: absolute; top: 3px; bottom: 3px; width: 2px; margin-left: -1px; background: color-mix(in srgb, var(--text) 45%, transparent); border-radius: 1px; z-index: 1; pointer-events: none; }
+/* Section name labels above the progress bar (always visible, click to jump). Each fills its
+   region up to the next change, so the names read like a timeline. */
+.sect-labels { position: relative; height: 19px; margin-bottom: 4px; }
+.sect-label { position: absolute; top: 0; height: 19px; line-height: 18px; padding: 0 6px; box-sizing: border-box;
+  font-size: 11px; color: var(--text-muted); background: transparent; border: 0;
+  border-left: 2px solid color-mix(in srgb, var(--text) 32%, transparent);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; cursor: pointer; }
+.sect-label:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.sect-label.on { color: var(--accent); font-weight: 700; border-left-color: var(--accent); }
 /* Fingers need taller bars than mouse pointers. */
 @media (pointer: coarse) {
   .progress { height: 26px; }

@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.7.2",
+    notes: {
+      it: [
+        "Nomi delle sezioni sulla barra Performance: le etichette di struttura ora sono sempre visibili SOPRA la barra di avanzamento (ogni nome riempie la sua regione fino al cambio successivo) e sono CLICCABILI per saltare direttamente a quel punto. Prima la tacca era troppo sottile per passarci sopra col mouse.",
+      ],
+      en: [
+        "Section names on the Performance bar: structure labels are now always visible ABOVE the progress bar (each name fills its region up to the next change) and are CLICKABLE to jump straight there. Before, the tick was too thin to hover.",
+      ],
+    },
+  },
+  {
     version: "1.7.1",
     notes: {
       it: [

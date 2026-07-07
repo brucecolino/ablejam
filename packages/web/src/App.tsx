@@ -2221,26 +2221,50 @@ function PerformanceView({ state, send }: { state: AppState; send: Send }) {
                 </div>}
               </>
             ) : (
-              b.bar && <div
-                className="progress seekable"
-                title={tr("perf.seek.title")}
-                {...songScrub.props}
-              >
-                <div className="progress-fill" style={{ width: `${(songScrub.frac ?? progress) * 100}%`, background: accent }} />
-                {songScrub.frac != null && <span className="scrub-cursor" style={{ left: `${songScrub.frac * 100}%` }} />}
-                {curStop != null && curSong && curSong.endBeat != null && curSong.endBeat > curSong.startBeat && (
-                  <span
-                    className="stop-mark"
-                    style={{ left: `${Math.min(100, Math.max(0, ((curStop - curSong.startBeat) / (curSong.endBeat - curSong.startBeat)) * 100))}%` }}
-                    title={tr("perf.stopMark.title", { bar: Math.round(curStop / stopBpb) + 1 })}
-                  />
+              b.bar && (<>
+                {/* Section name labels above the bar: each fills its region up to the next change,
+                    click to jump there. Names are always visible (no need to hover a thin tick). */}
+                {b.sections && curSong && curSong.endBeat != null && curSong.endBeat > curSong.startBeat && perfSections.length > 0 && (
+                  <div className="sect-labels">
+                    {perfSections.map((sec, k) => {
+                      const span = (curSong.endBeat as number) - curSong.startBeat;
+                      const left = ((sec.startBeat - curSong.startBeat) / span) * 100;
+                      if (left > 99.5) return null;
+                      const nextBeat = k + 1 < perfSections.length ? perfSections[k + 1]!.startBeat : (curSong.endBeat as number);
+                      const width = Math.max(0, ((nextBeat - sec.startBeat) / span) * 100 - (left < 0 ? -left : 0));
+                      const ph = curSong.startBeat + (songScrub.frac ?? progress) * span;
+                      const on = sec.startBeat - 1e-6 <= ph && ph < nextBeat;
+                      return (
+                        <button key={k} className={"sect-label" + (on ? " on" : "")} title={sec.title}
+                          style={{ left: `${Math.max(0, left)}%`, width: `${width}%` }}
+                          onClick={() => send({ type: "command", command: "seek", beat: sec.startBeat })}>
+                          {sec.title}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
-                {b.sections && curSong && curSong.endBeat != null && curSong.endBeat > curSong.startBeat && perfSections.map((sec, k) => {
-                  const left = ((sec.startBeat - curSong.startBeat) / ((curSong.endBeat as number) - curSong.startBeat)) * 100;
-                  if (left < 0.5 || left > 99.5) return null;
-                  return <span key={k} className="sect-tick" style={{ left: `${left}%` }} title={sec.title} />;
-                })}
-              </div>
+                <div
+                  className="progress seekable"
+                  title={tr("perf.seek.title")}
+                  {...songScrub.props}
+                >
+                  <div className="progress-fill" style={{ width: `${(songScrub.frac ?? progress) * 100}%`, background: accent }} />
+                  {songScrub.frac != null && <span className="scrub-cursor" style={{ left: `${songScrub.frac * 100}%` }} />}
+                  {curStop != null && curSong && curSong.endBeat != null && curSong.endBeat > curSong.startBeat && (
+                    <span
+                      className="stop-mark"
+                      style={{ left: `${Math.min(100, Math.max(0, ((curStop - curSong.startBeat) / (curSong.endBeat - curSong.startBeat)) * 100))}%` }}
+                      title={tr("perf.stopMark.title", { bar: Math.round(curStop / stopBpb) + 1 })}
+                    />
+                  )}
+                  {b.sections && curSong && curSong.endBeat != null && curSong.endBeat > curSong.startBeat && perfSections.map((sec, k) => {
+                    const left = ((sec.startBeat - curSong.startBeat) / ((curSong.endBeat as number) - curSong.startBeat)) * 100;
+                    if (left < 0.5 || left > 99.5) return null;
+                    return <span key={k} className="sect-tick" style={{ left: `${left}%` }} title={sec.title} />;
+                  })}
+                </div>
+              </>)
             )}
             {b.medleyBanner && <div className={"perf-medley " + (curContinues ? "cont" : "stops")}>
               {curContinues ? tr("perf.medley.continues") : tr("perf.medley.stops")}
