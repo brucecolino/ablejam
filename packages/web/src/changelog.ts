@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.12.0",
+    notes: {
+      it: [
+        "Audio guida: risolta una causa frequente del \"nessun audio generato\". La traccia guida DEVE essere una traccia audio (gli annunci sono file audio): se la punti su una traccia MIDI, ora AbleJam crea da sola una traccia audio col nome giusto e ci carica gli annunci (la vecchia traccia MIDI vuota puoi eliminarla). Prima falliva in silenzio con \"nopalette\".",
+        "Messaggio d'errore audio guida più utile: ora ti rimanda a Impostazioni → Progetto Ableton → Log, dove trovi il motivo esatto se gli annunci non si caricano (traccia non audio, cartella \"AbleJam Speech\" non trovata nel browser di Ableton, nessun file corrispondente…).",
+        "⚠ Richiede il bridge v56: si installa da solo all'avvio dell'app — poi esci COMPLETAMENTE da Ableton (Ctrl/Cmd+Q, non basta chiudere il set) e riaprilo. Controlla in Impostazioni → Progetto Ableton che compaia \"v56\".",
+      ],
+      en: [
+        "Audio guide: fixed a common cause of \"no audio generated\". The guide track MUST be an audio track (announcements are audio files): if you point it at a MIDI track, AbleJam now creates a proper audio track with the right name and loads the announcements there (you can delete the empty MIDI one). It used to fail silently with \"nopalette\".",
+        "More useful audio-guide error: it now sends you to Settings → Ableton Project → Logs, where you'll find the exact reason if announcements don't load (non-audio track, \"AbleJam Speech\" folder not found in Ableton's browser, no matching file…).",
+        "⚠ Requires bridge v56: it auto-installs on app launch — then FULLY quit Ableton (Ctrl/Cmd+Q, closing the set isn't enough) and reopen. Check Settings → Ableton Project shows \"v56\".",
+      ],
+    },
+  },
+  {
     version: "1.11.0",
     notes: {
       it: [

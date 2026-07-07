@@ -14,7 +14,7 @@ from .osc import OSCServer
 HOST_IP = "127.0.0.1"
 HOST_PORT = 39062     # the AbleJam host listens here for state
 LISTEN_PORT = 39061   # we listen here for commands from the host
-BRIDGE_VERSION = 55   # bump on every change; shown in the UI to confirm reloads
+BRIDGE_VERSION = 56   # bump on every change; shown in the UI to confirm reloads
 
 
 class AbleJam(ControlSurface):
@@ -1049,16 +1049,29 @@ class AbleJam(ControlSurface):
         self._send_structure()
         self._osc.send("/ablejam/structurewrite", [created, total, ""])
 
+    def _is_audio_track(self, t):
+        # Announcement clips are AUDIO; only an audio track can hold them. has_audio_input
+        # distinguishes audio tracks (True) from MIDI tracks (False) in the Live API.
+        try:
+            return bool(getattr(t, "has_audio_input", False))
+        except Exception:
+            return False
+
     def _find_guide_track(self, want_name):
         want = (want_name or "").strip().lower()
         try:
             if want:
+                # Explicit name: match ONLY a track with that exact name AND only if it's an audio
+                # track. If it's missing (or is a MIDI track), return None so the caller CREATES the
+                # right track — never hijack a different track (e.g. the user's own SPEECH audio).
                 for t in self._song.tracks:
-                    if (t.name or "").strip().lower() == want:
+                    if (t.name or "").strip().lower() == want and self._is_audio_track(t):
                         return t
+                return None
+            # No name given: reuse an existing guide-like AUDIO track if there is one.
             for t in self._song.tracks:
                 nm = (t.name or "").strip().lower()
-                if "guida" in nm or "guide" in nm:
+                if ("guida" in nm or "guide" in nm or "speech" in nm) and self._is_audio_track(t):
                     return t
         except Exception:
             pass
@@ -1066,10 +1079,19 @@ class AbleJam(ControlSurface):
 
     def _ensure_guide_track(self, want_name):
         # The audio guide track, creating an AUDIO track if none exists (announcement clips are audio).
+        # If the user pointed the guide at a MIDI track, we can't load WAVs into it — create a proper
+        # audio track instead (self-heals: the next run finds THIS audio track by name).
         t = self._find_guide_track(want_name)
         if t is not None:
             return t
         name = (want_name or "").strip() or "GUIDA"
+        try:
+            for mt in self._song.tracks:
+                if (mt.name or "").strip().lower() == name.lower() and not self._is_audio_track(mt):
+                    self._log("guide track: '%s' exists but is a MIDI track — audio announcements need an AUDIO track; creating an audio track named '%s' (you can delete the empty MIDI one)" % (name, name))
+                    break
+        except Exception:
+            pass
         try:
             self._song.create_audio_track(-1)
             t = self._song.tracks[len(self._song.tracks) - 1]
@@ -1077,6 +1099,7 @@ class AbleJam(ControlSurface):
                 t.name = name
             except Exception:
                 pass
+            self._log("guide track: created audio track '%s'" % name)
             return t
         except Exception:
             return None
