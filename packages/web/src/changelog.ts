@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.8.1",
+    notes: {
+      it: [
+        "Voci Azure: risolto il caso in cui, pur avendo la chiave salvata, all'export usciva \"Imposta chiave e regione Azure\". Ora le voci vengono ricaricate da sole all'avvio dalla chiave salvata (e comunque appena prima di generare/ascoltare), quindi la chiave salvata funziona sempre, anche dopo un riavvio.",
+      ],
+      en: [
+        "Azure voices: fixed the case where, even with a saved key, export said \"Set your Azure key and region\". The voices are now reloaded automatically on startup from the saved key (and just before generating/previewing anyway), so a saved key always works, even after a restart.",
+      ],
+    },
+  },
+  {
     version: "1.8.0",
     notes: {
       it: [

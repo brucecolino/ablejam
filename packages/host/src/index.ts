@@ -239,6 +239,7 @@ async function synthLabel(text: string, wav: string): Promise<boolean> {
 async function writeGuideClipsTts(items: { s: number; t: string }[]): Promise<void> {
   const azure = settings.ttsEngine === "azure";
   if (azure) {
+    await ensureAzureVoices();
     if (!settings.azureKey || !settings.azureRegion || !azureVoiceCache.some((v) => v.id === settings.azureVoice)) { toast("error", tr("host.tts.noazurevoice")); return; }
   } else if (!engineReady() || !voiceById(settings.ttsVoice) || !installedVoices().includes(settings.ttsVoice)) {
     toast("error", tr("host.tts.novoice"));
@@ -295,6 +296,12 @@ async function refreshAzureVoices(): Promise<void> {
   }
 }
 
+/** Lazily (re)fetch the Azure voices if the runtime cache is empty but a key+region are saved — so a
+ * preview/export right after a host restart works without the user re-saving the key. */
+async function ensureAzureVoices(): Promise<void> {
+  if (azureVoiceCache.length === 0 && settings.azureKey && settings.azureRegion) await refreshAzureVoices();
+}
+
 /** Download the Piper engine (first time only) + the chosen voice, reporting progress via ttsBusy. */
 async function downloadTtsVoice(voiceId: string): Promise<void> {
   const v = voiceById(voiceId);
@@ -321,6 +328,7 @@ async function downloadTtsVoice(voiceId: string): Promise<void> {
  * URL) to the requesting client to play. */
 async function previewTtsVoice(client: ClientMeta, text?: string): Promise<void> {
   if (settings.ttsEngine === "azure") {
+    await ensureAzureVoices();
     if (!settings.azureKey || !settings.azureRegion || !azureVoiceCache.some((v) => v.id === settings.azureVoice)) { toast("error", tr("host.tts.noazurevoice")); return; }
   } else if (!engineReady() || !installedVoices().includes(settings.ttsVoice)) { toast("error", tr("host.tts.novoice")); return; }
   const sample = (text && text.trim()) || tr("host.tts.previewtext");
@@ -1398,6 +1406,8 @@ export function startHost(): { ready: Promise<void>; close: () => Promise<void> 
   refreshBT();
   btId = setInterval(refreshBT, 20000); // keep the connected-Bluetooth list fresh
   refreshGuideAudio(); // scan the announcement audio (bundled or custom folder) once at boot
+  void refreshAzureVoices(); // repopulate the Azure voice list from the SAVED key+region (the cache is
+  //                            runtime-only, so without this a restart leaves "no voice" despite a saved key)
   refreshAudio();
   audioId = setInterval(refreshAudio, 5000); // watch the audio interface so a disconnect alerts fast
   refreshAbleton();
