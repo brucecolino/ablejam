@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.7.3",
+    notes: {
+      it: [
+        "Nomi delle sezioni sulla barra Performance: risolto il problema per cui i nomi non si vedevano (comparivano vuoti o solo un frammento tipo \"fi\"). Ora si leggono correttamente sopra la barra.",
+      ],
+      en: [
+        "Section names on the Performance bar: fixed a problem where the names weren't visible (blank or just a fragment like \"fi\"). They now read correctly above the bar.",
+      ],
+    },
+  },
+  {
     version: "1.7.2",
     notes: {
       it: [
