@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.5.0",
+    notes: {
+      it: [
+        "Struttura → \"Scrivi su Ableton\": le clip ora sono CONTIGUE — ogni etichetta dura dal suo inizio all'inizio della successiva, invece di essere tutte piccole e uguali. Progetto più ordinato e clip che non si spostano per sbaglio.",
+        "⚠ Richiede il bridge v52: Impostazioni → Progetto Ableton → \"Installa / aggiorna bridge Ableton\", poi ESCI COMPLETAMENTE e riapri Ableton.",
+      ],
+      en: [
+        "Structure → \"Write to Ableton\": clips are now CONTIGUOUS — each label spans from its start to the next one's start, instead of all being small and equal. Tidier project and clips that don't get nudged out of place.",
+        "⚠ Requires bridge v52: Settings → Ableton project → \"Install / update Ableton bridge\", then FULLY QUIT and reopen Ableton.",
+      ],
+    },
+  },
+  {
     version: "1.4.3",
     notes: {
       it: [

@@ -14,7 +14,7 @@ from .osc import OSCServer
 HOST_IP = "127.0.0.1"
 HOST_PORT = 39062     # the AbleJam host listens here for state
 LISTEN_PORT = 39061   # we listen here for commands from the host
-BRIDGE_VERSION = 51   # bump on every change; shown in the UI to confirm reloads
+BRIDGE_VERSION = 52   # bump on every change; shown in the UI to confirm reloads
 
 
 class AbleJam(ControlSurface):
@@ -977,28 +977,60 @@ class AbleJam(ControlSurface):
                     pass
         except Exception:
             pass
-        template, temp_slot, fresh = self._lyrics_template(track)
-        if template is None:
-            self._osc.send("/ablejam/structurewrite", [0, total, "empty"])
-            return
+        # Each clip spans from its start to the NEXT change so the markers ABUT (contiguous) instead
+        # of all being a fixed 1-beat size — the arrangement stays tidy and the clips are hard to
+        # nudge out of place. Sized clips need a MIDI slot we can create_clip(length) on; fall back
+        # to the old fixed-length template on odd tracks (the STRUCTURE track we make is always MIDI).
+        ordered = sorted(items, key=lambda x: float(x.get("s", 0.0)))
+        starts = [float(it.get("s", 0.0)) for it in ordered]
+        DEFAULT_LAST = 4.0   # the final change has no "next" — give it a bar-ish length
+        MIN_LEN = 0.25
+        try:
+            sized = bool(getattr(track, "has_midi_input", False))
+        except Exception:
+            sized = False
+        slot = self._first_empty_slot(track) if sized else None
+        template = temp_slot = None
+        fresh = False
+        if slot is None:
+            template, temp_slot, fresh = self._lyrics_template(track)
+            if template is None:
+                self._osc.send("/ablejam/structurewrite", [0, total, "empty"])
+                return
         created = 0
         tol = 0.25
-        for it in sorted(items, key=lambda x: float(x.get("s", 0.0))):
+        for i, it in enumerate(ordered):
             try:
-                start = float(it.get("s", 0.0))
+                start = starts[i]
                 if any(abs(o - start) < tol for o in occupied):
                     continue
-                new_clip = track.duplicate_clip_to_arrangement(template, start)
-                try:
-                    if new_clip is not None:
+                length = (starts[i + 1] - start) if i + 1 < len(starts) else DEFAULT_LAST
+                if length < MIN_LEN:
+                    length = MIN_LEN
+                new_clip = None
+                if slot is not None:
+                    # Create an empty MIDI clip of the exact gap length, then duplicate it to the
+                    # arrangement — the arrangement clip inherits that length and abuts the next.
+                    try:
+                        slot.create_clip(length)
+                        new_clip = track.duplicate_clip_to_arrangement(slot.clip, start)
+                    finally:
+                        try:
+                            slot.delete_clip()
+                        except Exception:
+                            pass
+                else:
+                    new_clip = track.duplicate_clip_to_arrangement(template, start)
+                    if new_clip is not None and not fresh and getattr(new_clip, "is_midi_clip", False):
+                        try:
+                            new_clip.remove_notes_extended(0, 128, 0.0, 1.0e9)
+                        except Exception:
+                            pass
+                if new_clip is not None:
+                    try:
                         new_clip.name = str(it.get("t", ""))
-                        if not fresh and getattr(new_clip, "is_midi_clip", False):
-                            try:
-                                new_clip.remove_notes_extended(0, 128, 0.0, 1.0e9)
-                            except Exception:
-                                pass
-                except Exception:
-                    pass
+                    except Exception:
+                        pass
                 occupied.append(start)
                 created += 1
             except Exception:
