@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { translate, bestMatch, LICENSING_ENABLED, DEFAULT_STRUCTURE_LABELS, type AppState, type ClientCommand, type ImportResult, type Lang, type LyricLine, type PluginRule, type Section, type Settings, type SetlistEntry, type ShortcutMap, type Song } from "@ablejam/shared";
+import { translate, bestMatch, LICENSING_ENABLED, DEFAULT_STRUCTURE_LABELS, type AppState, type ClientCommand, type ImportResult, type Lang, type LyricLine, type PluginRule, type Section, type Settings, type SetlistEntry, type ShortcutMap, type Song, type VoicePreset } from "@ablejam/shared";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 import { useAbleJam, type Toast, type Beat } from "./ws";
 import { formatDuration, formatClock, colorOf } from "./format";
@@ -325,6 +325,117 @@ function GuideFolderInput({ value, send }: { value: string; send: Send }) {
         send({ type: "command", command: "setSetting", key: "guideAudioFolder", value: e.target.value });
       }}
     />
+  );
+}
+
+function langName(l: string): string {
+  return l === "it" ? "Italiano" : l === "en" ? "English" : l === "es" ? "Español" : l === "fr" ? "Français" : l;
+}
+
+// The in-app neural voice generator (Piper). Pick accent + gender, download the voice on first use,
+// tune speed/expressiveness, preview ("Ascolta"), and save/recall presets. Generated announcements
+// then replace the folder-of-files on the SPEECH/guide track at export time.
+function VoiceGenerator({ state, send }: { state: AppState; send: Send }) {
+  const { tr } = useT();
+  const s = state.settings;
+  const catalog = state.ttsCatalog ?? [];
+  const installed = new Set(state.ttsInstalledVoices ?? []);
+  const busy = state.ttsBusy;
+  const cur = catalog.find((v) => v.id === s.ttsVoice) ?? catalog[0];
+  const accent = cur?.lang ?? "it";
+  const gender = cur?.gender ?? "F";
+  const langs = Array.from(new Set(catalog.map((v) => v.lang)));
+
+  const pickVoice = (lang: string, g: string) => {
+    const v = catalog.find((x) => x.lang === lang && x.gender === g) ?? catalog.find((x) => x.lang === lang);
+    if (v) send({ type: "command", command: "setSetting", key: "ttsVoice", value: v.id });
+  };
+
+  const [speed, setSpeed] = useState(s.ttsSpeed ?? 1);
+  const [expr, setExpr] = useState(s.ttsExpr ?? 0.667);
+  useEffect(() => setSpeed(s.ttsSpeed ?? 1), [s.ttsSpeed]);
+  useEffect(() => setExpr(s.ttsExpr ?? 0.667), [s.ttsExpr]);
+  const commit = (key: "ttsSpeed" | "ttsExpr", value: number) => send({ type: "command", command: "setSetting", key, value });
+
+  const [sample, setSample] = useState("");
+  const [presetName, setPresetName] = useState("");
+  const savePreset = () => {
+    const name = presetName.trim();
+    if (!name || !cur) return;
+    const next: VoicePreset[] = [...(s.voicePresets ?? []).filter((p) => p.name !== name), { name, voiceId: cur.id, speed: s.ttsSpeed, expr: s.ttsExpr }];
+    send({ type: "command", command: "setVoicePresets", presets: next });
+    setPresetName("");
+  };
+  const loadPreset = (p: VoicePreset) => {
+    send({ type: "command", command: "setSetting", key: "ttsVoice", value: p.voiceId });
+    send({ type: "command", command: "setSetting", key: "ttsSpeed", value: p.speed });
+    send({ type: "command", command: "setSetting", key: "ttsExpr", value: p.expr });
+  };
+  const delPreset = (name: string) => send({ type: "command", command: "setVoicePresets", presets: (s.voicePresets ?? []).filter((p) => p.name !== name) });
+
+  const voiceReady = cur ? installed.has(cur.id) : false;
+  const dling = !!busy && (busy.kind === "engine" || busy.kind === "voice");
+
+  return (
+    <div className="tts-gen">
+      <div className="settings-desc-small">{tr("tts.enginenote")}</div>
+      <label className="setting">
+        <span className="setting-text"><span className="setting-label">{tr("tts.voice.label")}</span></span>
+        <span style={{ display: "flex", gap: 6 }}>
+          <select className="setting-select" value={accent} onChange={(e) => pickVoice(e.target.value, gender)}>
+            {langs.map((l) => <option key={l} value={l}>{langName(l)}</option>)}
+          </select>
+          <select className="setting-select" value={gender} onChange={(e) => pickVoice(accent, e.target.value)} style={{ maxWidth: 90 }}>
+            <option value="F">♀</option>
+            <option value="M">♂</option>
+          </select>
+        </span>
+      </label>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 0 8px" }}>
+        <span className={"tts-status " + (voiceReady ? "ok" : "no")}>{cur?.label ?? "—"} · {voiceReady ? tr("tts.ready") : tr("tts.notready")}</span>
+        {!voiceReady && cur && (
+          <button className="settings-btn" style={{ marginTop: 0 }} disabled={!!busy} onClick={() => send({ type: "command", command: "downloadTtsVoice", voiceId: cur.id })}>
+            {dling ? tr("tts.dling") : `⬇ ${tr("tts.dl")}`}
+          </button>
+        )}
+      </div>
+      {dling && busy && (
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ height: 6, borderRadius: 999, background: "var(--bg)", border: "1px solid var(--border)", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: busy.pct + "%", background: "var(--accent)", transition: "width .2s linear" }} />
+          </div>
+        </div>
+      )}
+      <label className="setting">
+        <span className="setting-text"><span className="setting-label">{tr("tts.speed")}</span><span className="setting-desc">{speed.toFixed(2)}×</span></span>
+        <input className="setting-range" type="range" min={0.5} max={2} step={0.05} value={speed}
+          onChange={(e) => setSpeed(Number(e.target.value))} onPointerUp={() => commit("ttsSpeed", speed)} onKeyUp={() => commit("ttsSpeed", speed)} />
+      </label>
+      <label className="setting">
+        <span className="setting-text"><span className="setting-label">{tr("tts.expr")}</span><span className="setting-desc">{expr.toFixed(2)}</span></span>
+        <input className="setting-range" type="range" min={0} max={1.2} step={0.05} value={expr}
+          onChange={(e) => setExpr(Number(e.target.value))} onPointerUp={() => commit("ttsExpr", expr)} onKeyUp={() => commit("ttsExpr", expr)} />
+      </label>
+      <div style={{ display: "flex", gap: 6, margin: "4px 0 12px" }}>
+        <input className="setting-select" style={{ flex: 1, maxWidth: "none" }} placeholder={tr("tts.sampleph")} value={sample} onChange={(e) => setSample(e.target.value)} />
+        <button className="settings-btn" style={{ marginTop: 0 }} disabled={!voiceReady || !!busy} onClick={() => cur && send({ type: "command", command: "previewTtsVoice", text: sample, voiceId: cur.id, speed: s.ttsSpeed, expr: s.ttsExpr })}>
+          {tr("tts.listen")}
+        </button>
+      </div>
+      <div className="settings-section">{tr("tts.presets")}</div>
+      <div style={{ display: "flex", gap: 6, margin: "2px 0 8px" }}>
+        <input className="setting-select" style={{ flex: 1, maxWidth: "none" }} placeholder={tr("tts.preset.nameph")} value={presetName} onChange={(e) => setPresetName(e.target.value)} />
+        <button className="settings-btn" style={{ marginTop: 0 }} onClick={savePreset}>{tr("tts.preset.save")}</button>
+      </div>
+      {(s.voicePresets ?? []).map((p) => (
+        <div key={p.name} className="tts-preset">
+          <span className="tts-preset-name">{p.name}</span>
+          <span className="tts-preset-meta">{catalog.find((v) => v.id === p.voiceId)?.label ?? p.voiceId} · {p.speed.toFixed(2)}× · {p.expr.toFixed(2)}</span>
+          <button className="tts-mini" onClick={() => loadPreset(p)}>{tr("tts.preset.load")}</button>
+          <button className="tts-mini" onClick={() => delPreset(p.name)}>{tr("tts.preset.del")}</button>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -1431,24 +1542,36 @@ function SettingsPanel({ state, send, onClose, onOpenSetup, isMaster = true, sel
               </label>
               <label className="setting">
                 <span className="setting-text">
-                  <span className="setting-label">{tr("set.guideFolder.label")}</span>
-                  <span className="setting-desc">{tr("set.guideFolder.desc")}</span>
+                  <span className="setting-label">{tr("tts.mode.label")}</span>
+                  <span className="setting-desc">{tr("tts.mode.desc")}</span>
                 </span>
-                <GuideFolderInput value={s.guideAudioFolder ?? ""} send={send} />
+                <select className="setting-select" value={s.guideMode ?? "folder"} onChange={(e) => send({ type: "command", command: "setSetting", key: "guideMode", value: e.target.value })}>
+                  <option value="folder">{tr("tts.mode.folder")}</option>
+                  <option value="tts">{tr("tts.mode.tts")}</option>
+                </select>
               </label>
-              {(state.guideAudio ?? []).length > 0 ? (
-                <div className="guide-files">
-                  {(state.guideAudio ?? []).map((g) => (
-                    <div key={g.file} className="guide-file">
-                      <span className="gf-name">{g.file}</span>
-                      <span className={"gf-label" + (g.label ? "" : " none")}>{g.label ? `→ ${g.label}` : tr("guide.nolabel")}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="settings-desc-small" style={{ color: "#d66" }}>{tr("guide.nofiles")}</div>
-              )}
-              <div className="settings-desc-small">{tr("structure.palette.hint")}</div>
+              {s.guideMode === "tts" ? <VoiceGenerator state={state} send={send} /> : (<>
+                <label className="setting">
+                  <span className="setting-text">
+                    <span className="setting-label">{tr("set.guideFolder.label")}</span>
+                    <span className="setting-desc">{tr("set.guideFolder.desc")}</span>
+                  </span>
+                  <GuideFolderInput value={s.guideAudioFolder ?? ""} send={send} />
+                </label>
+                {(state.guideAudio ?? []).length > 0 ? (
+                  <div className="guide-files">
+                    {(state.guideAudio ?? []).map((g) => (
+                      <div key={g.file} className="guide-file">
+                        <span className="gf-name">{g.file}</span>
+                        <span className={"gf-label" + (g.label ? "" : " none")}>{g.label ? `→ ${g.label}` : tr("guide.nolabel")}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="settings-desc-small" style={{ color: "#d66" }}>{tr("guide.nofiles")}</div>
+                )}
+                <div className="settings-desc-small">{tr("structure.palette.hint")}</div>
+              </>)}
             </>)}
             <button className="settings-btn" onClick={() => setShowStructEd(true)}><ActionIcon name="edit" /> {tr("structure.openEditor")}</button>
           </section>

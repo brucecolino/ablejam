@@ -13,8 +13,9 @@ import { deviceId, deviceName } from "./deviceid";
 import { listBluetooth, openBluetoothSettings } from "./bluetooth";
 import { hasAudioInterface } from "./audio";
 import { defaultSpeechDir, listSpeechFiles, matchSpeechFile, installSpeechFiles } from "./speech";
+import { VOICE_CATALOG, voiceById, installedVoices, engineReady, ensureEngine, ensureVoice, synthesize, ttsCacheDir, type DlProgress } from "./tts";
 import nodePath from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { readAbleton } from "./ableton";
 import {
   ADDR,
@@ -170,6 +171,7 @@ let structureDoc: LyricLine[] | null = null; // AbleJam-edited structure doc (au
 const effectiveStructure = (): LyricLine[] => structureDoc ?? structureFromClips;
 
 let guideAudio: { file: string; label: string }[] = []; // announcement files + matched labels (cached)
+let ttsBusy: AppState["ttsBusy"] = null; // in-progress TTS download/preview/generate (for the UI progress bar)
 /** Active speech folder: the user's custom one (when set and existing), else the bundled defaults. */
 function speechDir(): string {
   const custom = (settings.guideAudioFolder || "").trim();
@@ -193,10 +195,16 @@ function refreshGuideAudio(): void {
   guideAudio = next;
   if (changedList) broadcastState();
 }
-/** Export the audio guide: match the doc's labels to speech files, copy them into the Ableton
- * User Library (so Live's browser can load them), then have the bridge build the session palette
- * and lay the clips at every change. */
+/** Filesystem-safe base name for a generated announcement (matches the palette `item`). */
+function ttsFileBase(label: string): string {
+  return label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "cue";
+}
+
+/** Export the audio guide. In "folder" mode: match the doc's labels to pre-recorded speech files.
+ * In "tts" mode: generate each announcement from its label text with the neural voice. Either way
+ * the files are copied into Ableton's User Library and the bridge lays the palette + clips. */
 function writeGuideClips(items: { s: number; t: string }[]): void {
+  if (settings.guideMode === "tts") { void writeGuideClipsTts(items); return; }
   const dir = speechDir();
   const files = dir ? listSpeechFiles(dir) : [];
   if (!files.length) { toast("error", tr("host.guide.nofiles")); return; }
@@ -212,6 +220,74 @@ function writeGuideClips(items: { s: number; t: string }[]): void {
   if (!palette.length) { toast("error", tr("host.guide.nomatch")); return; }
   if (installSpeechFiles(paths) === 0) { toast("error", tr("host.guide.nolib")); return; }
   bridge.send(ADDR.cmdWriteGuide, [JSON.stringify({ track: settings.guideTrack, items, palette })]);
+}
+
+/** TTS mode: synthesise one WAV per unique label with the selected voice, install them into the
+ * User Library, then hand the palette to the bridge (same clip-laying path as folder mode). */
+async function writeGuideClipsTts(items: { s: number; t: string }[]): Promise<void> {
+  const voiceId = settings.ttsVoice;
+  if (!engineReady() || !voiceById(voiceId) || !installedVoices().includes(voiceId)) {
+    toast("error", tr("host.tts.novoice"));
+    return;
+  }
+  const labels = Array.from(new Set(items.map((i) => i.t.trim()).filter(Boolean)));
+  if (!labels.length) { toast("error", tr("host.guide.nomatch")); return; }
+  const palette: { label: string; item: string }[] = [];
+  const paths: string[] = [];
+  ttsBusy = { kind: "generate", pct: 0 };
+  broadcastState();
+  let done = 0;
+  for (const l of labels) {
+    const base = ttsFileBase(l);
+    const wav = nodePath.join(ttsCacheDir(), `${base}.wav`);
+    const ok = await synthesize(l, { voiceId, speed: settings.ttsSpeed, expr: settings.ttsExpr }, wav);
+    if (ok) { palette.push({ label: l, item: base }); paths.push(wav); }
+    done++;
+    ttsBusy = { kind: "generate", pct: Math.floor((done / labels.length) * 100) };
+    broadcastState();
+  }
+  ttsBusy = null;
+  broadcastState();
+  if (!palette.length) { toast("error", tr("host.tts.genfail")); return; }
+  if (installSpeechFiles(paths) === 0) { toast("error", tr("host.guide.nolib")); return; }
+  // TTS announcements land on the SPEECH track by default (auto-created by the bridge if missing).
+  bridge.send(ADDR.cmdWriteGuide, [JSON.stringify({ track: settings.guideTrack || "SPEECH", items, palette })]);
+}
+
+/** Download the Piper engine (first time only) + the chosen voice, reporting progress via ttsBusy. */
+async function downloadTtsVoice(voiceId: string): Promise<void> {
+  const v = voiceById(voiceId);
+  if (!v) return;
+  if (ttsBusy) { toast("error", tr("host.tts.busy")); return; }
+  try {
+    ttsBusy = { kind: "engine", voiceId, pct: 0 }; broadcastState();
+    if (!engineReady()) {
+      const eng = await ensureEngine((p: DlProgress) => { ttsBusy = { kind: "engine", voiceId, pct: p.pct }; broadcastState(); });
+      if (!eng) throw new Error("engine");
+    }
+    ttsBusy = { kind: "voice", voiceId, pct: 0 }; broadcastState();
+    const ok = await ensureVoice(voiceId, (p: DlProgress) => { ttsBusy = { kind: "voice", voiceId, pct: p.pct }; broadcastState(); });
+    ttsBusy = null; broadcastState();
+    toast(ok ? "info" : "error", ok ? tr("host.tts.voiceready", { v: v.label }) : tr("host.tts.voicefail"));
+  } catch {
+    ttsBusy = null; broadcastState();
+    toast("error", tr("host.tts.voicefail"));
+  }
+}
+
+/** Generate a short sample and send it back (as a data: URL) to the requesting client to play. */
+async function previewTtsVoice(client: ClientMeta, opts: { text?: string; voiceId: string; speed: number; expr: number }): Promise<void> {
+  if (!engineReady() || !installedVoices().includes(opts.voiceId)) { toast("error", tr("host.tts.novoice")); return; }
+  const text = (opts.text && opts.text.trim()) || tr("host.tts.previewtext");
+  const out = nodePath.join(ttsCacheDir(), "preview.wav");
+  ttsBusy = { kind: "preview", voiceId: opts.voiceId, pct: 0 }; broadcastState();
+  const ok = await synthesize(text, { voiceId: opts.voiceId, speed: opts.speed, expr: opts.expr }, out);
+  ttsBusy = null; broadcastState();
+  if (!ok || !existsSync(out)) { toast("error", tr("host.tts.genfail")); return; }
+  try {
+    const b64 = readFileSync(out).toString("base64");
+    server.sendTo(client.opaqueId, { type: "ttsPreview", data: `data:audio/wav;base64,${b64}` });
+  } catch { toast("error", tr("host.tts.genfail")); }
 }
 let stopDiag = ""; // raw STOP-clip reading values (debug)
 let bluetooth: string[] = []; // connected Bluetooth peripherals (host machine)
@@ -364,6 +440,10 @@ function snapshot(): AppState {
     structure: effectiveStructure(),
     structureEdited: structureDoc != null,
     guideAudio,
+    ttsCatalog: VOICE_CATALOG.map((v) => ({ id: v.id, lang: v.lang, gender: v.gender, label: v.label })),
+    ttsInstalledVoices: installedVoices(),
+    ttsEngineReady: engineReady(),
+    ttsBusy,
     licensed: li.licensed,
     licenseEmail: li.email,
     activationState,
@@ -919,8 +999,8 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
 
 function applySetting(key: keyof Settings, value: boolean | string | number): void {
   const target = settings as unknown as Record<string, boolean | string | number>;
-  if (key === "emergencyNote" || key === "stopNote") target[key] = Number(value);
-  else if (key === "emergencyPort" || key === "stopTrack" || key === "lyricsTrack" || key === "structureTrack" || key === "guideTrack" || key === "guideAudioFolder" || key === "colorScheme" || key === "setlistColorScheme" || key === "panicLabel" || key === "panicColor" || key === "language" || key === "medleyDisplay" || key === "clickIndicator" || key === "licenseKey") target[key] = String(value);
+  if (key === "emergencyNote" || key === "stopNote" || key === "ttsSpeed" || key === "ttsExpr") target[key] = Number(value);
+  else if (key === "emergencyPort" || key === "stopTrack" || key === "lyricsTrack" || key === "structureTrack" || key === "guideTrack" || key === "guideAudioFolder" || key === "guideMode" || key === "ttsVoice" || key === "colorScheme" || key === "setlistColorScheme" || key === "panicLabel" || key === "panicColor" || key === "language" || key === "medleyDisplay" || key === "clickIndicator" || key === "licenseKey") target[key] = String(value);
   else target[key] = Boolean(value);
 }
 
@@ -1178,6 +1258,21 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
       }));
       applyPluginAutomation(transport.isPlaying, true); // apply the new rules now, don't wait for a transition
       changed();
+      break;
+    case "setVoicePresets":
+      settings.voicePresets = (c.presets || []).map((p) => ({
+        name: String(p.name ?? ""),
+        voiceId: String(p.voiceId ?? ""),
+        speed: Number(p.speed) || 1,
+        expr: Number(p.expr ?? 0.667),
+      }));
+      changed();
+      break;
+    case "downloadTtsVoice":
+      void downloadTtsVoice(String(c.voiceId));
+      break;
+    case "previewTtsVoice":
+      void previewTtsVoice(client, { text: c.text, voiceId: String(c.voiceId), speed: Number(c.speed) || 1, expr: Number(c.expr ?? 0.667) });
       break;
     case "setSetting":
       applySetting(c.key, c.value);

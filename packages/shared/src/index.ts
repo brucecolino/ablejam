@@ -156,6 +156,22 @@ export interface TrackDevices {
   devices: string[];
 }
 
+/** A saved TTS voice preset the user can recall in the voice generator. */
+export interface VoicePreset {
+  name: string;
+  voiceId: string;
+  speed: number;
+  expr: number;
+}
+
+/** A downloadable TTS voice (catalog entry sent to the web for the voice picker). */
+export interface TtsVoiceInfo {
+  id: string;
+  lang: Lang;
+  gender: "M" | "F";
+  label: string;
+}
+
 export interface Settings {
   /** Selecting a song starts playback immediately. */
   autoplay: boolean;
@@ -205,6 +221,17 @@ export interface Settings {
   /** Folder holding the announcement audio files. "" = the ones bundled with AbleJam (Italian).
    * Files auto-match the section labels by name ("SOLO DI CHITARRA.aif" ↔ "solo chitarra"). */
   guideAudioFolder: string;
+  /** How guide announcements are produced: "folder" = match pre-recorded files (guideAudioFolder),
+   * "tts" = generate them from the label text with the built-in neural voice (Piper). */
+  guideMode: "folder" | "tts";
+  /** Selected TTS voice id from the catalog (e.g. "it_IT-paola-medium"). */
+  ttsVoice: string;
+  /** TTS speaking rate multiplier (0.5..2.0, 1 = normal). */
+  ttsSpeed: number;
+  /** TTS expressiveness (0..1.5, ~0.667 = Piper default). */
+  ttsExpr: number;
+  /** Saved voice presets the user can recall (name + voice + speed + expr). */
+  voicePresets: VoicePreset[];
   /** Master switch for play/stop plugin automation. When off, the rules below are ignored. */
   automationEnabled: boolean;
   /** Plugin-automation rules applied on every play/stop transition (e.g. autotune ON while playing). */
@@ -286,6 +313,11 @@ export const defaultSettings: Settings = {
   guideAudioEnabled: false,
   guideTrack: "GUIDA",
   guideAudioFolder: "",
+  guideMode: "folder",
+  ttsVoice: "it_IT-paola-medium",
+  ttsSpeed: 1,
+  ttsExpr: 0.667,
+  voicePresets: [],
   automationEnabled: false,
   pluginRules: [],
   colorScheme: "rainbow",
@@ -392,6 +424,14 @@ export interface AppState {
   /** Announcement audio files available for the guide track (from the configured folder or the
    * bundled defaults) with the section label each one auto-matched ("" = no matching label). */
   guideAudio: { file: string; label: string }[];
+  /** TTS voice catalog (downloadable neural voices for the built-in guide generator). */
+  ttsCatalog: TtsVoiceInfo[];
+  /** Ids of the TTS voices already downloaded and ready to use. */
+  ttsInstalledVoices: string[];
+  /** Whether the Piper TTS engine binary is present (downloaded on first use). */
+  ttsEngineReady: boolean;
+  /** In-progress TTS download/generation, for the settings progress bar (null = idle). */
+  ttsBusy: { kind: "engine" | "voice" | "preview" | "generate"; voiceId?: string; pct: number } | null;
   /** True when a valid license key is stored — the full version is unlocked. When false the app
    * is locked to the demo setlist. */
   licensed: boolean;
@@ -447,6 +487,10 @@ export const initialState: AppState = {
   structure: [],
   structureEdited: false,
   guideAudio: [],
+  ttsCatalog: [],
+  ttsInstalledVoices: [],
+  ttsEngineReady: false,
+  ttsBusy: null,
   licensed: false,
   licenseEmail: "",
   activationState: "",
@@ -465,6 +509,7 @@ export type ServerMessage =
   | { type: "beat"; beat: number } // 0-based beat-in-bar from Live, for the CLICK metronome visual
   | { type: "toast"; level: "info" | "error"; message: string }
   | { type: "role"; isMaster: boolean; selfId: string } // per-socket: this client's role + its own opaque id
+  | { type: "ttsPreview"; data: string } // a generated voice sample as a data: URL, for the "Ascolta" button
   | { type: "importResult"; result: ImportResult };
 
 /** Client → server device introduction, sent once on connect (before any command). */
@@ -519,6 +564,10 @@ export type ClientCommand =
   | { type: "command"; command: "refreshBluetooth" }
   | { type: "command"; command: "openBluetoothSettings" }
   | { type: "command"; command: "setPluginRules"; rules: PluginRule[] }
+  | { type: "command"; command: "setVoicePresets"; presets: VoicePreset[] }
+  | { type: "command"; command: "downloadTtsVoice"; voiceId: string }
+  | { type: "command"; command: "previewTtsVoice"; text?: string; voiceId: string; speed: number; expr: number }
+  | { type: "command"; command: "generateSpeechFromMidi"; track: string }
   | { type: "command"; command: "setSetting"; key: keyof Settings; value: boolean | string | number };
 
 // ---- setlist model builders (pure) ----

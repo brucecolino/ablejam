@@ -88,6 +88,9 @@ export function useAbleJam() {
           setSelfId(msg.selfId);
         } else if (msg.type === "importResult") {
           setImportResult(msg.result);
+        } else if (msg.type === "ttsPreview") {
+          // A generated voice sample (data: URL) — play it immediately for the "Ascolta" button.
+          try { void new Audio(msg.data).play(); } catch { /* autoplay blocked / no audio */ }
         }
       };
     };

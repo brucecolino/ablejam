@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.6.0",
+    notes: {
+      it: [
+        "🎙️ Generatore voce integrato (TTS): crea gli annunci di struttura (ritornello, bridge, mix…) direttamente dall'app, senza una cartella di file. Scegli lingua (IT/EN/ES/FR) e voce (uomo/donna), regola velocità ed espressività, ascolta l'anteprima (\"Ascolta\") e salva i tuoi preset.",
+        "In Impostazioni → Struttura, con l'audio guida attivo, scegli \"Genera voce (TTS)\": all'export la struttura crea da sola le clip vocali sul canale SPEECH (creato se manca).",
+        "Voce neurale offline (Piper): al primo uso l'app scarica il motore (~25 MB) e la voce scelta; poi funziona senza internet. La cartella di file resta disponibile come alternativa.",
+      ],
+      en: [
+        "🎙️ Built-in voice generator (TTS): create the structure announcements (chorus, bridge, mix…) straight from the app, no folder of files needed. Pick a language (IT/EN/ES/FR) and voice (male/female), tune speed and expressiveness, preview it (\"Listen\") and save your presets.",
+        "In Settings → Structure, with the audio guide on, choose \"Generate voice (TTS)\": on export the structure creates the voice clips by itself on the SPEECH track (created if missing).",
+        "Offline neural voice (Piper): on first use the app downloads the engine (~25 MB) and the chosen voice; then it works with no internet. The file-folder mode stays available as an alternative.",
+      ],
+    },
+  },
+  {
     version: "1.5.0",
     notes: {
       it: [
