@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.13.0",
+    notes: {
+      it: [
+        "Audio guida: diagnostica finale + accesso al browser di Ableton più robusto. Il bridge ora scrive nel Log ogni passo del caricamento annunci (traccia risolta e se è audio, quante voci vanno caricate, accesso al browser, cartella trovata, file caricati X/Y) e usa un metodo alternativo per raggiungere il browser di Ableton se il primo fallisce. Se l'audio ancora non compare, il Log dirà ESATTAMENTE dove si ferma.",
+        "⚠ Richiede il bridge v57: si installa da solo all'avvio — poi esci COMPLETAMENTE da Ableton (Ctrl/Cmd+Q) e riaprilo; verifica \"v57\" in Impostazioni → Progetto Ableton.",
+      ],
+      en: [
+        "Audio guide: final diagnostics + more robust access to Ableton's browser. The bridge now logs every step of loading the announcements (resolved track and whether it's audio, how many voices need loading, browser access, folder found, files loaded X/Y) and uses a fallback way to reach Ableton's browser if the first fails. If the audio still doesn't appear, the Log will say EXACTLY where it stops.",
+        "⚠ Requires bridge v57: auto-installs on launch — then FULLY quit Ableton (Ctrl/Cmd+Q) and reopen; check \"v57\" in Settings → Ableton Project.",
+      ],
+    },
+  },
+  {
     version: "1.12.0",
     notes: {
       it: [

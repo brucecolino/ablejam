@@ -14,7 +14,7 @@ from .osc import OSCServer
 HOST_IP = "127.0.0.1"
 HOST_PORT = 39062     # the AbleJam host listens here for state
 LISTEN_PORT = 39061   # we listen here for commands from the host
-BRIDGE_VERSION = 56   # bump on every change; shown in the UI to confirm reloads
+BRIDGE_VERSION = 57   # bump on every change; shown in the UI to confirm reloads
 
 
 class AbleJam(ControlSurface):
@@ -1164,16 +1164,36 @@ class AbleJam(ControlSurface):
                 item_name = str(m.get("item", "")).strip().lower()
                 if label and item_name and label.lower() not in have and item_name not in have:
                     missing.append((label, item_name))
+            self._log("guide palette: track has %d named clip(s); %d of %d mapping entries need loading" % (len(have), len(missing), len(mapping)))
             if not missing:
                 return
-            browser = self.application().browser
-            folder = self._find_browser_folder(browser.user_library, "ablejam speech")
+            # Access the browser explicitly so a Live-API failure here is VISIBLE (it used to be
+            # swallowed by the outer try, leaving "nopalette" with no explanation). Try the
+            # ControlSurface helper first, then Live.Application as a fallback.
+            browser = None
+            try:
+                browser = self.application().browser
+            except Exception as e:
+                self._log("guide palette: self.application().browser failed (%s) — trying Live.Application" % e)
+            if browser is None:
+                try:
+                    import Live
+                    browser = Live.Application.get_application().browser
+                except Exception as e:
+                    self._log("guide palette: cannot obtain the Ableton browser object: %s" % e)
+                    return
+            try:
+                user_library = browser.user_library
+            except Exception as e:
+                self._log("guide palette: browser has no accessible User Library: %s" % e)
+                return
+            folder = self._find_browser_folder(user_library, "ablejam speech")
             if folder is None:
                 # List what Ableton actually shows so the user's log tells us WHY: a different
                 # folder name, an un-rescanned browser, or a User Library path mismatch.
                 try:
                     names = []
-                    for ch in browser.user_library.iter_children:
+                    for ch in user_library.iter_children:
                         try:
                             names.append(ch.name)
                         except Exception:
@@ -1250,6 +1270,13 @@ class AbleJam(ControlSurface):
         mapping = data.get("palette") or []  # [{label, item}] announcement files per label
         track = self._ensure_guide_track(data.get("track") or "")  # find or create the GUIDA audio track
         total = len(items)
+        # Decisive breadcrumb: this ALWAYS runs on a guide write. If it never shows in Settings→Logs,
+        # the _log pipeline itself is the problem; if it does, the palette logs below pinpoint the rest.
+        self._log("guide write: requested track=%r, resolved=%r (audio=%s), items=%d, palette entries=%d" % (
+            data.get("track"),
+            (track.name if track is not None else None),
+            (self._is_audio_track(track) if track is not None else None),
+            total, len(mapping)))
         if track is None:
             self._osc.send("/ablejam/guidewrite", [0, total, "notrack"])
             return
