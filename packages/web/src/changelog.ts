@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.4.3",
+    notes: {
+      it: [
+        "Controllo aggiornamenti più affidabile: non fallisce più quando GitHub limita temporaneamente le richieste (rate limit). Se l'API è occupata, l'app trova comunque l'ultima versione da un canale alternativo.",
+        "Messaggio d'errore aggiornamenti più chiaro: suggerisce di riprovare tra qualche minuto, non solo di controllare la connessione.",
+      ],
+      en: [
+        "More reliable update check: it no longer fails when GitHub temporarily rate-limits requests. If the API is busy, the app still finds the latest version via a fallback channel.",
+        "Clearer update error message: it suggests retrying in a few minutes, not just checking your connection.",
+      ],
+    },
+  },
+  {
     version: "1.4.2",
     notes: {
       it: [
