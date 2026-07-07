@@ -544,6 +544,9 @@ export function App() {
     try { return !KIOSK && !!getBridge() && localStorage.getItem("ablejam.setupDone") !== "1"; } catch { return false; }
   });
   const closeSetup = () => { try { localStorage.setItem("ablejam.setupDone", "1"); } catch { /* ignore */ } setShowSetup(false); };
+  // Mirror the "close to background" setting into the Electron main process (which owns the window
+  // close behaviour) whenever it changes — including on load from the persisted setting.
+  useEffect(() => { getBridge()?.setCloseToTray?.(!!state.settings.closeToTray); }, [state.settings.closeToTray]);
   // Show "what's new" once after an update: compare the last-seen version (per device) with the
   // current one. First run (no stored version) records it silently — no modal on a fresh install.
   useEffect(() => {
@@ -1074,6 +1077,7 @@ interface AbleJamBridge {
   platform?: string;
   version: () => Promise<string>;
   installBridge?: () => Promise<void>;
+  setCloseToTray?: (v: boolean) => void;
   checkUpdate?: () => Promise<UpdateCheck>;
   installUpdate?: () => Promise<{ ok: boolean; error?: string }>;
   onUpdateProgress?: (cb: (p: UpdateProgress) => void) => () => void;
@@ -1463,6 +1467,7 @@ function SettingsPanel({ state, send, onClose, onOpenSetup, isMaster = true, sel
             {row("safeMode", "set.safeMode.label", "set.safeMode.desc")}
             {row("reenableAutomationOnSongStart", "set.reenableAutomation.label", "set.reenableAutomation.desc")}
             {row("showClock", "set.showClock.label", "set.showClock.desc")}
+            {isDesktop && row("closeToTray", "set.closeToTray.label", "set.closeToTray.desc")}
             {row("clickOnStartup", "set.clickOnStartup.label", "set.clickOnStartup.desc")}
             {row("clickOnAtStart", "set.clickOnAtStart.label", "set.clickOnAtStart.desc")}
             <label className="setting">
@@ -1576,6 +1581,10 @@ function SettingsPanel({ state, send, onClose, onOpenSetup, isMaster = true, sel
                 {state.tracks.map((tk) => <option key={tk} value={tk}>{tk}</option>)}
               </select>
             </label>
+            {/* Re-read the track list from Ableton so a just-created track (e.g. STRUCTURE/SPEECH) shows
+                up in these dropdowns without reconnecting. */}
+            <div className="settings-desc-small">{tr("tracks.refresh.desc")}</div>
+            <button className="settings-btn" onClick={() => send({ type: "command", command: "refresh" })}><ActionIcon name="reset" /> {tr("tracks.refresh")}</button>
             {row("showStructure", "set.showStructure.label", "set.showStructure.desc")}
             {row("guideAudioEnabled", "set.guideAudio.label", "set.guideAudio.desc")}
             {s.guideAudioEnabled && (<>

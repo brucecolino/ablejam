@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld("ablejam", {
   platform: process.platform, // so the web can pad the macOS traffic-light title bar
   version: (): Promise<string> => ipcRenderer.invoke("ablejam:version"),
   installBridge: (): Promise<void> => ipcRenderer.invoke("ablejam:install-bridge"),
+  // Tell the main process whether closing the window should keep AbleJam running in the background.
+  setCloseToTray: (v: boolean): Promise<void> => ipcRenderer.invoke("ablejam:set-close-to-tray", v),
   checkUpdate: (): Promise<unknown> => ipcRenderer.invoke("ablejam:update-check"),
   installUpdate: (): Promise<unknown> => ipcRenderer.invoke("ablejam:update-install"),
   onUpdateProgress: (cb: (p: unknown) => void): (() => void) => {

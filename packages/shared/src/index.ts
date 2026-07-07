@@ -269,6 +269,9 @@ export interface Settings {
   colorOnImport: boolean;
   /** Show the current wall-clock time in the top bar (handy for musicians during a live). */
   showClock: boolean;
+  /** Desktop only: when the window is closed, keep AbleJam running in the background (host stays up so
+   * connected devices/Ableton stay linked) instead of quitting. Reopen from the tray or by relaunching. */
+  closeToTray: boolean;
   /** Turn Live's metronome (click) ON every time playback starts. */
   clickOnAtStart: boolean;
   /** Turn Live's metronome (click) ON once, when AbleJam starts up and connects to the bridge. */
@@ -346,6 +349,7 @@ export const defaultSettings: Settings = {
   splitMedleysOnImport: true,
   colorOnImport: true,
   showClock: false,
+  closeToTray: false,
   clickOnAtStart: false,
   clickOnStartup: false,
   medleyDisplay: "split",

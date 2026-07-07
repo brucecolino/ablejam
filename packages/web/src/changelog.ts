@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.9.0",
+    notes: {
+      it: [
+        "Nuovo pulsante \"Aggiorna tracce da Ableton\" (Impostazioni → Struttura): rilegge le tracce del progetto, così una traccia appena creata (STRUCTURE/SPEECH…) compare subito nei menu a tendina invece di \"non trovata\".",
+        "Chiusura app configurabile (Impostazioni → Generali → \"Alla chiusura, resta in background\"): scegli se chiudendo la finestra AbleJam continua a girare — dispositivi e Ableton restano collegati, riapri dall'icona nella barra di sistema o rilanciando l'app — oppure si chiude del tutto.",
+      ],
+      en: [
+        "New \"Refresh tracks from Ableton\" button (Settings → Structure): re-reads the project's tracks, so a just-created track (STRUCTURE/SPEECH…) shows up in the dropdowns right away instead of \"not found\".",
+        "Configurable app close (Settings → General → \"On close, keep running in the background\"): choose whether closing the window keeps AbleJam running — devices and Ableton stay linked, reopen from the system-tray icon or by relaunching — or quits entirely.",
+      ],
+    },
+  },
+  {
     version: "1.8.1",
     notes: {
       it: [

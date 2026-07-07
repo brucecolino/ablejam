@@ -7,7 +7,7 @@
 //   3. resolve paths + env    (set BEFORE importing the host — persist/server read env at module-eval)
 //   4. whenReady -> splash -> startHost -> wait for :3700 -> show main window
 //   5. graceful teardown on quit (release timers, watchers, MIDI, UDP, http+ws)
-import { app, BrowserWindow, Menu, shell, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, Menu, Tray, nativeImage, shell, dialog, ipcMain } from "electron";
 import path from "node:path";
 import net from "node:net";
 import { existsSync } from "node:fs";
@@ -31,8 +31,35 @@ if (process.platform === "win32") app.setAppUserModelId("com.ablejam.app");
 
 let mainWin: BrowserWindow | null = null;
 let splash: BrowserWindow | null = null;
+let tray: Tray | null = null;
 let hostHandle: { ready: Promise<void>; close: () => Promise<void> } | null = null;
 let quitting = false;
+let closeToTray = false; // when true, closing the window hides it (app keeps running) instead of quitting
+
+/** Bring the (possibly hidden/minimized) main window back to the foreground. */
+function showWindow(): void {
+  if (!mainWin) return;
+  if (mainWin.isMinimized()) mainWin.restore();
+  mainWin.show();
+  mainWin.focus();
+}
+
+/** A small tray icon so a background-running AbleJam can be reopened or quit (no window otherwise). */
+function ensureTray(): void {
+  if (tray) return;
+  try {
+    const img = nativeImage.createFromPath(path.join(__dirname, "icon.png"));
+    tray = new Tray(img.isEmpty() ? nativeImage.createEmpty() : img);
+    tray.setToolTip("AbleJam");
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: "Mostra AbleJam", click: showWindow },
+      { type: "separator" },
+      { label: "Esci", click: () => { quitting = true; app.quit(); } },
+    ]));
+    tray.on("click", showWindow);
+    tray.on("double-click", showWindow);
+  } catch { /* tray is optional */ }
+}
 let pendingActivateKey: string | null = null;
 
 // ---- one-click license activation: ablejam://activate?key=… (from the customer area) --------
@@ -76,11 +103,11 @@ function deliverActivateKey(key: string): void {
 app.on("second-instance", (_e, argv) => {
   const key = argv.map(activateKeyFromArg).find(Boolean);
   if (key) { deliverActivateKey(key); return; }
-  if (mainWin) {
-    if (mainWin.isMinimized()) mainWin.restore();
-    mainWin.focus();
-  }
+  showWindow(); // relaunching AbleJam brings a background/hidden window back to the front
 });
+
+// macOS: clicking the dock icon reopens the (hidden-to-background) window.
+app.on("activate", showWindow);
 
 // macOS delivers the link via open-url (can fire before the window exists).
 app.on("open-url", (_e, url) => {
@@ -199,6 +226,12 @@ function createMainWindow(): void {
     splash?.destroy();
     splash = null;
   });
+  // "Close to background": hide the window (host keeps running) instead of quitting, so connected
+  // devices/Ableton stay linked. Reopen from the tray or by relaunching AbleJam. Real quits (menu
+  // Esci / tray Esci / before-quit) set `quitting` first, so they close normally.
+  mainWin.on("close", (e) => {
+    if (closeToTray && !quitting) { e.preventDefault(); mainWin?.hide(); ensureTray(); }
+  });
   mainWin.on("closed", () => { mainWin = null; });
 
   void mainWin.loadURL(`http://127.0.0.1:${HOST_PORT}`);
@@ -265,6 +298,7 @@ async function boot(): Promise<void> {
   ipcMain.handle("ablejam:install-bridge", () => { installBridge(resourcesRoot); });
   ipcMain.handle("ablejam:update-check", () => checkForUpdate());
   ipcMain.handle("ablejam:update-install", (event) => downloadAndInstall((p) => event.sender.send("ablejam:update-progress", p)));
+  ipcMain.handle("ablejam:set-close-to-tray", (_e, v: boolean) => { closeToTray = !!v; }); // web mirrors the setting here
 
   // Dynamic import of the ESM host bundle from this CJS main (computed specifier keeps it a
   // native import(), so Node loads the .mjs correctly).
