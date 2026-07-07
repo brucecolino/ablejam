@@ -20,6 +20,7 @@ export const LICENSING_ENABLED = true;
 
 export const ADDR = {
   hello: "/ablejam/hello",
+  log: "/ablejam/log", // free-text diagnostic lines from the bridge (shown in Settings → Logs)
   setlist: "/ablejam/setlist",
   tracks: "/ablejam/tracks",
   midiTracks: "/ablejam/miditracks",
@@ -413,6 +414,8 @@ export interface AppState {
   stopPoints: number[];
   /** Raw STOP-clip reading values (clipStart/startMarker/note0/beat) — debug only. */
   stopDiag: string;
+  /** Recent diagnostic log lines (host events + bridge messages) for Settings → Logs. Newest last. */
+  logs: string[];
   /** Names of the Bluetooth peripherals currently connected to the host machine. */
   bluetooth: string[];
   /** Tracks + their device names (for the plugin-automation device picker). */
@@ -498,6 +501,7 @@ export const initialState: AppState = {
   lanIp: "",
   stopPoints: [],
   stopDiag: "",
+  logs: [],
   bluetooth: [],
   audioConnected: true,
   trackDevices: [],
@@ -569,7 +573,7 @@ export type ClientCommand =
   | { type: "command"; command: "writeLyricsClips"; lines: LyricLine[] }
   | { type: "command"; command: "setStructure"; lines: LyricLine[] }
   | { type: "command"; command: "clearStructure" }
-  | { type: "command"; command: "writeStructureClips"; lines: LyricLine[]; guide?: boolean }
+  | { type: "command"; command: "writeStructureClips"; lines: LyricLine[]; guide?: boolean; scope?: { start: number; end: number } }
   | { type: "command"; command: "setStructureLabels"; labels: string[] }
   | { type: "command"; command: "setClientMaster"; clientId: string; master: boolean }
   | { type: "command"; command: "saveSetlist"; name: string }
@@ -596,6 +600,7 @@ export type ClientCommand =
   | { type: "command"; command: "downloadTtsVoice"; voiceId: string }
   | { type: "command"; command: "previewTtsVoice"; text?: string }
   | { type: "command"; command: "refreshAzureVoices" }
+  | { type: "command"; command: "clearLogs" }
   | { type: "command"; command: "generateSpeechFromMidi"; track: string }
   | { type: "command"; command: "setSetting"; key: keyof Settings; value: boolean | string | number };
 

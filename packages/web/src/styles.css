@@ -343,6 +343,7 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .tts-mini { font-size: 12px; padding: 3px 9px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
 .tts-mini:hover { border-color: var(--accent); }
 .settings-desc-small { font-size: 12px; color: #8a8a8a; margin: 4px 0 8px; line-height: 1.4; }
+.logs-view { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; line-height: 1.5; color: #cfcfcf; background: #0d0d0d; border: 1px solid #262626; border-radius: 8px; padding: 10px 12px; margin: 0 0 10px; max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
 .auto-rule { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
 /* Structure editor: label chips (tap = mark a section change at the playhead). */
 .struct-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 8px 16px; border-bottom: 1px solid var(--border); }

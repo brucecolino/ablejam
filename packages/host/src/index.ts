@@ -301,7 +301,9 @@ async function writeGuideClipsTts(items: { s: number; t: string; e?: number }[])
   // Send each occurrence with its song-bounded end beat `e` so the bridge trims the padded clip to
   // fill exactly up to the next change (or the song end). TTS lands on the SPEECH track (auto-created).
   const outItems = ordered.map((it) => ({ s: it.s, t: it.t, e: it.e }));
-  bridge.send(ADDR.cmdWriteGuide, [JSON.stringify({ track: settings.guideTrack || "SPEECH", items: outItems, palette })]);
+  const track = settings.guideTrack || "SPEECH";
+  log(`guide TTS: engine=${settings.ttsEngine}, track="${track}", generated ${palette.length}/${labels.length} announcements → sending ${outItems.length} clips to the bridge`);
+  bridge.send(ADDR.cmdWriteGuide, [JSON.stringify({ track, items: outItems, palette })]);
 }
 
 /** Fetch the Azure voice catalog for the current key+region (on key/region change or manual refresh). */
@@ -501,6 +503,7 @@ function snapshot(): AppState {
     lanIp,
     stopPoints,
     stopDiag,
+    logs,
     bluetooth,
     // Audio is "operational on Ableton" only when Ableton is actually connected AND an interface is
     // present — the Live API can't reveal Live's selected device, so this is the honest proxy.
@@ -715,7 +718,17 @@ function broadcastState(): void {
 function broadcastTransport(): void {
   server.broadcastMessage({ type: "transport", transport, currentEntryIndex: mgr.currentEntry, bridgeConnected });
 }
+// Diagnostic log ring buffer (host events + bridge messages), shown in Settings → Logs so the user
+// can see what happened during an export/connect without a console. Broadcast is debounced.
+let logs: string[] = [];
+let logBroadcastTimer: ReturnType<typeof setTimeout> | null = null;
+function log(msg: string): void {
+  logs.push(`${new Date().toLocaleTimeString()}  ${msg}`);
+  if (logs.length > 300) logs = logs.slice(-300);
+  if (!logBroadcastTimer) logBroadcastTimer = setTimeout(() => { logBroadcastTimer = null; broadcastState(); }, 400);
+}
 function toast(level: "info" | "error", message: string): void {
+  log(`${level === "error" ? "⚠ " : ""}${message}`);
   server.broadcastMessage({ type: "toast", level, message });
 }
 /** Translate a toast in the user's chosen interface language. */
@@ -905,6 +918,7 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
       // doesn't get stuck at v0). Don't request a refresh here — that would loop.
       bridgeVersion = Number(args[1] ?? 0);
       console.log(`[host] bridge: ${args[0]} (v${bridgeVersion})`);
+      log(`bridge connected: v${bridgeVersion}`);
       maybeWarnBridgeRestart(); // the app auto-installed a newer bridge but Ableton still runs the old one
       sendStopConfig(); // let the (re)connected bridge know which track/note marks stops
       sendLyricsConfig(); // and which track holds the lyrics clips
@@ -1031,6 +1045,7 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
       const n = Number(args[0] ?? 0);
       const total = Number(args[1] ?? n);
       const reason = String(args[2] ?? "");
+      log(`structureWrite: created=${n}/${total} reason="${reason}"`);
       if (n > 0) toast("info", tr("host.structure.written", { n, total }));
       else if (reason === "notrack" || reason === "empty") toast("error", tr("host.structure.writeFail"));
       else toast("info", tr("host.structure.writeNothing"));
@@ -1040,11 +1055,15 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
       const n = Number(args[0] ?? 0);
       const total = Number(args[1] ?? n);
       const reason = String(args[2] ?? "");
+      log(`guideWrite: created=${n}/${total} reason="${reason}"`);
       if (n > 0) toast("info", tr("host.guide.written", { n, total }));
       else if (reason === "notrack") toast("error", tr("host.guide.notrack"));
       else if (reason === "nopalette") toast("error", tr("host.guide.nopalette"));
       break;
     }
+    case ADDR.log:
+      log(`[bridge] ${String(args[0] ?? "")}`); // free-text diagnostic from the control surface
+      break;
     case ADDR.stopPoints:
       try {
         const next = (JSON.parse(String(args[0] ?? "[]")) as unknown[]).map(Number).filter((n) => Number.isFinite(n));
@@ -1178,7 +1197,14 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
         saveStructureDoc(abletonProject, structureDoc);
         broadcastState();
       }
-      const items = withClipEnds(effectiveStructure().map((l) => ({ s: l.start, t: l.text })));
+      // Compute song-bounded ends on the FULL structure (so each clip stops at its own song),
+      // then keep only the labels of the song the user is editing: the editor is per-song and
+      // must not rewrite the other songs' clips.
+      const allItems = withClipEnds(effectiveStructure().map((l) => ({ s: l.start, t: l.text })));
+      const items = c.scope
+        ? allItems.filter((it) => it.s >= c.scope!.start - 1e-6 && it.s < c.scope!.end - 1e-6)
+        : allItems;
+      log(`writeStructureClips: ${items.length}/${allItems.length} labels${c.scope ? ` (current song, beats ${c.scope.start.toFixed(1)}–${c.scope.end.toFixed(1)})` : " (all songs)"}, guide=${settings.guideAudioEnabled && !!c.guide}`);
       if (!items.length) { toast("error", tr("host.structure.nolabels")); break; }
       bridge.send(ADDR.cmdWriteStructure, [JSON.stringify(items)]); // each item carries its `e` (song-bounded end)
       if (settings.guideAudioEnabled && c.guide) writeGuideClips(items);
@@ -1369,6 +1395,10 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
       break;
     case "refreshAzureVoices":
       void refreshAzureVoices();
+      break;
+    case "clearLogs":
+      logs = [];
+      broadcastState();
       break;
     case "setSetting":
       applySetting(c.key, c.value);

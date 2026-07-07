@@ -1270,7 +1270,9 @@ function StructureEditor({ state, send, entryIndex, onClose }: { state: AppState
     if (!confirm(tr("structEd.export.confirm"))) return;
     // Audio guide is opt-in PER EXPORT: with the setting active, ask before laying the audio.
     const guide = state.settings.guideAudioEnabled ? confirm(tr("structEd.guide.confirm")) : false;
-    send({ type: "command", command: "writeStructureClips", lines: fullDoc(linesRef.current), guide });
+    // Persist the FULL document (all songs) but WRITE only the song we're editing — the user
+    // opened this editor for one song and expects only that song's clips to hit Ableton.
+    send({ type: "command", command: "writeStructureClips", lines: fullDoc(linesRef.current), guide, scope: { start: scope.start, end: scope.end } });
   };
 
   return (
@@ -1695,6 +1697,16 @@ function SettingsPanel({ state, send, onClose, onOpenSetup, isMaster = true, sel
               <div className="settings-desc-small" style={{ marginTop: 12 }}>{tr("setup.reopen.desc")}</div>
               <button className="settings-btn" onClick={onOpenSetup}>{tr("setup.reopen")}</button>
             </>)}
+          </section>
+
+          <section className="settings-card" style={catStyle("project")}>
+            <div className="settings-section">{tr("settings.section.logs")}</div>
+            <div className="settings-desc-small">{tr("logs.desc")}</div>
+            <pre className="logs-view">{(state.logs ?? []).length ? (state.logs ?? []).join("\n") : tr("logs.empty")}</pre>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="settings-btn" style={{ marginTop: 0 }} onClick={() => { try { void navigator.clipboard.writeText((state.logs ?? []).join("\n")); } catch { /* ignore */ } }}>{tr("logs.copy")}</button>
+              <button className="settings-btn" style={{ marginTop: 0 }} onClick={() => send({ type: "command", command: "clearLogs" })}>{tr("logs.clear")}</button>
+            </div>
           </section>
 
           <section className="settings-card" style={catStyle("general")}>

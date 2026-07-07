@@ -14,7 +14,7 @@ from .osc import OSCServer
 HOST_IP = "127.0.0.1"
 HOST_PORT = 39062     # the AbleJam host listens here for state
 LISTEN_PORT = 39061   # we listen here for commands from the host
-BRIDGE_VERSION = 54   # bump on every change; shown in the UI to confirm reloads
+BRIDGE_VERSION = 55   # bump on every change; shown in the UI to confirm reloads
 
 
 class AbleJam(ControlSurface):
@@ -1115,6 +1115,13 @@ class AbleJam(ControlSurface):
         except Exception:
             return None
 
+    def _log(self, msg):
+        # Free-text diagnostic to the host (shown in Settings → Logs). Best-effort.
+        try:
+            self._osc.send("/ablejam/log", [str(msg)])
+        except Exception:
+            pass
+
     def _ensure_guide_palette(self, track, mapping):
         # Auto-build the session palette: for every label with no palette clip yet, load its
         # announcement audio from the User Library ("AbleJam Speech", copied there by the host)
@@ -1139,6 +1146,18 @@ class AbleJam(ControlSurface):
             browser = self.application().browser
             folder = self._find_browser_folder(browser.user_library, "ablejam speech")
             if folder is None:
+                # List what Ableton actually shows so the user's log tells us WHY: a different
+                # folder name, an un-rescanned browser, or a User Library path mismatch.
+                try:
+                    names = []
+                    for ch in browser.user_library.iter_children:
+                        try:
+                            names.append(ch.name)
+                        except Exception:
+                            pass
+                    self._log("guide palette: 'AbleJam Speech' NOT found in Ableton's User Library. Top-level entries Ableton sees: %s" % (", ".join(names[:40]) or "(none)"))
+                except Exception:
+                    self._log("guide palette: 'AbleJam Speech' folder NOT found and the User Library could not be listed")
                 return
             items_by_name = {}
             try:
@@ -1150,6 +1169,8 @@ class AbleJam(ControlSurface):
                         pass
             except Exception:
                 return
+            self._log("guide palette: folder found, %d loadable items, %d labels to load" % (len(items_by_name), len(missing)))
+            loaded = 0
             view = self._song.view
             prev_track = None
             try:
@@ -1164,6 +1185,7 @@ class AbleJam(ControlSurface):
                             it = v
                             break
                 if it is None:
+                    self._log("guide palette: no browser item matches '%s'" % item_name)
                     continue
                 slot = self._first_empty_slot(track)
                 if slot is None:
@@ -1172,13 +1194,18 @@ class AbleJam(ControlSurface):
                     view.selected_track = track
                     view.highlighted_clip_slot = slot
                     browser.load_item(it)
-                except Exception:
+                except Exception as e:
+                    self._log("guide palette: load_item failed for '%s': %s" % (label, e))
                     continue
                 try:
                     if slot.has_clip:
                         slot.clip.name = label
+                        loaded += 1
+                    else:
+                        self._log("guide palette: load_item created no clip for '%s'" % label)
                 except Exception:
                     pass
+            self._log("guide palette: loaded %d/%d announcements into session slots" % (loaded, len(missing)))
             if prev_track is not None:
                 try:
                     view.selected_track = prev_track

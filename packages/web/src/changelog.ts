@@ -10,6 +10,23 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.11.0",
+    notes: {
+      it: [
+        "\"Scrivi su Ableton\" ora esporta SOLO il brano su cui stai lavorando, non più tutti i brani della scaletta. Le etichette degli altri brani restano salvate ma non vengono più riscritte sulla traccia.",
+        "Nuova sezione \"Log\" (Impostazioni → Progetto Ableton): mostra i segnali dell'app e del bridge Ableton, così puoi vedere cosa succede durante un'esportazione e diagnosticare i problemi (con pulsanti Copia e Svuota).",
+        "Audio guida: aggiunte diagnostiche dettagliate nel bridge quando gli annunci non si caricano — il Log ora dice esattamente dove si ferma (cartella \"AbleJam Speech\" non trovata nel browser di Ableton, nessun file corrispondente, caricamento fallito…). Se l'audio guida non viene generato, apri il Log e mandami cosa c'è scritto.",
+        "⚠ Richiede il bridge v55: si installa da solo all'avvio dell'app — poi esci COMPLETAMENTE e riapri Ableton per caricarlo.",
+      ],
+      en: [
+        "\"Write to Ableton\" now exports ONLY the song you're working on, no longer every song in the setlist. The other songs' labels stay saved but are no longer rewritten onto the track.",
+        "New \"Logs\" section (Settings → Ableton Project): shows the app's and the Ableton bridge's signals, so you can see what happens during an export and diagnose problems (with Copy and Clear buttons).",
+        "Audio guide: added detailed bridge diagnostics when announcements fail to load — the Log now says exactly where it stops (\"AbleJam Speech\" folder not found in Ableton's browser, no matching file, load failed…). If the audio guide isn't generated, open the Log and send me what it says.",
+        "⚠ Requires bridge v55: it auto-installs on app launch — then FULLY quit and reopen Ableton to load it.",
+      ],
+    },
+  },
+  {
     version: "1.10.0",
     notes: {
       it: [
