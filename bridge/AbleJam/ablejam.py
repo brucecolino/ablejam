@@ -14,7 +14,7 @@ from .osc import OSCServer
 HOST_IP = "127.0.0.1"
 HOST_PORT = 39062     # the AbleJam host listens here for state
 LISTEN_PORT = 39061   # we listen here for commands from the host
-BRIDGE_VERSION = 53   # bump on every change; shown in the UI to confirm reloads
+BRIDGE_VERSION = 54   # bump on every change; shown in the UI to confirm reloads
 
 
 class AbleJam(ControlSurface):
@@ -1004,7 +1004,13 @@ class AbleJam(ControlSurface):
                 start = starts[i]
                 if any(abs(o - start) < tol for o in occupied):
                     continue
-                length = (starts[i + 1] - start) if i + 1 < len(starts) else DEFAULT_LAST
+                # Prefer the host-provided end `e` (clamped to the SONG boundary so a song's last
+                # label doesn't run across the following songs). Fall back to the next label / default.
+                end = float(it.get("e", 0.0))
+                if end > start:
+                    length = end - start
+                else:
+                    length = (starts[i + 1] - start) if i + 1 < len(starts) else DEFAULT_LAST
                 if length < MIN_LEN:
                     length = MIN_LEN
                 new_clip = None

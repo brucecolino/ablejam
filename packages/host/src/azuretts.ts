@@ -76,10 +76,11 @@ export async function azureSynthesize(
       },
       body: ssml,
     });
-  } catch {
+  } catch (e) {
+    console.error("[azure] synth network error:", (e as Error).message);
     return false;
   }
-  if (!res.ok) return false;
+  if (!res.ok) { console.error(`[azure] synth HTTP ${res.status} (region "${region}", voice "${voice}")`); return false; }
   const buf = Buffer.from(await res.arrayBuffer());
   if (buf.length < 64) return false;
   mkdirSync(path.dirname(outPath), { recursive: true });

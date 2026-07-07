@@ -202,10 +202,35 @@ function ttsFileBase(label: string): string {
   return label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "cue";
 }
 
+/** The beat where the SONG containing `beat` ends (next song's start, or its own end). */
+function songEndAt(beat: number): number {
+  const songs = mgr.library;
+  for (let i = songs.length - 1; i >= 0; i--) {
+    if (songs[i]!.startBeat - 1e-6 <= beat) {
+      const next = songs[i + 1];
+      return next ? next.startBeat : (songs[i]!.endBeat ?? Infinity);
+    }
+  }
+  return Infinity;
+}
+
+/** Annotate each structure/guide item with the beat its clip should END at: the next item's start,
+ * but NEVER past the end of the song it belongs to — so a song's last label doesn't bleed across the
+ * following songs that have no labels of their own. */
+function withClipEnds(items: { s: number; t: string }[]): { s: number; t: string; e: number }[] {
+  const ordered = [...items].sort((a, b) => a.s - b.s);
+  return ordered.map((it, i) => {
+    const nextStart = i + 1 < ordered.length ? ordered[i + 1]!.s : Infinity;
+    let e = Math.min(nextStart, songEndAt(it.s));
+    if (!isFinite(e) || e <= it.s + 1e-6) e = it.s + 4; // fallback for the very last clip / no song bound
+    return { s: it.s, t: it.t, e };
+  });
+}
+
 /** Export the audio guide. In "folder" mode: match the doc's labels to pre-recorded speech files.
  * In "tts" mode: generate each announcement from its label text with the neural voice. Either way
  * the files are copied into Ableton's User Library and the bridge lays the palette + clips. */
-function writeGuideClips(items: { s: number; t: string }[]): void {
+function writeGuideClips(items: { s: number; t: string; e?: number }[]): void {
   if (settings.guideMode === "tts") { void writeGuideClipsTts(items); return; }
   const dir = speechDir();
   const files = dir ? listSpeechFiles(dir) : [];
@@ -236,7 +261,7 @@ async function synthLabel(text: string, wav: string): Promise<boolean> {
 
 /** TTS mode: synthesise one WAV per unique label with the selected engine, install them into the
  * User Library, then hand the palette to the bridge (same clip-laying path as folder mode). */
-async function writeGuideClipsTts(items: { s: number; t: string }[]): Promise<void> {
+async function writeGuideClipsTts(items: { s: number; t: string; e?: number }[]): Promise<void> {
   const azure = settings.ttsEngine === "azure";
   if (azure) {
     await ensureAzureVoices();
@@ -245,12 +270,12 @@ async function writeGuideClipsTts(items: { s: number; t: string }[]): Promise<vo
     toast("error", tr("host.tts.novoice"));
     return;
   }
-  // Sort by beat and compute each change's gap to the NEXT one, so the SPEECH clips can be made to
-  // ABUT (fill the timeline up to the next clip) like the STRUCTURE clips — instead of tiny clips.
-  const ordered = [...items].sort((a, b) => a.s - b.s);
-  const DEFAULT_LAST = 4; // the final change has no "next" — give it a bar-ish tail
-  const gaps = ordered.map((it, i) => (i + 1 < ordered.length ? ordered[i + 1]!.s - it.s : DEFAULT_LAST));
-  const maxGapBeats = Math.max(DEFAULT_LAST, ...gaps);
+  // Each announcement clip fills from its start to `e` (the next change OR the end of its song — so
+  // it never bleeds across the following songs). Pad every WAV to the biggest span so the bridge can
+  // trim each to its exact length.
+  const ordered = withClipEnds(items.map((it) => ({ s: it.s, t: it.t })));
+  const gaps = ordered.map((it) => Math.max(0.25, it.e - it.s));
+  const maxGapBeats = Math.max(4, ...gaps);
   const tempo = transport.tempo > 0 ? transport.tempo : 120;
   const padSec = (maxGapBeats * 60) / tempo; // pad every announcement long enough to cover the biggest gap
   const labels = Array.from(new Set(ordered.map((i) => i.t.trim()).filter(Boolean)));
@@ -271,11 +296,11 @@ async function writeGuideClipsTts(items: { s: number; t: string }[]): Promise<vo
   }
   ttsBusy = null;
   broadcastState();
-  if (!palette.length) { toast("error", tr("host.tts.genfail")); return; }
+  if (!palette.length) { toast("error", tr(azure ? "host.tts.azuregenfail" : "host.tts.genfail")); return; }
   if (installSpeechFiles(paths) === 0) { toast("error", tr("host.guide.nolib")); return; }
-  // Send each occurrence with its end beat `e` (= start of the next change) so the bridge trims the
-  // padded clip to exactly fill the gap. TTS announcements land on the SPEECH track (auto-created).
-  const outItems = ordered.map((it, i) => ({ s: it.s, t: it.t, e: it.s + gaps[i]! }));
+  // Send each occurrence with its song-bounded end beat `e` so the bridge trims the padded clip to
+  // fill exactly up to the next change (or the song end). TTS lands on the SPEECH track (auto-created).
+  const outItems = ordered.map((it) => ({ s: it.s, t: it.t, e: it.e }));
   bridge.send(ADDR.cmdWriteGuide, [JSON.stringify({ track: settings.guideTrack || "SPEECH", items: outItems, palette })]);
 }
 
@@ -1153,9 +1178,9 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
         saveStructureDoc(abletonProject, structureDoc);
         broadcastState();
       }
-      const items = effectiveStructure().map((l) => ({ s: l.start, t: l.text }));
+      const items = withClipEnds(effectiveStructure().map((l) => ({ s: l.start, t: l.text })));
       if (!items.length) { toast("error", tr("host.structure.nolabels")); break; }
-      bridge.send(ADDR.cmdWriteStructure, [JSON.stringify(items)]);
+      bridge.send(ADDR.cmdWriteStructure, [JSON.stringify(items)]); // each item carries its `e` (song-bounded end)
       if (settings.guideAudioEnabled && c.guide) writeGuideClips(items);
       break;
     }

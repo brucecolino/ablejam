@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.10.0",
+    notes: {
+      it: [
+        "Clip di struttura (e audio guida) ora si fermano al confine del brano: l'ultima etichetta di una canzone NON invade più i brani successivi. Prima riempiva fino alla prossima etichetta, anche se in un altro brano — ora ogni clip finisce al massimo alla fine della sua canzone.",
+        "Audio guida Azure: messaggio d'errore più chiaro se la generazione fallisce pur avendo le voci caricate (di solito quota esaurita o regione della chiave).",
+        "⚠ Richiede il bridge v54: si installa da solo all'avvio dell'app — poi esci COMPLETAMENTE e riapri Ableton per caricarlo.",
+      ],
+      en: [
+        "Structure clips (and audio guide) now stop at the song boundary: a song's last label NO longer bleeds into the following songs. It used to fill up to the next label even in another song — now every clip ends at most at the end of its own song.",
+        "Azure audio guide: clearer error when generation fails despite the voices being loaded (usually exhausted quota or the key's region).",
+        "⚠ Requires bridge v54: it auto-installs on app launch — then FULLY quit and reopen Ableton to load it.",
+      ],
+    },
+  },
+  {
     version: "1.9.0",
     notes: {
       it: [
