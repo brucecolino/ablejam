@@ -335,106 +335,149 @@ function langName(l: string): string {
 // The in-app neural voice generator (Piper). Pick accent + gender, download the voice on first use,
 // tune speed/expressiveness, preview ("Ascolta"), and save/recall presets. Generated announcements
 // then replace the folder-of-files on the SPEECH/guide track at export time.
+// One Azure credential field (key/region): local draft while typing, committed on blur so the host
+// only re-fetches the voice list when you finish editing.
+function AzureField({ label, value, placeholder, keyName, send, password }: { label: string; value: string; placeholder: string; keyName: keyof Settings; send: Send; password?: boolean }) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  return (
+    <label className="setting">
+      <span className="setting-text"><span className="setting-label">{label}</span></span>
+      <input className="setting-select" style={{ maxWidth: 250, width: "100%" }} type={password ? "password" : "text"}
+        value={draft} placeholder={placeholder} onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => { if (draft !== value) send({ type: "command", command: "setSetting", key: keyName, value: draft }); }} />
+    </label>
+  );
+}
+
 function VoiceGenerator({ state, send }: { state: AppState; send: Send }) {
   const { tr } = useT();
   const s = state.settings;
-  const catalog = state.ttsCatalog ?? [];
-  const installed = new Set(state.ttsInstalledVoices ?? []);
+  const engine = s.ttsEngine === "azure" ? "azure" : "piper";
   const busy = state.ttsBusy;
-  const cur = catalog.find((v) => v.id === s.ttsVoice) ?? catalog[0];
-  const accent = cur?.lang ?? "it";
-  const gender = cur?.gender ?? "F";
+  const catalog = engine === "azure" ? (state.azureVoices ?? []) : (state.ttsCatalog ?? []);
+  const installed = engine === "azure" ? new Set(catalog.map((v) => v.id)) : new Set(state.ttsInstalledVoices ?? []);
+  const selectedId = engine === "azure" ? s.azureVoice : s.ttsVoice;
+  const cur = catalog.find((v) => v.id === selectedId) ?? catalog[0];
   const langs = Array.from(new Set(catalog.map((v) => v.lang)));
-
-  const pickVoice = (lang: string, g: string) => {
-    const v = catalog.find((x) => x.lang === lang && x.gender === g) ?? catalog.find((x) => x.lang === lang);
-    if (v) send({ type: "command", command: "setSetting", key: "ttsVoice", value: v.id });
-  };
+  const curLang = cur?.lang ?? langs[0] ?? "it";
+  const voicesForLang = catalog.filter((v) => v.lang === curLang);
+  const voiceKey: keyof Settings = engine === "azure" ? "azureVoice" : "ttsVoice";
+  const selectVoice = (id: string) => send({ type: "command", command: "setSetting", key: voiceKey, value: id });
+  const setLang = (lang: string) => { const v = catalog.find((x) => x.lang === lang); if (v) selectVoice(v.id); };
 
   const [speed, setSpeed] = useState(s.ttsSpeed ?? 1);
   const [expr, setExpr] = useState(s.ttsExpr ?? 0.667);
+  const [pitch, setPitch] = useState(s.ttsPitch ?? 0);
   useEffect(() => setSpeed(s.ttsSpeed ?? 1), [s.ttsSpeed]);
   useEffect(() => setExpr(s.ttsExpr ?? 0.667), [s.ttsExpr]);
-  const commit = (key: "ttsSpeed" | "ttsExpr", value: number) => send({ type: "command", command: "setSetting", key, value });
+  useEffect(() => setPitch(s.ttsPitch ?? 0), [s.ttsPitch]);
+  const commit = (key: keyof Settings, value: string | number) => send({ type: "command", command: "setSetting", key, value });
 
   const [sample, setSample] = useState("");
   const [presetName, setPresetName] = useState("");
   const savePreset = () => {
     const name = presetName.trim();
     if (!name || !cur) return;
-    const next: VoicePreset[] = [...(s.voicePresets ?? []).filter((p) => p.name !== name), { name, voiceId: cur.id, speed: s.ttsSpeed, expr: s.ttsExpr }];
+    const next: VoicePreset[] = [...(s.voicePresets ?? []).filter((p) => p.name !== name), { name, engine, voiceId: cur.id, speed: s.ttsSpeed, expr: s.ttsExpr, pitch: s.ttsPitch }];
     send({ type: "command", command: "setVoicePresets", presets: next });
     setPresetName("");
   };
   const loadPreset = (p: VoicePreset) => {
-    send({ type: "command", command: "setSetting", key: "ttsVoice", value: p.voiceId });
-    send({ type: "command", command: "setSetting", key: "ttsSpeed", value: p.speed });
-    send({ type: "command", command: "setSetting", key: "ttsExpr", value: p.expr });
+    commit("ttsEngine", p.engine ?? "piper");
+    commit(p.engine === "azure" ? "azureVoice" : "ttsVoice", p.voiceId);
+    commit("ttsSpeed", p.speed); commit("ttsExpr", p.expr); commit("ttsPitch", p.pitch ?? 0);
   };
   const delPreset = (name: string) => send({ type: "command", command: "setVoicePresets", presets: (s.voicePresets ?? []).filter((p) => p.name !== name) });
 
-  const voiceReady = cur ? installed.has(cur.id) : false;
+  const azureNoVoices = engine === "azure" && catalog.length === 0;
+  const voiceReady = engine === "azure" ? !!cur : (cur ? installed.has(cur.id) : false);
   const dling = !!busy && (busy.kind === "engine" || busy.kind === "voice");
 
   return (
     <div className="tts-gen">
-      <div className="settings-desc-small">{tr("tts.enginenote")}</div>
       <label className="setting">
-        <span className="setting-text"><span className="setting-label">{tr("tts.voice.label")}</span></span>
-        <span style={{ display: "flex", gap: 6 }}>
-          <select className="setting-select" value={accent} onChange={(e) => pickVoice(e.target.value, gender)}>
-            {langs.map((l) => <option key={l} value={l}>{langName(l)}</option>)}
-          </select>
-          <select className="setting-select" value={gender} onChange={(e) => pickVoice(accent, e.target.value)} style={{ maxWidth: 90 }}>
-            <option value="F">♀</option>
-            <option value="M">♂</option>
-          </select>
-        </span>
+        <span className="setting-text"><span className="setting-label">{tr("tts.engine.label")}</span><span className="setting-desc">{tr("tts.engine.desc")}</span></span>
+        <select className="setting-select" value={engine} onChange={(e) => commit("ttsEngine", e.target.value)}>
+          <option value="piper">{tr("tts.engine.piper")}</option>
+          <option value="azure">{tr("tts.engine.azure")}</option>
+        </select>
       </label>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 0 8px" }}>
-        <span className={"tts-status " + (voiceReady ? "ok" : "no")}>{cur?.label ?? "—"} · {voiceReady ? tr("tts.ready") : tr("tts.notready")}</span>
-        {!voiceReady && cur && (
-          <button className="settings-btn" style={{ marginTop: 0 }} disabled={!!busy} onClick={() => send({ type: "command", command: "downloadTtsVoice", voiceId: cur.id })}>
-            {dling ? tr("tts.dling") : `⬇ ${tr("tts.dl")}`}
-          </button>
-        )}
-      </div>
-      {dling && busy && (
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ height: 6, borderRadius: 999, background: "var(--bg)", border: "1px solid var(--border)", overflow: "hidden" }}>
-            <div style={{ height: "100%", width: busy.pct + "%", background: "var(--accent)", transition: "width .2s linear" }} />
-          </div>
-        </div>
+      {engine === "azure" ? (<>
+        <div className="settings-desc-small">{tr("tts.azure.note")}</div>
+        <AzureField label={tr("tts.azure.key")} value={s.azureKey ?? ""} placeholder={tr("tts.azure.keyph")} keyName="azureKey" send={send} password />
+        <AzureField label={tr("tts.azure.region")} value={s.azureRegion ?? ""} placeholder={tr("tts.azure.regionph")} keyName="azureRegion" send={send} />
+      </>) : (
+        <div className="settings-desc-small">{tr("tts.enginenote")}</div>
       )}
-      <label className="setting">
-        <span className="setting-text"><span className="setting-label">{tr("tts.speed")}</span><span className="setting-desc">{speed.toFixed(2)}×</span></span>
-        <input className="setting-range" type="range" min={0.5} max={2} step={0.05} value={speed}
-          onChange={(e) => setSpeed(Number(e.target.value))} onPointerUp={() => commit("ttsSpeed", speed)} onKeyUp={() => commit("ttsSpeed", speed)} />
-      </label>
-      <label className="setting">
-        <span className="setting-text"><span className="setting-label">{tr("tts.expr")}</span><span className="setting-desc">{expr.toFixed(2)}</span></span>
-        <input className="setting-range" type="range" min={0} max={1.2} step={0.05} value={expr}
-          onChange={(e) => setExpr(Number(e.target.value))} onPointerUp={() => commit("ttsExpr", expr)} onKeyUp={() => commit("ttsExpr", expr)} />
-      </label>
-      <div style={{ display: "flex", gap: 6, margin: "4px 0 12px" }}>
-        <input className="setting-select" style={{ flex: 1, maxWidth: "none" }} placeholder={tr("tts.sampleph")} value={sample} onChange={(e) => setSample(e.target.value)} />
-        <button className="settings-btn" style={{ marginTop: 0 }} disabled={!voiceReady || !!busy} onClick={() => cur && send({ type: "command", command: "previewTtsVoice", text: sample, voiceId: cur.id, speed: s.ttsSpeed, expr: s.ttsExpr })}>
-          {tr("tts.listen")}
-        </button>
-      </div>
-      <div className="settings-section">{tr("tts.presets")}</div>
-      <div style={{ display: "flex", gap: 6, margin: "2px 0 8px" }}>
-        <input className="setting-select" style={{ flex: 1, maxWidth: "none" }} placeholder={tr("tts.preset.nameph")} value={presetName} onChange={(e) => setPresetName(e.target.value)} />
-        <button className="settings-btn" style={{ marginTop: 0 }} onClick={savePreset}>{tr("tts.preset.save")}</button>
-      </div>
-      {(s.voicePresets ?? []).map((p) => (
-        <div key={p.name} className="tts-preset">
-          <span className="tts-preset-name">{p.name}</span>
-          <span className="tts-preset-meta">{catalog.find((v) => v.id === p.voiceId)?.label ?? p.voiceId} · {p.speed.toFixed(2)}× · {p.expr.toFixed(2)}</span>
-          <button className="tts-mini" onClick={() => loadPreset(p)}>{tr("tts.preset.load")}</button>
-          <button className="tts-mini" onClick={() => delPreset(p.name)}>{tr("tts.preset.del")}</button>
+      {azureNoVoices ? (
+        <div className="settings-desc-small" style={{ color: "#d66" }}>{tr("tts.azure.nokey")}</div>
+      ) : (<>
+        <label className="setting">
+          <span className="setting-text"><span className="setting-label">{tr("tts.voice.label")}</span>{engine === "azure" && <span className="setting-desc">{tr("tts.azure.count", { n: catalog.length })}</span>}</span>
+          <span style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <select className="setting-select" value={curLang} onChange={(e) => setLang(e.target.value)} style={{ maxWidth: 130 }}>
+              {langs.map((l) => <option key={l} value={l}>{langName(l)}</option>)}
+            </select>
+            <select className="setting-select" value={selectedId} onChange={(e) => selectVoice(e.target.value)} style={{ maxWidth: 210 }}>
+              {voicesForLang.map((v) => <option key={v.id} value={v.id}>{v.label} {v.gender === "F" ? "♀" : "♂"}</option>)}
+            </select>
+          </span>
+        </label>
+        {engine === "piper" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 0 8px" }}>
+            <span className={"tts-status " + (voiceReady ? "ok" : "no")}>{cur?.label ?? "—"} · {voiceReady ? tr("tts.ready") : tr("tts.notready")}</span>
+            {!voiceReady && cur && (
+              <button className="settings-btn" style={{ marginTop: 0 }} disabled={!!busy} onClick={() => send({ type: "command", command: "downloadTtsVoice", voiceId: cur.id })}>
+                {dling ? tr("tts.dling") : `⬇ ${tr("tts.dl")}`}
+              </button>
+            )}
+          </div>
+        )}
+        {dling && busy && (
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ height: 6, borderRadius: 999, background: "var(--bg)", border: "1px solid var(--border)", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: busy.pct + "%", background: "var(--accent)", transition: "width .2s linear" }} />
+            </div>
+          </div>
+        )}
+        <label className="setting">
+          <span className="setting-text"><span className="setting-label">{tr("tts.speed")}</span><span className="setting-desc">{speed.toFixed(2)}×</span></span>
+          <input className="setting-range" type="range" min={0.5} max={2} step={0.05} value={speed}
+            onChange={(e) => setSpeed(Number(e.target.value))} onPointerUp={() => commit("ttsSpeed", speed)} onKeyUp={() => commit("ttsSpeed", speed)} />
+        </label>
+        {engine === "piper" && (
+          <label className="setting">
+            <span className="setting-text"><span className="setting-label">{tr("tts.expr")}</span><span className="setting-desc">{expr.toFixed(2)}</span></span>
+            <input className="setting-range" type="range" min={0} max={1.2} step={0.05} value={expr}
+              onChange={(e) => setExpr(Number(e.target.value))} onPointerUp={() => commit("ttsExpr", expr)} onKeyUp={() => commit("ttsExpr", expr)} />
+          </label>
+        )}
+        <label className="setting">
+          <span className="setting-text"><span className="setting-label">{tr("tts.pitch")}</span><span className="setting-desc">{pitch > 0 ? "+" : ""}{pitch}</span></span>
+          <input className="setting-range" type="range" min={-12} max={12} step={1} value={pitch}
+            onChange={(e) => setPitch(Number(e.target.value))} onPointerUp={() => commit("ttsPitch", pitch)} onKeyUp={() => commit("ttsPitch", pitch)} />
+        </label>
+        <div style={{ display: "flex", gap: 6, margin: "4px 0 12px" }}>
+          <input className="setting-select" style={{ flex: 1, maxWidth: "none" }} placeholder={tr("tts.sampleph")} value={sample} onChange={(e) => setSample(e.target.value)} />
+          <button className="settings-btn" style={{ marginTop: 0 }} disabled={!voiceReady || !!busy} onClick={() => send({ type: "command", command: "previewTtsVoice", text: sample })}>
+            {tr("tts.listen")}
+          </button>
         </div>
-      ))}
+        <div className="settings-section">{tr("tts.presets")}</div>
+        <div style={{ display: "flex", gap: 6, margin: "2px 0 8px" }}>
+          <input className="setting-select" style={{ flex: 1, maxWidth: "none" }} placeholder={tr("tts.preset.nameph")} value={presetName} onChange={(e) => setPresetName(e.target.value)} />
+          <button className="settings-btn" style={{ marginTop: 0 }} onClick={savePreset}>{tr("tts.preset.save")}</button>
+        </div>
+        {(s.voicePresets ?? []).map((p) => (
+          <div key={p.name} className="tts-preset">
+            <span className="tts-preset-name">{p.name}</span>
+            <span className="tts-preset-meta">{p.engine === "azure" ? "Azure" : "Piper"} · {p.voiceId.replace(/Neural$/, "")} · {(p.speed ?? 1).toFixed(2)}×</span>
+            <button className="tts-mini" onClick={() => loadPreset(p)}>{tr("tts.preset.load")}</button>
+            <button className="tts-mini" onClick={() => delPreset(p.name)}>{tr("tts.preset.del")}</button>
+          </div>
+        ))}
+      </>)}
     </div>
   );
 }

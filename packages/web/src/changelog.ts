@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.7.0",
+    notes: {
+      it: [
+        "🎙️ Voci premium (Azure): nel Generatore voce puoi ora scegliere il motore \"Premium (Azure)\" e usare le stesse voci di alta qualità di Luvvoice — centinaia, inclusa Jenny — in tutte le lingue. Nessun download: sono tutte pronte. Ti basta creare una risorsa Azure Speech gratuita (free tier: 500.000 caratteri/mese), incollare Chiave e Regione, e le voci compaiono da sole.",
+        "Nuovo slider Tono (pitch) nelle impostazioni voce, per entrambi i motori.",
+        "Selettore voce migliorato: prima scegli la lingua, poi la voce fra tutte quelle disponibili (con indicazione uomo/donna). Piper resta come opzione offline gratuita.",
+      ],
+      en: [
+        "🎙️ Premium voices (Azure): the Voice generator now has a \"Premium (Azure)\" engine with the same high-quality voices as Luvvoice — hundreds, Jenny included — in every language. No downloads: all ready. Just create a free Azure Speech resource (free tier: 500,000 chars/month), paste the Key and Region, and the voices appear automatically.",
+        "New Pitch slider in the voice settings, for both engines.",
+        "Improved voice picker: choose the language first, then the voice among all available (with male/female marker). Piper stays as the free offline option.",
+      ],
+    },
+  },
+  {
     version: "1.6.1",
     notes: {
       it: [

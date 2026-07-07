@@ -159,9 +159,11 @@ export interface TrackDevices {
 /** A saved TTS voice preset the user can recall in the voice generator. */
 export interface VoicePreset {
   name: string;
+  engine: "piper" | "azure";
   voiceId: string;
   speed: number;
   expr: number;
+  pitch: number;
 }
 
 /** A downloadable TTS voice (catalog entry sent to the web for the voice picker). */
@@ -228,8 +230,19 @@ export interface Settings {
   ttsVoice: string;
   /** TTS speaking rate multiplier (0.5..2.0, 1 = normal). */
   ttsSpeed: number;
-  /** TTS expressiveness (0..1.5, ~0.667 = Piper default). */
+  /** TTS expressiveness (0..1.5, ~0.667 = Piper default; Piper only). */
   ttsExpr: number;
+  /** TTS pitch in semitones (−12..12, 0 = normal). */
+  ttsPitch: number;
+  /** Which voice engine generates the announcements: "piper" (offline neural, download-per-voice) or
+   * "azure" (Microsoft Cognitive Services — hundreds of premium voices incl. Jenny, online, BYO key). */
+  ttsEngine: "piper" | "azure";
+  /** Azure Speech subscription key (the user's own — free tier is plenty). Redacted for LAN clients. */
+  azureKey: string;
+  /** Azure Speech region, e.g. "westeurope", "eastus". */
+  azureRegion: string;
+  /** Selected Azure voice ShortName, e.g. "en-US-JennyNeural". */
+  azureVoice: string;
   /** Saved voice presets the user can recall (name + voice + speed + expr). */
   voicePresets: VoicePreset[];
   /** Master switch for play/stop plugin automation. When off, the rules below are ignored. */
@@ -317,6 +330,11 @@ export const defaultSettings: Settings = {
   ttsVoice: "it_IT-paola-medium",
   ttsSpeed: 1,
   ttsExpr: 0.667,
+  ttsPitch: 0,
+  ttsEngine: "piper",
+  azureKey: "",
+  azureRegion: "",
+  azureVoice: "",
   voicePresets: [],
   automationEnabled: false,
   pluginRules: [],
@@ -432,6 +450,10 @@ export interface AppState {
   ttsEngineReady: boolean;
   /** In-progress TTS download/generation, for the settings progress bar (null = idle). */
   ttsBusy: { kind: "engine" | "voice" | "preview" | "generate"; voiceId?: string; pct: number } | null;
+  /** Azure premium voices for the current key+region (empty until a valid key is set). */
+  azureVoices: TtsVoiceInfo[];
+  /** Whether the Azure key+region are set and returned a usable voice list. */
+  azureReady: boolean;
   /** True when a valid license key is stored — the full version is unlocked. When false the app
    * is locked to the demo setlist. */
   licensed: boolean;
@@ -491,6 +513,8 @@ export const initialState: AppState = {
   ttsInstalledVoices: [],
   ttsEngineReady: false,
   ttsBusy: null,
+  azureVoices: [],
+  azureReady: false,
   licensed: false,
   licenseEmail: "",
   activationState: "",
@@ -566,7 +590,8 @@ export type ClientCommand =
   | { type: "command"; command: "setPluginRules"; rules: PluginRule[] }
   | { type: "command"; command: "setVoicePresets"; presets: VoicePreset[] }
   | { type: "command"; command: "downloadTtsVoice"; voiceId: string }
-  | { type: "command"; command: "previewTtsVoice"; text?: string; voiceId: string; speed: number; expr: number }
+  | { type: "command"; command: "previewTtsVoice"; text?: string }
+  | { type: "command"; command: "refreshAzureVoices" }
   | { type: "command"; command: "generateSpeechFromMidi"; track: string }
   | { type: "command"; command: "setSetting"; key: keyof Settings; value: boolean | string | number };
 

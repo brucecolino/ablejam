@@ -6,7 +6,7 @@
 // self-contained (bundles espeak-ng-data + onnxruntime), so once extracted it just runs.
 // Output is 16 kHz mono 16-bit PCM WAV, loaded into Ableton exactly like the folder announcements.
 import { spawn } from "node:child_process";
-import { createWriteStream, existsSync, mkdirSync, rmSync, statSync, renameSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, rmSync, statSync, renameSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import https from "node:https";
 import { fileURLToPath } from "node:url";
@@ -236,19 +236,61 @@ export async function ensureVoice(id: string, onProgress?: (p: DlProgress) => vo
   return existsSync(onnx) && existsSync(json);
 }
 
-export interface SynthOpts { voiceId: string; speed?: number; expr?: number }
+export interface SynthOpts { voiceId: string; speed?: number; expr?: number; pitch?: number }
 
 function clamp(n: number, lo: number, hi: number): number { return Math.max(lo, Math.min(hi, n)); }
 
+/** Pitch-shift a 16-bit mono PCM WAV by resampling its data by `factor` samples (keeps the declared
+ * sample rate). Paired with a compensating length_scale at generation, this shifts pitch while
+ * leaving duration ~unchanged — dependency-free, fine for short cue words. Rewrites the WAV in place. */
+function pitchResampleWav(wavPath: string, factor: number): void {
+  const b = readFileSync(wavPath);
+  // Locate the fmt + data chunks (don't assume a fixed 44-byte header).
+  let off = 12, dataOff = -1, dataLen = 0, sampleRate = 22050, channels = 1, bits = 16;
+  while (off + 8 <= b.length) {
+    const id = b.toString("ascii", off, off + 4);
+    const sz = b.readUInt32LE(off + 4);
+    if (id === "fmt ") { channels = b.readUInt16LE(off + 10); sampleRate = b.readUInt32LE(off + 12); bits = b.readUInt16LE(off + 22); }
+    else if (id === "data") { dataOff = off + 8; dataLen = sz; break; }
+    off += 8 + sz + (sz & 1);
+  }
+  if (dataOff < 0 || bits !== 16 || channels !== 1) return; // only the canonical piper output
+  const n = Math.floor(dataLen / 2);
+  const src = new Int16Array(b.buffer, b.byteOffset + dataOff, n);
+  const outN = Math.max(1, Math.round(n * factor));
+  const out = new Int16Array(outN);
+  for (let i = 0; i < outN; i++) {
+    const p = i / factor;             // input position for output sample i
+    const i0 = Math.floor(p);
+    const frac = p - i0;
+    const s0 = src[i0] ?? 0;
+    const s1 = src[Math.min(i0 + 1, n - 1)] ?? 0;
+    out[i] = Math.max(-32768, Math.min(32767, Math.round(s0 + (s1 - s0) * frac)));
+  }
+  // Write a canonical 44-byte-header WAV.
+  const body = Buffer.from(out.buffer, out.byteOffset, outN * 2);
+  const h = Buffer.alloc(44);
+  h.write("RIFF", 0); h.writeUInt32LE(36 + body.length, 4); h.write("WAVE", 8);
+  h.write("fmt ", 12); h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(1, 22);
+  h.writeUInt32LE(sampleRate, 24); h.writeUInt32LE(sampleRate * 2, 28); h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34);
+  h.write("data", 36); h.writeUInt32LE(body.length, 40);
+  writeFileSync(wavPath, Buffer.concat([h, body]));
+}
+
 /** Synthesize `text` to a WAV at `outPath`. `speed` (0.5..2.0, 1 = normal) maps to Piper's
- * length_scale (inverse); `expr` (0..1.5, ~0.667 default) maps to noise_scale. */
+ * length_scale (inverse); `expr` (0..1.5, ~0.667 default) maps to noise_scale; `pitch` (semitones,
+ * −12..12) is applied by a host-side varispeed resample. */
 export async function synthesize(text: string, opts: SynthOpts, outPath: string): Promise<boolean> {
   const v = voiceById(opts.voiceId);
   if (!v || !engineReady()) return false;
   await ensureMacReady(); // macOS: unquarantine + ensure Rosetta 2 (x86_64 binary) before spawning
   const model = voiceModelPath(v.id);
   if (!existsSync(model)) return false;
-  const lengthScale = clamp(1 / (opts.speed && opts.speed > 0 ? opts.speed : 1), 0.3, 3);
+  const semis = clamp(opts.pitch ?? 0, -12, 12);
+  const ratio = Math.pow(2, semis / 12);                 // >1 = pitch up
+  const baseLen = 1 / (opts.speed && opts.speed > 0 ? opts.speed : 1);
+  // Generate `ratio`x longer so that decimating by `ratio` (pitch shift) restores the intended duration.
+  const lengthScale = clamp(baseLen * ratio, 0.3, 4);
   const noise = clamp(opts.expr ?? 0.667, 0, 1.5);
   mkdirSync(path.dirname(outPath), { recursive: true });
   const ok = await new Promise<boolean>((resolve) => {
@@ -264,7 +306,9 @@ export async function synthesize(text: string, opts: SynthOpts, outPath: string)
     c.on("close", (code, signal) => resolve(code === 0 && !signal));
     try { c.stdin.write(text.replace(/\r?\n/g, " ").trim() + "\n"); c.stdin.end(); } catch { resolve(false); }
   });
-  return ok && existsSync(outPath);
+  if (!ok || !existsSync(outPath)) return false;
+  if (Math.abs(semis) >= 0.5) { try { pitchResampleWav(outPath, 1 / ratio); } catch { /* keep unshifted on failure */ } }
+  return true;
 }
 
 /** Can the Piper binary actually execute here? Detects an OS that kills it at exec (e.g. Apple

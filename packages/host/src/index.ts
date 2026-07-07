@@ -14,6 +14,7 @@ import { listBluetooth, openBluetoothSettings } from "./bluetooth";
 import { hasAudioInterface } from "./audio";
 import { defaultSpeechDir, listSpeechFiles, matchSpeechFile, installSpeechFiles } from "./speech";
 import { VOICE_CATALOG, voiceById, installedVoices, engineReady, engineCanRun, ensureEngine, ensureVoice, synthesize, ttsCacheDir, type DlProgress } from "./tts";
+import { fetchAzureVoices, azureSynthesize, type AzureVoice } from "./azuretts";
 import nodePath from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import { readAbleton } from "./ableton";
@@ -172,6 +173,7 @@ const effectiveStructure = (): LyricLine[] => structureDoc ?? structureFromClips
 
 let guideAudio: { file: string; label: string }[] = []; // announcement files + matched labels (cached)
 let ttsBusy: AppState["ttsBusy"] = null; // in-progress TTS download/preview/generate (for the UI progress bar)
+let azureVoiceCache: AzureVoice[] = []; // Azure premium voices for the current key+region (with locale)
 /** Active speech folder: the user's custom one (when set and existing), else the bundled defaults. */
 function speechDir(): string {
   const custom = (settings.guideAudioFolder || "").trim();
@@ -222,11 +224,23 @@ function writeGuideClips(items: { s: number; t: string }[]): void {
   bridge.send(ADDR.cmdWriteGuide, [JSON.stringify({ track: settings.guideTrack, items, palette })]);
 }
 
-/** TTS mode: synthesise one WAV per unique label with the selected voice, install them into the
+/** Synthesise one label with whichever TTS engine is selected (Piper offline or Azure premium). */
+async function synthLabel(text: string, wav: string): Promise<boolean> {
+  if (settings.ttsEngine === "azure") {
+    const av = azureVoiceCache.find((v) => v.id === settings.azureVoice);
+    if (!av) return false;
+    return azureSynthesize(settings.azureKey, settings.azureRegion, av.id, av.locale, text, { rate: settings.ttsSpeed, pitch: settings.ttsPitch }, wav);
+  }
+  return synthesize(text, { voiceId: settings.ttsVoice, speed: settings.ttsSpeed, expr: settings.ttsExpr, pitch: settings.ttsPitch }, wav);
+}
+
+/** TTS mode: synthesise one WAV per unique label with the selected engine, install them into the
  * User Library, then hand the palette to the bridge (same clip-laying path as folder mode). */
 async function writeGuideClipsTts(items: { s: number; t: string }[]): Promise<void> {
-  const voiceId = settings.ttsVoice;
-  if (!engineReady() || !voiceById(voiceId) || !installedVoices().includes(voiceId)) {
+  const azure = settings.ttsEngine === "azure";
+  if (azure) {
+    if (!settings.azureKey || !settings.azureRegion || !azureVoiceCache.some((v) => v.id === settings.azureVoice)) { toast("error", tr("host.tts.noazurevoice")); return; }
+  } else if (!engineReady() || !voiceById(settings.ttsVoice) || !installedVoices().includes(settings.ttsVoice)) {
     toast("error", tr("host.tts.novoice"));
     return;
   }
@@ -240,7 +254,7 @@ async function writeGuideClipsTts(items: { s: number; t: string }[]): Promise<vo
   for (const l of labels) {
     const base = ttsFileBase(l);
     const wav = nodePath.join(ttsCacheDir(), `${base}.wav`);
-    const ok = await synthesize(l, { voiceId, speed: settings.ttsSpeed, expr: settings.ttsExpr }, wav);
+    const ok = await synthLabel(l, wav);
     if (ok) { palette.push({ label: l, item: base }); paths.push(wav); }
     done++;
     ttsBusy = { kind: "generate", pct: Math.floor((done / labels.length) * 100) };
@@ -252,6 +266,23 @@ async function writeGuideClipsTts(items: { s: number; t: string }[]): Promise<vo
   if (installSpeechFiles(paths) === 0) { toast("error", tr("host.guide.nolib")); return; }
   // TTS announcements land on the SPEECH track by default (auto-created by the bridge if missing).
   bridge.send(ADDR.cmdWriteGuide, [JSON.stringify({ track: settings.guideTrack || "SPEECH", items, palette })]);
+}
+
+/** Fetch the Azure voice catalog for the current key+region (on key/region change or manual refresh). */
+async function refreshAzureVoices(): Promise<void> {
+  if (!settings.azureKey || !settings.azureRegion) { azureVoiceCache = []; broadcastState(); return; }
+  try {
+    azureVoiceCache = await fetchAzureVoices(settings.azureKey, settings.azureRegion);
+    broadcastState();
+    if (!azureVoiceCache.length) toast("error", tr("host.tts.azurefail"));
+    else if (!settings.azureVoice || !azureVoiceCache.some((v) => v.id === settings.azureVoice)) {
+      const def = azureVoiceCache.find((v) => v.lang === "it") ?? azureVoiceCache[0];
+      if (def) applySetting("azureVoice", def.id); // pick a sensible default voice
+    }
+  } catch {
+    azureVoiceCache = []; broadcastState();
+    toast("error", tr("host.tts.azurefail"));
+  }
 }
 
 /** Download the Piper engine (first time only) + the chosen voice, reporting progress via ttsBusy. */
@@ -276,13 +307,16 @@ async function downloadTtsVoice(voiceId: string): Promise<void> {
   }
 }
 
-/** Generate a short sample and send it back (as a data: URL) to the requesting client to play. */
-async function previewTtsVoice(client: ClientMeta, opts: { text?: string; voiceId: string; speed: number; expr: number }): Promise<void> {
-  if (!engineReady() || !installedVoices().includes(opts.voiceId)) { toast("error", tr("host.tts.novoice")); return; }
-  const text = (opts.text && opts.text.trim()) || tr("host.tts.previewtext");
+/** Generate a short sample with the selected engine + current settings and send it back (as a data:
+ * URL) to the requesting client to play. */
+async function previewTtsVoice(client: ClientMeta, text?: string): Promise<void> {
+  if (settings.ttsEngine === "azure") {
+    if (!settings.azureKey || !settings.azureRegion || !azureVoiceCache.some((v) => v.id === settings.azureVoice)) { toast("error", tr("host.tts.noazurevoice")); return; }
+  } else if (!engineReady() || !installedVoices().includes(settings.ttsVoice)) { toast("error", tr("host.tts.novoice")); return; }
+  const sample = (text && text.trim()) || tr("host.tts.previewtext");
   const out = nodePath.join(ttsCacheDir(), "preview.wav");
-  ttsBusy = { kind: "preview", voiceId: opts.voiceId, pct: 0 }; broadcastState();
-  const ok = await synthesize(text, { voiceId: opts.voiceId, speed: opts.speed, expr: opts.expr }, out);
+  ttsBusy = { kind: "preview", pct: 0 }; broadcastState();
+  const ok = await synthLabel(sample, out);
   ttsBusy = null; broadcastState();
   if (!ok || !existsSync(out)) { toast("error", tr("host.tts.genfail")); return; }
   try {
@@ -445,6 +479,8 @@ function snapshot(): AppState {
     ttsInstalledVoices: installedVoices(),
     ttsEngineReady: engineReady(),
     ttsBusy,
+    azureVoices: azureVoiceCache.map((v) => ({ id: v.id, lang: v.lang, gender: v.gender, label: v.label })),
+    azureReady: azureVoiceCache.length > 0,
     licensed: li.licensed,
     licenseEmail: li.email,
     activationState,
@@ -610,7 +646,7 @@ function writeKeysToMarkers(): void {
 const server = new Server(snapshot);
 // LAN clients never see the license secrets nor the raw master device ids (anti-spoofing: a
 // viewer that could read a master's id could replay it in its own hello and self-promote).
-server.redactForRemote = (s) => ({ ...s, settings: { ...s.settings, licenseKey: "", activationToken: "", masterDevices: [] } });
+server.redactForRemote = (s) => ({ ...s, settings: { ...s.settings, licenseKey: "", activationToken: "", masterDevices: [], azureKey: "" } });
 /** Master = the host PC itself (loopback) or one of the (max 2) authorized remote devices. */
 function isMasterClient(client: ClientMeta): boolean {
   return client.isLocal || (!!client.deviceId && settings.masterDevices.some((m) => m.id === client.deviceId));
@@ -1000,8 +1036,8 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
 
 function applySetting(key: keyof Settings, value: boolean | string | number): void {
   const target = settings as unknown as Record<string, boolean | string | number>;
-  if (key === "emergencyNote" || key === "stopNote" || key === "ttsSpeed" || key === "ttsExpr") target[key] = Number(value);
-  else if (key === "emergencyPort" || key === "stopTrack" || key === "lyricsTrack" || key === "structureTrack" || key === "guideTrack" || key === "guideAudioFolder" || key === "guideMode" || key === "ttsVoice" || key === "colorScheme" || key === "setlistColorScheme" || key === "panicLabel" || key === "panicColor" || key === "language" || key === "medleyDisplay" || key === "clickIndicator" || key === "licenseKey") target[key] = String(value);
+  if (key === "emergencyNote" || key === "stopNote" || key === "ttsSpeed" || key === "ttsExpr" || key === "ttsPitch") target[key] = Number(value);
+  else if (key === "emergencyPort" || key === "stopTrack" || key === "lyricsTrack" || key === "structureTrack" || key === "guideTrack" || key === "guideAudioFolder" || key === "guideMode" || key === "ttsVoice" || key === "ttsEngine" || key === "azureKey" || key === "azureRegion" || key === "azureVoice" || key === "colorScheme" || key === "setlistColorScheme" || key === "panicLabel" || key === "panicColor" || key === "language" || key === "medleyDisplay" || key === "clickIndicator" || key === "licenseKey") target[key] = String(value);
   else target[key] = Boolean(value);
 }
 
@@ -1263,9 +1299,11 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
     case "setVoicePresets":
       settings.voicePresets = (c.presets || []).map((p) => ({
         name: String(p.name ?? ""),
+        engine: p.engine === "azure" ? "azure" : "piper",
         voiceId: String(p.voiceId ?? ""),
         speed: Number(p.speed) || 1,
         expr: Number(p.expr ?? 0.667),
+        pitch: Number(p.pitch) || 0,
       }));
       changed();
       break;
@@ -1273,7 +1311,10 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
       void downloadTtsVoice(String(c.voiceId));
       break;
     case "previewTtsVoice":
-      void previewTtsVoice(client, { text: c.text, voiceId: String(c.voiceId), speed: Number(c.speed) || 1, expr: Number(c.expr ?? 0.667) });
+      void previewTtsVoice(client, c.text);
+      break;
+    case "refreshAzureVoices":
+      void refreshAzureVoices();
       break;
     case "setSetting":
       applySetting(c.key, c.value);
@@ -1281,6 +1322,7 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
       if (c.key === "lyricsTrack") sendLyricsConfig(); // re-read lyrics from the new track
       if (c.key === "structureTrack") sendStructureConfig(); // re-read the structure from the new track
       if (c.key === "guideAudioFolder") refreshGuideAudio(); // re-scan + re-match the announcement files
+      if (c.key === "azureKey" || c.key === "azureRegion") void refreshAzureVoices(); // re-fetch premium voices
       if (c.key === "automationEnabled") applyPluginAutomation(transport.isPlaying, true); // enforce on toggle
       if (c.key === "demoMode") applyDemo(); // honour the toggle (only effective when licensed)
       if (c.key === "licenseKey") {
