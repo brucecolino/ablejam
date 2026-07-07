@@ -14,7 +14,7 @@ from .osc import OSCServer
 HOST_IP = "127.0.0.1"
 HOST_PORT = 39062     # the AbleJam host listens here for state
 LISTEN_PORT = 39061   # we listen here for commands from the host
-BRIDGE_VERSION = 57   # bump on every change; shown in the UI to confirm reloads
+BRIDGE_VERSION = 58   # bump on every change; shown in the UI to confirm reloads
 
 
 class AbleJam(ControlSurface):
@@ -1145,11 +1145,31 @@ class AbleJam(ControlSurface):
         except Exception:
             pass
 
+    def _get_browser(self):
+        # The Ableton browser. ableton.v2 exposes `application` as a PROPERTY (calling it raises
+        # "'Application' object is not callable"); older Live exposes application() as a method.
+        # Handle both, then fall back to Live.Application.
+        try:
+            app = self.application
+            app = app() if callable(app) else app
+            b = getattr(app, "browser", None)
+            if b is not None:
+                return b
+        except Exception:
+            pass
+        try:
+            import Live
+            return Live.Application.get_application().browser
+        except Exception:
+            pass
+        return None
+
     def _ensure_guide_palette(self, track, mapping):
-        # Auto-build the session palette: for every label with no palette clip yet, load its
-        # announcement audio from the User Library ("AbleJam Speech", copied there by the host)
-        # into an empty session slot via Live's browser, then rename the clip to the label.
-        # Best-effort: any failure leaves the manual-palette path intact.
+        # Auto-build the session palette: for every label with no palette clip yet, FIRE a browser
+        # load of its announcement audio (User Library "AbleJam Speech", copied there by the host)
+        # into its OWN empty session slot. Live decodes audio ASYNCHRONOUSLY, so the clip is NOT
+        # created synchronously — we record the fired loads in self._pending_guide_slots and the
+        # caller renames/uses them in a deferred pass (_finish_guide). Best-effort.
         try:
             have = set()
             for slot in track.clip_slots:
@@ -1167,21 +1187,10 @@ class AbleJam(ControlSurface):
             self._log("guide palette: track has %d named clip(s); %d of %d mapping entries need loading" % (len(have), len(missing), len(mapping)))
             if not missing:
                 return
-            # Access the browser explicitly so a Live-API failure here is VISIBLE (it used to be
-            # swallowed by the outer try, leaving "nopalette" with no explanation). Try the
-            # ControlSurface helper first, then Live.Application as a fallback.
-            browser = None
-            try:
-                browser = self.application().browser
-            except Exception as e:
-                self._log("guide palette: self.application().browser failed (%s) — trying Live.Application" % e)
+            browser = self._get_browser()
             if browser is None:
-                try:
-                    import Live
-                    browser = Live.Application.get_application().browser
-                except Exception as e:
-                    self._log("guide palette: cannot obtain the Ableton browser object: %s" % e)
-                    return
+                self._log("guide palette: cannot obtain the Ableton browser object")
+                return
             try:
                 user_library = browser.user_library
             except Exception as e:
@@ -1213,13 +1222,18 @@ class AbleJam(ControlSurface):
             except Exception:
                 return
             self._log("guide palette: folder found, %d loadable items, %d labels to load" % (len(items_by_name), len(missing)))
-            loaded = 0
             view = self._song.view
-            prev_track = None
-            try:
-                prev_track = view.selected_track
-            except Exception:
-                pass
+            # Distinct empty slots up front: each load needs its OWN slot, and the loaded clip does
+            # NOT appear synchronously (Live decodes audio on a later tick), so _first_empty_slot
+            # can't advance between loads. Record the fired loads; _finish_guide renames them later.
+            empty_slots = []
+            for slot in track.clip_slots:
+                try:
+                    if not slot.has_clip:
+                        empty_slots.append(slot)
+                except Exception:
+                    pass
+            si = 0
             for label, item_name in missing:
                 it = items_by_name.get(item_name)
                 if it is None:  # browser may show the name with its extension
@@ -1230,32 +1244,21 @@ class AbleJam(ControlSurface):
                 if it is None:
                     self._log("guide palette: no browser item matches '%s'" % item_name)
                     continue
-                slot = self._first_empty_slot(track)
-                if slot is None:
+                if si >= len(empty_slots):
+                    self._log("guide palette: not enough empty session slots for '%s'" % label)
                     continue
+                slot = empty_slots[si]
+                si += 1
                 try:
                     view.selected_track = track
                     view.highlighted_clip_slot = slot
-                    browser.load_item(it)
+                    browser.load_item(it)  # async: Live creates the audio clip on a later tick
+                    self._pending_guide_slots.append((slot, label))
                 except Exception as e:
                     self._log("guide palette: load_item failed for '%s': %s" % (label, e))
-                    continue
-                try:
-                    if slot.has_clip:
-                        slot.clip.name = label
-                        loaded += 1
-                    else:
-                        self._log("guide palette: load_item created no clip for '%s'" % label)
-                except Exception:
-                    pass
-            self._log("guide palette: loaded %d/%d announcements into session slots" % (loaded, len(missing)))
-            if prev_track is not None:
-                try:
-                    view.selected_track = prev_track
-                except Exception:
-                    pass
-        except Exception:
-            pass
+            self._log("guide palette: fired %d load(s); waiting for Live to create the clips" % len(self._pending_guide_slots))
+        except Exception as e:
+            self._log("guide palette: unexpected error while loading: %s" % e)
 
     def _write_guide(self, payload):
         # Audio guide track: duplicate the SESSION palette clip whose name matches each section
@@ -1280,7 +1283,55 @@ class AbleJam(ControlSurface):
         if track is None:
             self._osc.send("/ablejam/guidewrite", [0, total, "notrack"])
             return
+        # Fire the (async) sample loads for any missing announcement, then FINISH in a deferred pass:
+        # Live decodes audio on a later tick, so the loaded clips don't exist synchronously.
+        self._pending_guide_slots = []
         self._ensure_guide_palette(track, mapping)
+        self._pending_guide = {"track": track, "items": items, "mapping": mapping,
+                               "total": total, "pending": list(self._pending_guide_slots), "tries": 0}
+        if self._pending_guide_slots:
+            try:
+                self.schedule_message(3, self._finish_guide)  # ~300ms for Live to create the clips
+            except Exception:
+                self._finish_guide()  # no scheduler available → best-effort now
+        else:
+            self._finish_guide()  # nothing to load (palette already present) → write immediately
+
+    def _finish_guide(self, _param=None):
+        # Deferred phase: rename the freshly loaded clips (retrying while Live is still decoding the
+        # samples), then build the palette and write the arrangement clips.
+        d = getattr(self, "_pending_guide", None)
+        if not d:
+            return
+        pending = d.get("pending") or []
+        ready = 0
+        for slot, label in pending:
+            try:
+                if slot.has_clip:
+                    ready += 1
+                    if (slot.clip.name or "").strip().lower() != label.strip().lower():
+                        try:
+                            slot.clip.name = label
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+        if pending and ready < len(pending) and d.get("tries", 0) < 8:
+            d["tries"] = d.get("tries", 0) + 1
+            self._log("guide palette: %d/%d clips ready, waiting for Live to finish decoding..." % (ready, len(pending)))
+            try:
+                self.schedule_message(3, self._finish_guide)
+                return
+            except Exception:
+                pass  # can't reschedule → fall through and write with what's ready
+        if pending:
+            self._log("guide palette: loaded %d/%d announcements into session slots" % (ready, len(pending)))
+        self._pending_guide = None
+        self._write_guide_arrangement(d["track"], d["items"], d["mapping"], d["total"])
+
+    def _write_guide_arrangement(self, track, items, mapping, total):
+        # Build the palette from the session slots (label -> session clip), then duplicate each into
+        # the arrangement at its section start, trimmed to the gap. Idempotent (skips occupied beats).
         palette = {}
         try:
             for slot in track.clip_slots:

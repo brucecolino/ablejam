@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.14.0",
+    notes: {
+      it: [
+        "🔊 RISOLTO l'audio guida che non veniva generato! Causa: Ableton decodifica i file audio in modo asincrono, quindi la clip non esisteva ancora nell'istante in cui il bridge provava a usarla (falliva con \"nopalette\", 0 clip caricate). Ora il bridge carica gli annunci, aspetta che Live finisca di crearli e POI li scrive nell'arrangiamento. Sistemato anche l'accesso al browser di Ableton (usava una chiamata sbagliata per questa versione di Live).",
+        "⚠ Richiede il bridge v58: si installa da solo all'avvio — poi esci COMPLETAMENTE da Ableton (Ctrl/Cmd+Q) e riaprilo; verifica \"v58\" in Impostazioni → Progetto Ableton. Assicurati che la traccia guida sia una traccia AUDIO con qualche slot di sessione vuoto.",
+      ],
+      en: [
+        "🔊 FIXED the audio guide not being generated! Cause: Ableton decodes audio files asynchronously, so the clip didn't exist yet at the instant the bridge tried to use it (failed with \"nopalette\", 0 clips loaded). The bridge now loads the announcements, waits for Live to finish creating them, and THEN writes them into the arrangement. Also fixed access to Ableton's browser (it used a call that isn't valid in this Live version).",
+        "⚠ Requires bridge v58: it auto-installs on launch — then FULLY quit Ableton (Ctrl/Cmd+Q) and reopen; check \"v58\" in Settings → Ableton Project. Make sure the guide track is an AUDIO track with some empty session slots.",
+      ],
+    },
+  },
+  {
     version: "1.13.0",
     notes: {
       it: [
