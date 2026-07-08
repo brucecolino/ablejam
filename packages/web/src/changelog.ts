@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.18.0",
+    notes: {
+      it: [
+        "\"Ricava la struttura da una traccia audio\" ora usa Azure Fast Transcription: legge anche i file MP3/FLAC (prima solo WAV → i tuoi MP3 fallivano), fa UNA sola trascrizione per file (anche se molte clip condividono lo stesso audio), usa le tue etichette come suggerimento (precisione più alta) e assegna a ogni clip l'etichetta parlata nella SUA posizione grazie ai timestamp (niente più regioni con più etichette insieme).",
+        "Il Log mostra, per ogni file, quante frasi sono state riconosciute, e per ogni clip la frase assegnata e l'etichetta finale.",
+        "Nessun aggiornamento del bridge necessario (resta v62). Serve la chiave Azure (la stessa delle voci).",
+      ],
+      en: [
+        "\"Derive the structure from an audio track\" now uses Azure Fast Transcription: it also reads MP3/FLAC files (before, WAV only → your MP3s failed), does ONE transcription per file (even when many clips share the same audio), uses your labels as hints (higher accuracy) and assigns each clip the label spoken in ITS position via timestamps (no more regions with several labels lumped together).",
+        "The Log shows, per file, how many phrases were recognized, and per clip the assigned phrase and the final label.",
+        "No bridge update needed (stays v62). Requires the Azure key (same as the voices).",
+      ],
+    },
+  },
+  {
     version: "1.17.2",
     notes: {
       it: [
