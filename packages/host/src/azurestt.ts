@@ -12,10 +12,11 @@ export interface FastPhrase {
   confidence: number;  // 0..1
 }
 
-/** Fast-transcribe a whole audio file. `phrases` biases recognition toward the known label
- * vocabulary. Returns the phrases (empty if no speech) or null on network / non-2xx. */
+/** Fast-transcribe a whole audio file. `locales` are BCP-47 candidates (e.g. ["it-IT"]); an EMPTY
+ * array turns on multilingual auto-detection (best for mixed IT/EN speech). `phrases` biases
+ * recognition toward the known labels. Returns the phrases (empty if no speech) or null on error. */
 export async function azureFastTranscribe(
-  key: string, region: string, filePath: string, locale: string, phrases: string[],
+  key: string, region: string, filePath: string, locales: string[], phrases: string[],
 ): Promise<FastPhrase[] | null> {
   if (!key || !region) return null;
   let body: Buffer;
@@ -26,7 +27,7 @@ export async function azureFastTranscribe(
   // Region host form (reuses the short settings.azureRegion — no extra config). Documented as accepted.
   const url = `https://${region}.api.cognitive.microsoft.com/speechtotext/transcriptions:transcribe?api-version=2024-11-15`;
   const definition = {
-    locales: [locale || "it-IT"],
+    locales,                     // [] → multilingual auto-detect; else candidate languages
     profanityFilterMode: "None", // don't mask short section words ("stop", exclamations)
     phraseList: { phrases: phrases.slice(0, 500) }, // biasing — array of strings only
   };
@@ -53,7 +54,7 @@ export async function azureFastTranscribe(
   }
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    console.error(`[azure] fast-stt HTTP ${res.status} (region "${region}", locale "${locale}") ${detail.slice(0, 300)}`);
+    console.error(`[azure] fast-stt HTTP ${res.status} (region "${region}", locales "${locales.join(",") || "auto"}") ${detail.slice(0, 300)}`);
     return null;
   }
   let json: Record<string, unknown>;

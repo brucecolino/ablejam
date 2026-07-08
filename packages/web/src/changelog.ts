@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.18.1",
+    notes: {
+      it: [
+        "Trascrizione struttura molto più precisa su audio misto italiano/inglese: nuova opzione lingua \"Auto (rileva)\" (predefinita) che riconosce automaticamente la lingua di ogni annuncio — prima, fissando una sola lingua, il resto non veniva capito.",
+        "In più, i NOMI delle clip (es. \"WALK OFF\", \"SET A VIBE\") vengono usati come suggerimento per il riconoscimento: quando il nome coincide col parlato la precisione sale molto.",
+        "Nessun aggiornamento del bridge (resta v62).",
+      ],
+      en: [
+        "Much more accurate structure transcription on mixed Italian/English audio: new \"Auto (detect)\" language option (default) that auto-detects each announcement's language — before, forcing a single language left the rest unrecognized.",
+        "Also, the clip NAMES (e.g. \"WALK OFF\", \"SET A VIBE\") are used as recognition hints: when the name matches what's spoken, accuracy jumps.",
+        "No bridge update (stays v62).",
+      ],
+    },
+  },
+  {
     version: "1.18.0",
     notes: {
       it: [

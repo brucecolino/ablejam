@@ -384,8 +384,13 @@ async function transcribeStructureFromClips(clips: TrackClip[], locale: string):
   if (!settings.azureKey || !settings.azureRegion) { toast("error", tr("host.stt.nokey")); return; }
   const audio = clips.filter((c) => c.file);
   if (!audio.length) { toast("error", tr("host.stt.noaudio")); return; }
-  const loc = locale || "it-IT";
+  // "auto"/empty → multilingual auto-detect (best for mixed IT/EN speech); else one candidate locale.
+  const locales = (!locale || locale === "auto") ? [] : [locale];
   const vocab = Array.from(new Set([...(settings.structureLabels ?? []), ...DEFAULT_STRUCTURE_LABELS]));
+  // Bias recognition toward BOTH the known labels AND the clip names (stripped of the " - SPEECH"
+  // suffix): the clip name is usually what's spoken, so it sharply improves accuracy — incl. English.
+  const nameHints = audio.map((c) => cleanLabel(c.t.replace(/\s*[-–]\s*speech\s*$/i, ""))).filter(Boolean);
+  const phraseList = Array.from(new Set([...vocab, ...nameHints])).slice(0, 500);
   // Group clips by source file → one Fast Transcription call per distinct file.
   const byFile = new Map<string, { file: string; clips: TrackClip[] }>();
   for (const c of audio) {
@@ -393,13 +398,13 @@ async function transcribeStructureFromClips(clips: TrackClip[], locale: string):
     if (!byFile.has(k)) byFile.set(k, { file: c.file, clips: [] });
     byFile.get(k)!.clips.push(c);
   }
-  log(`transcribe: ${audio.length} clip(s) across ${byFile.size} file(s), locale=${loc}, vocab=${vocab.length} phrases`);
+  log(`transcribe: ${audio.length} clip(s) across ${byFile.size} file(s), lang=${locales.length ? locales.join(",") : "auto"}, ${phraseList.length} phrase hints`);
   const results: { s: number; t: string }[] = [];
   ttsBusy = { kind: "generate", pct: 0 };
   broadcastState();
   let done = 0;
   for (const { file, clips: fileClips } of byFile.values()) {
-    const phrases = await azureFastTranscribe(settings.azureKey, settings.azureRegion, file, loc, vocab);
+    const phrases = await azureFastTranscribe(settings.azureKey, settings.azureRegion, file, locales, phraseList);
     if (phrases == null) {
       log(`transcribe: file "${file}" → request FAILED (see below / bad key/region?); ${fileClips.length} clip(s) skipped`);
     } else if (!phrases.length) {

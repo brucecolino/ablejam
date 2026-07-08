@@ -402,9 +402,8 @@ function TranscribeStructure({ state, send }: { state: AppState; send: Send }) {
   const options = state.tracks.length ? state.tracks : state.midiTracks;
   const speechTrack = state.tracks.find((t) => /speech/i.test(t)) ?? "";
   const [track, setTrack] = useState<string>(speechTrack || options[0] || "");
-  const uiToLocale: Record<string, string> = { it: "it-IT", en: "en-US", es: "es-ES", fr: "fr-FR" };
-  const [locale, setLocale] = useState<string>(uiToLocale[s.language] ?? "it-IT");
-  const langs = [{ id: "it-IT", label: "Italiano" }, { id: "en-US", label: "English" }, { id: "es-ES", label: "Español" }, { id: "fr-FR", label: "Français" }];
+  const [locale, setLocale] = useState<string>("auto"); // auto-detect handles mixed IT/EN speech
+  const langs = [{ id: "auto", label: tr("stt.lang.auto") }, { id: "it-IT", label: "Italiano" }, { id: "en-US", label: "English" }, { id: "es-ES", label: "Español" }, { id: "fr-FR", label: "Français" }];
   const busy = state.ttsBusy != null;
   const hasKey = !!(s.azureKey && s.azureRegion);
   // Same saved Azure key as the voices; offer a compact entry here so the tool stands alone.
