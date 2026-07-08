@@ -14,7 +14,7 @@ from .osc import OSCServer
 HOST_IP = "127.0.0.1"
 HOST_PORT = 39062     # the AbleJam host listens here for state
 LISTEN_PORT = 39061   # we listen here for commands from the host
-BRIDGE_VERSION = 61   # bump on every change; shown in the UI to confirm reloads
+BRIDGE_VERSION = 62   # bump on every change; shown in the UI to confirm reloads
 
 
 class AbleJam(ControlSurface):
@@ -914,6 +914,41 @@ class AbleJam(ControlSurface):
         except Exception:
             return None
 
+    def _clip_file_region_sec(self, clip):
+        # [fileStartSec, fileEndSec] region of the clip's source file that it plays. Unwarped audio:
+        # start/end markers ARE file seconds. Warped: map the marker beats via the warp markers
+        # ({beat_time in beats, sample_time in seconds}). Returns (start, end); end < 0 = "to EOF".
+        try:
+            r0 = float(clip.start_marker); r1 = float(clip.end_marker)
+        except Exception:
+            return (0.0, -1.0)
+        try:
+            warped = bool(clip.warping)
+        except Exception:
+            warped = False
+        if not warped:
+            return (r0, r1)
+        try:
+            wm = sorted([(float(m.beat_time), float(m.sample_time)) for m in clip.warp_markers], key=lambda x: x[0])
+        except Exception:
+            wm = []
+        if len(wm) < 2:
+            return (0.0, -1.0)  # can't map without at least two markers → whole file
+
+        def b2s(b):
+            m0, m1 = wm[0], wm[1]
+            if b >= wm[-1][0]:
+                m0, m1 = wm[-2], wm[-1]
+            elif b > wm[0][0]:
+                for i in range(len(wm) - 1):
+                    if wm[i][0] <= b <= wm[i + 1][0]:
+                        m0, m1 = wm[i], wm[i + 1]
+                        break
+            db = m1[0] - m0[0]
+            return m0[1] if db == 0 else m0[1] + ((b - m0[0]) / db) * (m1[1] - m0[1])
+
+        return (b2s(r0), b2s(r1))
+
     def _read_clips(self, a):
         # Read the named arrangement clips (name + start beat) of a track chosen by the host — the
         # STRUCTURE track when the name is empty, else any track by exact name. Used to GENERATE the
@@ -944,28 +979,19 @@ class AbleJam(ControlSurface):
                         nm = clip.name or ""
                         if not nm.strip():
                             continue
-                        item = {"t": nm, "s": float(clip.start_time), "e": float(clip.end_time)}
-                        # For AUDIO clips also report the source file + the region it plays, so the host
-                        # can slice that region and transcribe it (speech → structure labels). Markers
-                        # are in SECONDS for unwarped clips, BEATS for warped (mapped via warp_markers).
+                        item = {"t": nm, "s": float(clip.start_time)}
+                        # For AUDIO clips also report the source file + the [start,end] seconds region
+                        # it plays, so the host can slice that region and transcribe it. The region is
+                        # computed HERE (keeps the reply small — no warp-marker arrays over OSC).
                         try:
                             if getattr(clip, "is_audio_clip", False):
                                 fp = clip.file_path or ""
                                 if fp:
                                     audio_clips += 1
-                                    warped = bool(getattr(clip, "warping", False))
+                                    fs, fe = self._clip_file_region_sec(clip)
                                     item["file"] = fp
-                                    item["warp"] = warped
-                                    item["sm"] = float(clip.start_marker)
-                                    item["em"] = float(clip.end_marker)
-                                    item["sr"] = float(getattr(clip, "sample_rate", 0) or 0)
-                                    item["slen"] = float(getattr(clip, "sample_length", 0) or 0)
-                                    if warped:
-                                        try:
-                                            item["wm"] = [{"b": float(m.beat_time), "s": float(m.sample_time)}
-                                                          for m in clip.warp_markers]
-                                        except Exception:
-                                            pass
+                                    item["fs"] = fs
+                                    item["fe"] = fe
                         except Exception:
                             pass
                         out.append(item)

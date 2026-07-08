@@ -313,39 +313,11 @@ async function writeGuideClipsTts(items: { s: number; t: string; e?: number }[])
   bridge.send(ADDR.cmdWriteGuide, [JSON.stringify({ track, items: outItems, palette: paletteWithPaths })]);
 }
 
-/** A clip read from a track by the bridge (name + arrangement beats, plus audio-region info when it's
- * an audio clip: source file + the region it plays — markers are SECONDS if unwarped, BEATS if warped). */
+/** A clip read from a track by the bridge: name + arrangement start beat, plus (for audio clips) the
+ * source file and the [fs, fe] SECONDS region it plays — computed bridge-side (fe < 0 = to EOF). */
 interface TrackClip {
-  t: string; s: number; e: number;
-  file: string; warp: boolean; sm: number; em: number; sr: number; slen: number;
-  wm: { b: number; s: number }[];
-}
-
-/** The [fileStartSec, fileEndSec] region of a clip's source file that it plays. Unwarped audio: the
- * start/end markers ARE file seconds. Warped: map the marker beats through the warp markers. Falls
- * back to the whole file when the region is missing/invalid. */
-function clipFileRegionSec(c: TrackClip): [number, number] {
-  const dur = (c.slen > 0 && c.sr > 0) ? c.slen / c.sr : Infinity; // whole-file duration (or unknown)
-  let r0 = c.sm, r1 = c.em;
-  if (c.warp && c.wm.length >= 2) {
-    const wm = [...c.wm].sort((a, b) => a.b - b.b);
-    const beatToSec = (beat: number): number => {
-      // Deterministic segment pick: at/after the last marker → last segment (extrapolate forward);
-      // at/before the first → first segment (extrapolate backward); else the containing segment.
-      let m0 = wm[0]!, m1 = wm[1]!;
-      if (beat >= wm[wm.length - 1]!.b) { m0 = wm[wm.length - 2]!; m1 = wm[wm.length - 1]!; }
-      else if (beat > wm[0]!.b) {
-        for (let i = 0; i < wm.length - 1; i++) {
-          if (wm[i]!.b <= beat && beat <= wm[i + 1]!.b) { m0 = wm[i]!; m1 = wm[i + 1]!; break; }
-        }
-      }
-      const db = m1.b - m0.b;
-      return db === 0 ? m0.s : m0.s + ((beat - m0.b) / db) * (m1.s - m0.s);
-    };
-    r0 = beatToSec(c.sm); r1 = beatToSec(c.em);
-  }
-  if (!(r1 > r0) || !Number.isFinite(r0) || r0 < 0) return [0, dur]; // invalid / whole-file clip → whole file
-  return [r0, r1];
+  t: string; s: number;
+  file: string; fs: number; fe: number;
 }
 
 /** Clean a raw transcription into a readable label (drop trailing punctuation, collapse whitespace). */
@@ -381,7 +353,8 @@ async function transcribeStructureFromClips(clips: TrackClip[], locale: string):
   broadcastState();
   let i = 0;
   for (const c of audio) {
-    const [a, b] = clipFileRegionSec(c);
+    const a = Math.max(0, c.fs);
+    const b = (c.fe < 0 || c.fe <= a) ? Infinity : c.fe; // fe < 0 (or invalid) → to end of file
     const wav = nodePath.join(ttsCacheDir(), `stt-${i}.wav`);
     const bLbl = Number.isFinite(b) ? b.toFixed(2) : "end";
     if (!sliceWavToMono16k(c.file, a, b, wav)) {
@@ -1197,14 +1170,9 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
         clips = arr.map((c) => ({
           t: String(c.t ?? "").trim(),
           s: Number(c.s) || 0,
-          e: Number(c.e) || 0,
           file: typeof c.file === "string" ? c.file : "",
-          warp: !!c.warp,
-          sm: Number(c.sm) || 0,
-          em: Number(c.em) || 0,
-          sr: Number(c.sr) || 0,
-          slen: Number(c.slen) || 0,
-          wm: Array.isArray(c.wm) ? (c.wm as Array<Record<string, unknown>>).map((m) => ({ b: Number(m.b) || 0, s: Number(m.s) || 0 })) : [],
+          fs: Number(c.fs) || 0,
+          fe: typeof c.fe === "number" ? c.fe : -1,
         })).filter((c) => c.t.length > 0);
       } catch { /* ignore malformed */ }
       if (pending.mode === "guide") {

@@ -75,6 +75,14 @@ class OSCServer(object):
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         except OSError:
             pass
+        # Bigger send/recv buffers: some replies (e.g. reading a track's 50+ audio clips with file
+        # paths) exceed the small default UDP buffer (~8 KB on Windows) and sendto() would fail
+        # silently with WSAEMSGSIZE. 1 MB comfortably fits any single reply.
+        for opt in (socket.SO_SNDBUF, socket.SO_RCVBUF):
+            try:
+                self._sock.setsockopt(socket.SOL_SOCKET, opt, 1 << 20)
+            except OSError:
+                pass
         self._sock.bind(("0.0.0.0", local_port))
 
     def on(self, address, fn):

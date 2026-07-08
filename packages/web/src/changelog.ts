@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.17.1",
+    notes: {
+      it: [
+        "Fix: la trascrizione da traccia audio non partiva con molte clip. Leggendo una traccia con tante clip (es. 59), la risposta era troppo grande per il buffer UDP di Windows e andava persa (\"Nessuna risposta da Ableton\"). Ora i buffer sono più grandi e la regione audio viene calcolata dal bridge (risposta molto più piccola). Funziona anche con decine di clip.",
+        "⚠ Richiede il bridge v62: si installa da solo all'avvio — poi esci COMPLETAMENTE da Ableton (Ctrl/Cmd+Q) e riaprilo; verifica \"v62\" in Impostazioni → Progetto Ableton.",
+      ],
+      en: [
+        "Fix: transcribing from an audio track failed with many clips. Reading a track with lots of clips (e.g. 59) produced a reply too large for Windows' UDP buffer, so it was dropped (\"No reply from Ableton\"). The buffers are now larger and the audio region is computed on the bridge (much smaller reply). Works with dozens of clips.",
+        "⚠ Requires bridge v62: it auto-installs on launch — then FULLY quit Ableton (Ctrl/Cmd+Q) and reopen; check \"v62\" in Settings → Ableton Project.",
+      ],
+    },
+  },
+  {
     version: "1.17.0",
     notes: {
       it: [
