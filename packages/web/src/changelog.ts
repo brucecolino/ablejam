@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.17.2",
+    notes: {
+      it: [
+        "\"Ricava la struttura da una traccia audio\" è ora una sezione a sé (Impostazioni → Progetto Ableton), separata dalla generazione dell'audio guida: analizza l'audio della tua traccia SPEECH e ricrea le etichette MIDI sulla traccia STRUCTURE. Funziona in autonomia — se non hai ancora inserito la chiave Azure, la puoi mettere direttamente lì.",
+        "Nessun aggiornamento del bridge necessario (resta v62).",
+      ],
+      en: [
+        "\"Derive the structure from an audio track\" is now its own section (Settings → Ableton Project), separate from the audio-guide generation: it analyzes your SPEECH track's audio and recreates the MIDI labels on the STRUCTURE track. It stands alone — if you haven't entered the Azure key yet, you can set it right there.",
+        "No bridge update needed (stays v62).",
+      ],
+    },
+  },
+  {
     version: "1.17.1",
     notes: {
       it: [

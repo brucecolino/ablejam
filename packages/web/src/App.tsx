@@ -392,21 +392,46 @@ function GuideFromTrack({ state, send }: { state: AppState; send: Send }) {
   );
 }
 
-/** "Derive the structure from an audio track": transcribe each clip of an audio track (e.g. SPEECH)
- * with Azure STT, match to a structure label, and write markers onto the STRUCTURE track. */
+/** "Derive the structure from an audio track" — a STANDALONE tool (separate from the audio-guide
+ * generation): transcribe each clip of a recorded speech track with Azure STT, match to a structure
+ * label, and write the MIDI labels onto the STRUCTURE track. Carries its own Azure key entry so it
+ * works without opening the voice settings. */
 function TranscribeStructure({ state, send }: { state: AppState; send: Send }) {
   const { tr } = useT();
+  const s = state.settings;
   const options = state.tracks.length ? state.tracks : state.midiTracks;
   const speechTrack = state.tracks.find((t) => /speech/i.test(t)) ?? "";
   const [track, setTrack] = useState<string>(speechTrack || options[0] || "");
   const uiToLocale: Record<string, string> = { it: "it-IT", en: "en-US", es: "es-ES", fr: "fr-FR" };
-  const [locale, setLocale] = useState<string>(uiToLocale[state.settings.language] ?? "it-IT");
+  const [locale, setLocale] = useState<string>(uiToLocale[s.language] ?? "it-IT");
   const langs = [{ id: "it-IT", label: "Italiano" }, { id: "en-US", label: "English" }, { id: "es-ES", label: "Español" }, { id: "fr-FR", label: "Français" }];
   const busy = state.ttsBusy != null;
+  const hasKey = !!(s.azureKey && s.azureRegion);
+  // Same saved Azure key as the voices; offer a compact entry here so the tool stands alone.
+  const [keyDraft, setKeyDraft] = useState(s.azureKey ?? "");
+  const [regionDraft, setRegionDraft] = useState(s.azureRegion ?? "");
+  useEffect(() => setKeyDraft(s.azureKey ?? ""), [s.azureKey]);
+  useEffect(() => setRegionDraft(s.azureRegion ?? ""), [s.azureRegion]);
+  const saveAzure = () => {
+    send({ type: "command", command: "setSetting", key: "azureKey", value: keyDraft.trim() });
+    send({ type: "command", command: "setSetting", key: "azureRegion", value: regionDraft.trim().toLowerCase() });
+  };
   return (
     <div className="guide-fromtrack">
-      <div className="settings-section" style={{ marginTop: 6 }}>{tr("stt.title")}</div>
+      <div className="settings-section" style={{ marginTop: 0 }}>{tr("stt.title")}</div>
       <div className="settings-desc-small">{tr("stt.desc")}</div>
+      {!hasKey && (<>
+        <div className="settings-desc-small">{tr("stt.needkey")}</div>
+        <label className="setting">
+          <span className="setting-text"><span className="setting-label">{tr("tts.azure.key")}</span></span>
+          <input className="setting-select" style={{ maxWidth: 250, width: "100%" }} type="password" autoComplete="off" value={keyDraft} placeholder={tr("tts.azure.keyph")} onChange={(e) => setKeyDraft(e.target.value)} />
+        </label>
+        <label className="setting">
+          <span className="setting-text"><span className="setting-label">{tr("tts.azure.region")}</span></span>
+          <input className="setting-select" style={{ maxWidth: 250, width: "100%" }} value={regionDraft} placeholder={tr("tts.azure.regionph")} onChange={(e) => setRegionDraft(e.target.value)} />
+        </label>
+        <button className="settings-btn" style={{ marginTop: 0 }} disabled={!keyDraft.trim() || !regionDraft.trim()} onClick={saveAzure}>💾 {tr("tts.azure.save")}</button>
+      </>)}
       <label className="setting">
         <span className="setting-text"><span className="setting-label">{tr("stt.track")}</span></span>
         <select className="setting-select" value={track} onChange={(e) => setTrack(e.target.value)}>
@@ -420,7 +445,7 @@ function TranscribeStructure({ state, send }: { state: AppState; send: Send }) {
           {langs.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
         </select>
       </label>
-      <button className="settings-btn" disabled={busy || !state.bridgeConnected}
+      <button className="settings-btn" disabled={busy || !state.bridgeConnected || !hasKey}
         onClick={() => send({ type: "command", command: "transcribeStructureFromTrack", track, locale })}>
         <ActionIcon name="edit" /> {tr("stt.btn")}
       </button>
@@ -1726,9 +1751,14 @@ function SettingsPanel({ state, send, onClose, onOpenSetup, isMaster = true, sel
                 <div className="settings-desc-small">{tr("structure.palette.hint")}</div>
               </>)}
               <GuideFromTrack state={state} send={send} />
-              <TranscribeStructure state={state} send={send} />
             </>)}
             <button className="settings-btn" onClick={() => setShowStructEd(true)}><ActionIcon name="edit" /> {tr("structure.openEditor")}</button>
+          </section>
+
+          {/* Build the STRUCTURE (MIDI labels) from an existing recorded speech track — a standalone
+              tool, independent of the audio-guide generation above. */}
+          <section className="settings-card" style={catStyle("project")}>
+            <TranscribeStructure state={state} send={send} />
           </section>
 
           <section className="settings-card" style={catStyle("project")}>
