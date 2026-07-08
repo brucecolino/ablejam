@@ -338,48 +338,27 @@ function matchLabelFromTranscription(transcription: string, vocab: string[]): st
   return best;
 }
 
-const STT_TOL_SEC = 0.35;    // marker-vs-STT skew tolerance (~a syllable)
-const STT_CONF_FLOOR = 0.4;  // min confidence when picking the "dominant" phrase of a whole file
+const STT_TOL_SEC = 0.35; // marker-vs-STT skew tolerance (~a syllable)
 
 function normPath(p: string): string { return p.replace(/\\/g, "/").toLowerCase().replace(/\/+$/, ""); }
-function overlapSec(aS: number, aE: number, bS: number, bE: number): number { return Math.max(0, Math.min(aE, bE) - Math.max(aS, bS)); }
-function gapSec(aS: number, aE: number, bS: number, bE: number): number { return aE < bS ? bS - aE : (bE < aS ? aS - bE : 0); }
 
-/** Pick the single best phrase for a clip region on its source file's timeline. Whole-file clips
- * (one clip == the whole file) fall back to the most confident/longest phrase. `phrases` must be
- * sorted by offset. */
-function assignBestPhrase(fs: number, fe: number, phrases: FastPhrase[], eofSec: number): FastPhrase | null {
-  if (!phrases.length) return null;
-  const cS = Math.max(0, fs);
-  const cE = (fe < 0 || fe <= cS) ? eofSec : fe; // fe < 0 → to EOF (matches TrackClip)
-  const wholeFile = cS <= STT_TOL_SEC && cE >= eofSec - STT_TOL_SEC;
-  if (wholeFile) {
-    return phrases.slice().sort((a, b) =>
-      (Number(b.confidence >= STT_CONF_FLOOR) - Number(a.confidence >= STT_CONF_FLOOR)) ||
-      (b.confidence - a.confidence) || (b.durationSec - a.durationSec) || (a.offsetSec - b.offsetSec))[0] ?? null;
+/** The clip whose file-region contains file-time `t` (or the nearest within tolerance) — used to map
+ * a recognized phrase's file position to an arrangement position. */
+function clipForFileTime(clips: TrackClip[], t: number, eof: number): TrackClip | null {
+  let near: TrackClip | null = null, nearGap = STT_TOL_SEC + 1e-9;
+  for (const c of clips) {
+    const cS = Math.max(0, c.fs);
+    const cE = (c.fe < 0 || c.fe <= cS) ? eof : c.fe; // fe < 0 → to EOF
+    if (t >= cS - 1e-6 && t <= cE + 1e-6) return c;
+    const g = t < cS ? cS - t : t - cE;
+    if (g < nearGap) { nearGap = g; near = c; }
   }
-  // Primary: the phrase with the largest REAL overlap of the clip region (phrases are pre-sorted).
-  let best: FastPhrase | null = null, bestOv = 0;
-  for (const p of phrases) {
-    const phS = p.offsetSec, phE = p.offsetSec + Math.max(0, p.durationSec);
-    if (phS > cE + STT_TOL_SEC) break; // nothing further can overlap
-    if (phE < cS - STT_TOL_SEC) continue;
-    const ov = overlapSec(cS, cE, phS, phE);
-    if (ov > bestOv || (ov === bestOv && ov > 0 && best && p.offsetSec < best.offsetSec)) { best = p; bestOv = ov; }
-  }
-  if (best) return best;
-  // No phrase overlaps the region (timing skew): nearest within tolerance, else give up on this clip.
-  let near: FastPhrase | null = null, nearGap = Infinity;
-  for (const p of phrases) {
-    const g = gapSec(cS, cE, p.offsetSec, p.offsetSec + Math.max(0, p.durationSec));
-    if (g < nearGap) { nearGap = g; near = p; }
-  }
-  return near && nearGap <= STT_TOL_SEC ? near : null;
+  return near;
 }
 
-/** Transcribe a track's audio clips with Azure Fast Transcription (one call per SOURCE FILE — handles
- * MP3/WAV/FLAC and consolidated recordings), assign each clip the phrase spoken in its region, match
- * to a structure label (fallback: cleaned text), and write the markers onto the STRUCTURE track. */
+/** Transcribe a track's audio clips with Azure Fast Transcription (ONE call per SOURCE FILE — handles
+ * MP3/WAV/FLAC and consolidated recordings). Places a STRUCTURE marker for EVERY recognized phrase at
+ * its arrangement position (a single clip can hold several spoken labels), matched to a label. */
 async function transcribeStructureFromClips(clips: TrackClip[], locale: string): Promise<void> {
   if (!settings.azureKey || !settings.azureRegion) { toast("error", tr("host.stt.nokey")); return; }
   const audio = clips.filter((c) => c.file);
@@ -391,6 +370,7 @@ async function transcribeStructureFromClips(clips: TrackClip[], locale: string):
   // suffix): the clip name is usually what's spoken, so it sharply improves accuracy — incl. English.
   const nameHints = audio.map((c) => cleanLabel(c.t.replace(/\s*[-–]\s*speech\s*$/i, ""))).filter(Boolean);
   const phraseList = Array.from(new Set([...vocab, ...nameHints])).slice(0, 500);
+  const tempo = transport.tempo > 0 ? transport.tempo : 120; // file seconds → arrangement beats
   // Group clips by source file → one Fast Transcription call per distinct file.
   const byFile = new Map<string, { file: string; clips: TrackClip[] }>();
   for (const c of audio) {
@@ -398,40 +378,42 @@ async function transcribeStructureFromClips(clips: TrackClip[], locale: string):
     if (!byFile.has(k)) byFile.set(k, { file: c.file, clips: [] });
     byFile.get(k)!.clips.push(c);
   }
-  log(`transcribe: ${audio.length} clip(s) across ${byFile.size} file(s), lang=${locales.length ? locales.join(",") : "auto"}, ${phraseList.length} phrase hints`);
+  const totalFiles = byFile.size;
+  log(`transcribe: ${audio.length} clip(s) across ${totalFiles} file(s), lang=${locales.length ? locales.join(",") : "auto"}, ${phraseList.length} hints, tempo=${tempo}`);
   const results: { s: number; t: string }[] = [];
+  let done = 0;
   ttsBusy = { kind: "generate", pct: 0 };
   broadcastState();
-  let done = 0;
   for (const { file, clips: fileClips } of byFile.values()) {
+    ttsBusy = { kind: "generate", pct: Math.floor((done / totalFiles) * 100) }; // reading file (done+1)/total
+    broadcastState();
     const phrases = await azureFastTranscribe(settings.azureKey, settings.azureRegion, file, locales, phraseList);
     if (phrases == null) {
-      log(`transcribe: file "${file}" → request FAILED (see below / bad key/region?); ${fileClips.length} clip(s) skipped`);
+      log(`transcribe: file "${nodePath.basename(file)}" → request FAILED (bad key/region? see console); ${fileClips.length} clip(s) skipped`);
     } else if (!phrases.length) {
-      log(`transcribe: file "${file}" → no speech recognized; ${fileClips.length} clip(s) skipped`);
+      log(`transcribe: file "${nodePath.basename(file)}" → no speech recognized; ${fileClips.length} clip(s) skipped`);
     } else {
       phrases.sort((a, b) => a.offsetSec - b.offsetSec);
       const eof = phrases.reduce((m, p) => Math.max(m, p.offsetSec + p.durationSec), 0);
-      log(`transcribe: file "${nodePath.basename(file)}" → ${phrases.length} phrase(s), ${eof.toFixed(1)}s`);
-      for (const c of fileClips) {
-        const best = assignBestPhrase(c.fs, c.fe, phrases, eof);
-        if (!best) {
-          log(`transcribe: "${c.t}" @${c.s.toFixed(1)} [${Math.max(0, c.fs).toFixed(2)}s..${c.fe < 0 ? "EOF" : c.fe.toFixed(2) + "s"}] → no phrase (skipped)`);
-          continue;
-        }
-        const matched = matchLabelFromTranscription(best.text, vocab);
-        const label = matched ?? cleanLabel(best.text);
-        log(`transcribe: "${c.t}" @${c.s.toFixed(1)} → "${best.text}" (conf ${best.confidence.toFixed(2)}) → ${matched ? `matched "${matched}"` : `label "${label}"`}`);
-        if (label) results.push({ s: c.s, t: label });
+      let placed = 0;
+      for (const p of phrases) {
+        const clip = clipForFileTime(fileClips, p.offsetSec, eof);
+        if (!clip) continue; // phrase falls outside every clip's region
+        const beat = clip.s + Math.max(0, p.offsetSec - Math.max(0, clip.fs)) * (tempo / 60);
+        const matched = matchLabelFromTranscription(p.text, vocab);
+        const label = matched ?? cleanLabel(p.text);
+        if (label) { results.push({ s: beat, t: label }); placed++; }
       }
+      log(`transcribe: file "${nodePath.basename(file)}" → ${phrases.length} phrase(s) → ${placed} marker(s); e.g. ${phrases.slice(0, 4).map((p) => `"${p.text}"@${p.offsetSec.toFixed(1)}s`).join(", ")}`);
     }
     done++;
-    ttsBusy = { kind: "generate", pct: Math.floor((done / byFile.size) * 100) };
+    ttsBusy = { kind: "generate", pct: Math.floor((done / totalFiles) * 100) };
     broadcastState();
   }
   ttsBusy = null;
   broadcastState();
   if (!results.length) { toast("error", tr("host.stt.none")); return; }
+  results.sort((a, b) => a.s - b.s);
   const items = withClipEnds(results.map((r) => ({ s: r.s, t: r.t })));
   log(`transcribe: writing ${items.length} structure marker(s) to the STRUCTURE track`);
   bridge.send(ADDR.cmdWriteStructure, [JSON.stringify(items)]);

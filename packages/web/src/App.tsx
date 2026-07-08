@@ -444,9 +444,17 @@ function TranscribeStructure({ state, send }: { state: AppState; send: Send }) {
           {langs.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
         </select>
       </label>
+      {busy && (
+        <div style={{ margin: "4px 0 8px" }}>
+          <div style={{ height: 6, borderRadius: 999, background: "var(--bg)", border: "1px solid var(--border)", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: (state.ttsBusy?.pct ?? 0) + "%", background: "var(--accent)", transition: "width .2s linear" }} />
+          </div>
+          <div className="settings-desc-small" style={{ marginTop: 4 }}>{tr("stt.working")} {state.ttsBusy?.pct ?? 0}%</div>
+        </div>
+      )}
       <button className="settings-btn" disabled={busy || !state.bridgeConnected || !hasKey}
         onClick={() => send({ type: "command", command: "transcribeStructureFromTrack", track, locale })}>
-        <ActionIcon name="edit" /> {tr("stt.btn")}
+        <ActionIcon name="edit" /> {busy ? tr("stt.working") : tr("stt.btn")}
       </button>
     </div>
   );

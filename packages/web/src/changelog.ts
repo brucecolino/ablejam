@@ -10,6 +10,23 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.19.0",
+    notes: {
+      it: [
+        "Trascrizione struttura: ora crea un marker per OGNI annuncio riconosciuto (una clip audio può contenere più etichette parlate), posizionato al suo istante esatto nell'arrangiamento — prima ne creava solo uno per clip, perdendone la maggior parte.",
+        "Aggiunta la barra di avanzamento: mentre \"Trascrivi e crea la struttura\" lavora vedi a che punto è (prima legge tutto l'audio, poi scrive i marker sulla traccia STRUCTURE).",
+        "Il Log ora mostra, per ogni file, quante frasi sono state riconosciute e quanti marker create, con qualche esempio (testo@istante) per capire subito la qualità.",
+        "Nessun aggiornamento del bridge (resta v62).",
+      ],
+      en: [
+        "Structure transcription: now creates a marker for EVERY recognized announcement (one audio clip can hold several spoken labels), placed at its exact arrangement position — before it made only one per clip, losing most of them.",
+        "Added a progress bar: while \"Transcribe and build the structure\" runs you can see how far it is (it reads all the audio first, then writes the markers on the STRUCTURE track).",
+        "The Log now shows, per file, how many phrases were recognized and how many markers were created, with a few examples (text@time) so you can gauge quality at a glance.",
+        "No bridge update (stays v62).",
+      ],
+    },
+  },
+  {
     version: "1.18.1",
     notes: {
       it: [
