@@ -381,15 +381,16 @@ async function transcribeStructureFromClips(clips: TrackClip[], locale: string):
   const totalFiles = byFile.size;
   log(`transcribe: ${audio.length} clip(s) across ${totalFiles} file(s), lang=${locales.length ? locales.join(",") : "auto"}, ${phraseList.length} hints, tempo=${tempo}`);
   const results: { s: number; t: string }[] = [];
-  let done = 0;
+  let done = 0, failed = 0;
   ttsBusy = { kind: "generate", pct: 0 };
   broadcastState();
   for (const { file, clips: fileClips } of byFile.values()) {
     ttsBusy = { kind: "generate", pct: Math.floor((done / totalFiles) * 100) }; // reading file (done+1)/total
     broadcastState();
-    const phrases = await azureFastTranscribe(settings.azureKey, settings.azureRegion, file, locales, phraseList);
-    if (phrases == null) {
-      log(`transcribe: file "${nodePath.basename(file)}" → request FAILED (bad key/region? see console); ${fileClips.length} clip(s) skipped`);
+    const { phrases, error } = await azureFastTranscribe(settings.azureKey, settings.azureRegion, file, locales, phraseList);
+    if (error) {
+      failed++;
+      log(`transcribe: file "${nodePath.basename(file)}" → FAILED: ${error}`);
     } else if (!phrases.length) {
       log(`transcribe: file "${nodePath.basename(file)}" → no speech recognized; ${fileClips.length} clip(s) skipped`);
     } else {
@@ -412,6 +413,7 @@ async function transcribeStructureFromClips(clips: TrackClip[], locale: string):
   }
   ttsBusy = null;
   broadcastState();
+  if (failed === totalFiles) { toast("error", tr("host.stt.failed")); return; } // every request errored → see the Log
   if (!results.length) { toast("error", tr("host.stt.none")); return; }
   results.sort((a, b) => a.s - b.s);
   const items = withClipEnds(results.map((r) => ({ s: r.s, t: r.t })));

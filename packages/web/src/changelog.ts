@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.19.1",
+    notes: {
+      it: [
+        "Barra di avanzamento della trascrizione ora sempre visibile: mostra un'animazione continua mentre lavora (prima, con un solo file, restava a 0% e sembrava assente).",
+        "Errori di trascrizione resi visibili: se le richieste ad Azure falliscono (chiave/regione errata, endpoint non valido, file non supportato…) ora compare un messaggio e il motivo esatto (es. \"HTTP 404\") finisce nel Log, invece di fallire in silenzio.",
+        "Nessun aggiornamento del bridge (resta v62).",
+      ],
+      en: [
+        "Transcription progress bar is now always visible: it shows a continuous animation while working (before, with a single file it stayed at 0% and looked absent).",
+        "Transcription errors are now visible: if the Azure requests fail (wrong key/region, invalid endpoint, unsupported file…) you get a message and the exact reason (e.g. \"HTTP 404\") lands in the Log, instead of failing silently.",
+        "No bridge update (stays v62).",
+      ],
+    },
+  },
+  {
     version: "1.19.0",
     notes: {
       it: [
