@@ -14,7 +14,7 @@ from .osc import OSCServer
 HOST_IP = "127.0.0.1"
 HOST_PORT = 39062     # the AbleJam host listens here for state
 LISTEN_PORT = 39061   # we listen here for commands from the host
-BRIDGE_VERSION = 60   # bump on every change; shown in the UI to confirm reloads
+BRIDGE_VERSION = 61   # bump on every change; shown in the UI to confirm reloads
 
 
 class AbleJam(ControlSurface):
@@ -936,20 +936,46 @@ class AbleJam(ControlSurface):
         except Exception:
             track = None
         out = []
+        audio_clips = 0
         if track is not None:
             try:
                 for clip in track.arrangement_clips:
                     try:
                         nm = clip.name or ""
-                        if nm.strip():
-                            out.append({"t": nm, "s": float(clip.start_time), "e": float(clip.end_time)})
+                        if not nm.strip():
+                            continue
+                        item = {"t": nm, "s": float(clip.start_time), "e": float(clip.end_time)}
+                        # For AUDIO clips also report the source file + the region it plays, so the host
+                        # can slice that region and transcribe it (speech → structure labels). Markers
+                        # are in SECONDS for unwarped clips, BEATS for warped (mapped via warp_markers).
+                        try:
+                            if getattr(clip, "is_audio_clip", False):
+                                fp = clip.file_path or ""
+                                if fp:
+                                    audio_clips += 1
+                                    warped = bool(getattr(clip, "warping", False))
+                                    item["file"] = fp
+                                    item["warp"] = warped
+                                    item["sm"] = float(clip.start_marker)
+                                    item["em"] = float(clip.end_marker)
+                                    item["sr"] = float(getattr(clip, "sample_rate", 0) or 0)
+                                    item["slen"] = float(getattr(clip, "sample_length", 0) or 0)
+                                    if warped:
+                                        try:
+                                            item["wm"] = [{"b": float(m.beat_time), "s": float(m.sample_time)}
+                                                          for m in clip.warp_markers]
+                                        except Exception:
+                                            pass
+                        except Exception:
+                            pass
+                        out.append(item)
                     except Exception:
                         pass
             except Exception:
                 pass
         out.sort(key=lambda x: x["s"])
-        self._log("read clips: track=%r resolved=%r → %d named clip(s)" % (
-            name or "(structure)", (track.name if track is not None else None), len(out)))
+        self._log("read clips: track=%r resolved=%r → %d named clip(s), %d with audio file" % (
+            name or "(structure)", (track.name if track is not None else None), len(out), audio_clips))
         self._osc.send("/ablejam/trackclips", [json.dumps(out)])
 
     def _send_structure(self):

@@ -356,3 +356,85 @@ export async function engineCanRun(): Promise<boolean> {
     setTimeout(() => { try { c.kill(); } catch { /* ignore */ } finish(true); }, 4000); // still running → it ran
   });
 }
+
+/** Slice [startSec, endSec] out of a WAV and write a new 16 kHz mono 16-bit PCM WAV — exactly the
+ * format Azure Speech-to-Text short-audio wants. Dependency-free (same chunk-walker idiom as
+ * padWavToSeconds), handling arbitrary rate/channels, 16/24/32-bit int and 32/64-bit float PCM
+ * (incl. WAVE_FORMAT_EXTENSIBLE), multiple pre-data chunks, odd-chunk padding. endSec may be
+ * Infinity to take from startSec to end of file. Returns false on any parse failure/empty window. */
+export function sliceWavToMono16k(srcPath: string, startSec: number, endSec: number, outPath: string): boolean {
+  try {
+    const b = readFileSync(srcPath);
+    if (b.length < 12 || b.toString("ascii", 0, 4) !== "RIFF" || b.toString("ascii", 8, 12) !== "WAVE") return false;
+    let off = 12, dataOff = -1, dataLen = 0;
+    let fmtTag = 1, channels = 1, sampleRate = 44100, bits = 16;
+    while (off + 8 <= b.length) {
+      const id = b.toString("ascii", off, off + 4);
+      const sz = b.readUInt32LE(off + 4);
+      if (id === "fmt ") {
+        fmtTag = b.readUInt16LE(off + 8);
+        channels = b.readUInt16LE(off + 10);
+        sampleRate = b.readUInt32LE(off + 12);
+        bits = b.readUInt16LE(off + 22);
+        if (fmtTag === 0xfffe && sz >= 40) fmtTag = b.readUInt16LE(off + 8 + 16 + 8); // EXTENSIBLE: real tag in sub-format GUID
+      } else if (id === "data") {
+        dataOff = off + 8;
+        dataLen = Math.min(sz, b.length - dataOff); // clamp to what's really present (truncated/streamed files)
+        break;
+      }
+      off += 8 + sz + (sz & 1);
+    }
+    if (dataOff < 0 || channels < 1) return false;
+    const bytesPerSample = bits >> 3;
+    const frameBytes = bytesPerSample * channels;
+    if (frameBytes <= 0) return false;
+    const totalFrames = Math.floor(dataLen / frameBytes);
+    const srcDurSec = totalFrames / sampleRate;
+    const isFloat = fmtTag === 3;
+    const readSample = (frame: number, ch: number): number => {
+      const p = dataOff + frame * frameBytes + ch * bytesPerSample;
+      if (isFloat && bits === 32) return b.readFloatLE(p);
+      if (isFloat && bits === 64) return b.readDoubleLE(p);
+      if (bits === 16) return b.readInt16LE(p) / 32768;
+      if (bits === 24) { let v = b[p]! | (b[p + 1]! << 8) | (b[p + 2]! << 16); if (v & 0x800000) v -= 0x1000000; return v / 8388608; }
+      if (bits === 32) return b.readInt32LE(p) / 2147483648;
+      if (bits === 8) return (b[p]! - 128) / 128;
+      return 0;
+    };
+    const s0 = Math.max(0, Math.min(startSec, srcDurSec));
+    const s1 = Math.max(s0, Math.min(endSec, srcDurSec));
+    const startFrame = Math.floor(s0 * sampleRate);
+    const endFrame = Math.min(totalFrames, Math.ceil(s1 * sampleRate));
+    const winFrames = Math.max(0, endFrame - startFrame);
+    if (winFrames === 0) return false;
+    const winSec = winFrames / sampleRate;
+    const OUT_RATE = 16000;
+    const outFrames = Math.max(1, Math.round(winSec * OUT_RATE));
+    const out = new Int16Array(outFrames);
+    const mono = (frame: number): number => {
+      let acc = 0;
+      for (let ch = 0; ch < channels; ch++) acc += readSample(frame, ch);
+      return acc / channels; // average → downmix (avoids the clipping of summing)
+    };
+    for (let i = 0; i < outFrames; i++) {
+      const srcPos = (i / OUT_RATE) * sampleRate; // window-relative fractional source frame
+      const i0 = Math.floor(srcPos);
+      const frac = srcPos - i0;
+      const f0 = startFrame + i0;
+      const f1 = Math.min(endFrame - 1, f0 + 1);
+      const v = mono(f0) + (mono(f1) - mono(f0)) * frac;
+      out[i] = Math.max(-32768, Math.min(32767, Math.round(v * 32767)));
+    }
+    const body = Buffer.from(out.buffer, out.byteOffset, outFrames * 2);
+    const h = Buffer.alloc(44);
+    h.write("RIFF", 0); h.writeUInt32LE(36 + body.length, 4); h.write("WAVE", 8);
+    h.write("fmt ", 12); h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(1, 22); // PCM, mono
+    h.writeUInt32LE(OUT_RATE, 24); h.writeUInt32LE(OUT_RATE * 2, 28); h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34);
+    h.write("data", 36); h.writeUInt32LE(body.length, 40);
+    mkdirSync(path.dirname(outPath), { recursive: true });
+    writeFileSync(outPath, Buffer.concat([h, body]));
+    return true;
+  } catch {
+    return false;
+  }
+}

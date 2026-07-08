@@ -392,6 +392,42 @@ function GuideFromTrack({ state, send }: { state: AppState; send: Send }) {
   );
 }
 
+/** "Derive the structure from an audio track": transcribe each clip of an audio track (e.g. SPEECH)
+ * with Azure STT, match to a structure label, and write markers onto the STRUCTURE track. */
+function TranscribeStructure({ state, send }: { state: AppState; send: Send }) {
+  const { tr } = useT();
+  const options = state.tracks.length ? state.tracks : state.midiTracks;
+  const speechTrack = state.tracks.find((t) => /speech/i.test(t)) ?? "";
+  const [track, setTrack] = useState<string>(speechTrack || options[0] || "");
+  const uiToLocale: Record<string, string> = { it: "it-IT", en: "en-US", es: "es-ES", fr: "fr-FR" };
+  const [locale, setLocale] = useState<string>(uiToLocale[state.settings.language] ?? "it-IT");
+  const langs = [{ id: "it-IT", label: "Italiano" }, { id: "en-US", label: "English" }, { id: "es-ES", label: "Español" }, { id: "fr-FR", label: "Français" }];
+  const busy = state.ttsBusy != null;
+  return (
+    <div className="guide-fromtrack">
+      <div className="settings-section" style={{ marginTop: 6 }}>{tr("stt.title")}</div>
+      <div className="settings-desc-small">{tr("stt.desc")}</div>
+      <label className="setting">
+        <span className="setting-text"><span className="setting-label">{tr("stt.track")}</span></span>
+        <select className="setting-select" value={track} onChange={(e) => setTrack(e.target.value)}>
+          {options.map((tk) => <option key={tk} value={tk}>{tk}</option>)}
+          {track && !options.includes(track) && <option value={track}>{track}</option>}
+        </select>
+      </label>
+      <label className="setting">
+        <span className="setting-text"><span className="setting-label">{tr("stt.lang")}</span></span>
+        <select className="setting-select" value={locale} onChange={(e) => setLocale(e.target.value)}>
+          {langs.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+        </select>
+      </label>
+      <button className="settings-btn" disabled={busy || !state.bridgeConnected}
+        onClick={() => send({ type: "command", command: "transcribeStructureFromTrack", track, locale })}>
+        <ActionIcon name="edit" /> {tr("stt.btn")}
+      </button>
+    </div>
+  );
+}
+
 function VoiceGenerator({ state, send }: { state: AppState; send: Send }) {
   const { tr } = useT();
   const s = state.settings;
@@ -1690,6 +1726,7 @@ function SettingsPanel({ state, send, onClose, onOpenSetup, isMaster = true, sel
                 <div className="settings-desc-small">{tr("structure.palette.hint")}</div>
               </>)}
               <GuideFromTrack state={state} send={send} />
+              <TranscribeStructure state={state} send={send} />
             </>)}
             <button className="settings-btn" onClick={() => setShowStructEd(true)}><ActionIcon name="edit" /> {tr("structure.openEditor")}</button>
           </section>

@@ -577,6 +577,7 @@ export type ClientCommand =
   | { type: "command"; command: "clearStructure" }
   | { type: "command"; command: "writeStructureClips"; lines: LyricLine[]; guide?: boolean; scope?: { start: number; end: number } }
   | { type: "command"; command: "generateGuideFromTrack"; track?: string }
+  | { type: "command"; command: "transcribeStructureFromTrack"; track?: string; locale?: string }
   | { type: "command"; command: "setStructureLabels"; labels: string[] }
   | { type: "command"; command: "setClientMaster"; clientId: string; master: boolean }
   | { type: "command"; command: "saveSetlist"; name: string }

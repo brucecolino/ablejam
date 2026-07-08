@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.17.0",
+    notes: {
+      it: [
+        "🎧 Nuovo: ricava la struttura da una traccia audio già registrata. In Impostazioni → (audio guida) → \"Ricava la struttura da una traccia audio\": scegli una traccia audio (es. SPEECH) e la lingua, premi il pulsante e AbleJam trascrive con Azure Speech-to-Text ogni clip, riconosce l'etichetta (matchandola alle sezioni note, es. ritornello/strofa, altrimenti tiene il testo trascritto) e scrive i marker sulla traccia STRUCTURE alla stessa posizione — per tutto il progetto. Niente più etichette a mano.",
+        "Serve la chiave Azure (la stessa delle voci). Il Log mostra, per ogni clip, la regione analizzata, il testo riconosciuto e l'etichetta scelta.",
+        "⚠ Richiede il bridge v61: si installa da solo all'avvio — poi esci COMPLETAMENTE da Ableton (Ctrl/Cmd+Q) e riaprilo; verifica \"v61\" in Impostazioni → Progetto Ableton.",
+      ],
+      en: [
+        "🎧 New: derive the structure from an already-recorded audio track. In Settings → (audio guide) → \"Derive the structure from an audio track\": pick an audio track (e.g. SPEECH) and the language, press the button, and AbleJam transcribes each clip with Azure Speech-to-Text, recognizes the label (matching it to known sections, e.g. chorus/verse, otherwise keeping the transcribed text) and writes the markers onto the STRUCTURE track at the same position — for the whole project. No more typing labels by hand.",
+        "Requires the Azure key (same as the voices). The Log shows, per clip, the analyzed region, the recognized text and the chosen label.",
+        "⚠ Requires bridge v61: it auto-installs on launch — then FULLY quit Ableton (Ctrl/Cmd+Q) and reopen; check \"v61\" in Settings → Ableton Project.",
+      ],
+    },
+  },
+  {
     version: "1.16.0",
     notes: {
       it: [

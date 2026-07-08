@@ -13,7 +13,8 @@ import { deviceId, deviceName } from "./deviceid";
 import { listBluetooth, openBluetoothSettings } from "./bluetooth";
 import { hasAudioInterface } from "./audio";
 import { defaultSpeechDir, listSpeechFiles, matchSpeechFile, installSpeechFiles, speechFilePath } from "./speech";
-import { VOICE_CATALOG, voiceById, installedVoices, engineReady, engineCanRun, ensureEngine, ensureVoice, synthesize, padWavToSeconds, ttsCacheDir, type DlProgress } from "./tts";
+import { VOICE_CATALOG, voiceById, installedVoices, engineReady, engineCanRun, ensureEngine, ensureVoice, synthesize, padWavToSeconds, sliceWavToMono16k, ttsCacheDir, type DlProgress } from "./tts";
+import { azureRecognize } from "./azurestt";
 import { fetchAzureVoices, azureSynthesize, type AzureVoice } from "./azuretts";
 import nodePath from "node:path";
 import { existsSync, readFileSync } from "node:fs";
@@ -310,6 +311,102 @@ async function writeGuideClipsTts(items: { s: number; t: string; e?: number }[])
   const track = settings.guideTrack || "SPEECH";
   log(`guide TTS: engine=${settings.ttsEngine}, track="${track}", generated ${palette.length}/${labels.length} announcements → sending ${outItems.length} clips to the bridge`);
   bridge.send(ADDR.cmdWriteGuide, [JSON.stringify({ track, items: outItems, palette: paletteWithPaths })]);
+}
+
+/** A clip read from a track by the bridge (name + arrangement beats, plus audio-region info when it's
+ * an audio clip: source file + the region it plays — markers are SECONDS if unwarped, BEATS if warped). */
+interface TrackClip {
+  t: string; s: number; e: number;
+  file: string; warp: boolean; sm: number; em: number; sr: number; slen: number;
+  wm: { b: number; s: number }[];
+}
+
+/** The [fileStartSec, fileEndSec] region of a clip's source file that it plays. Unwarped audio: the
+ * start/end markers ARE file seconds. Warped: map the marker beats through the warp markers. Falls
+ * back to the whole file when the region is missing/invalid. */
+function clipFileRegionSec(c: TrackClip): [number, number] {
+  const dur = (c.slen > 0 && c.sr > 0) ? c.slen / c.sr : Infinity; // whole-file duration (or unknown)
+  let r0 = c.sm, r1 = c.em;
+  if (c.warp && c.wm.length >= 2) {
+    const wm = [...c.wm].sort((a, b) => a.b - b.b);
+    const beatToSec = (beat: number): number => {
+      // Deterministic segment pick: at/after the last marker → last segment (extrapolate forward);
+      // at/before the first → first segment (extrapolate backward); else the containing segment.
+      let m0 = wm[0]!, m1 = wm[1]!;
+      if (beat >= wm[wm.length - 1]!.b) { m0 = wm[wm.length - 2]!; m1 = wm[wm.length - 1]!; }
+      else if (beat > wm[0]!.b) {
+        for (let i = 0; i < wm.length - 1; i++) {
+          if (wm[i]!.b <= beat && beat <= wm[i + 1]!.b) { m0 = wm[i]!; m1 = wm[i + 1]!; break; }
+        }
+      }
+      const db = m1.b - m0.b;
+      return db === 0 ? m0.s : m0.s + ((beat - m0.b) / db) * (m1.s - m0.s);
+    };
+    r0 = beatToSec(c.sm); r1 = beatToSec(c.em);
+  }
+  if (!(r1 > r0) || !Number.isFinite(r0) || r0 < 0) return [0, dur]; // invalid / whole-file clip → whole file
+  return [r0, r1];
+}
+
+/** Clean a raw transcription into a readable label (drop trailing punctuation, collapse whitespace). */
+function cleanLabel(s: string): string {
+  return s.replace(/[.,;:!?]+$/g, "").trim().replace(/\s+/g, " ");
+}
+
+/** Find the known structure label that the transcription CONTAINS (label tokens ⊆ transcription
+ * tokens, via the existing token matcher), preferring the most specific (most words). null if none. */
+function matchLabelFromTranscription(transcription: string, vocab: string[]): string | null {
+  let best: string | null = null, bestTokens = 0;
+  for (const label of vocab) {
+    if (matchSpeechFile(label, [transcription])) { // label's tokens are all present in the transcription
+      const nTokens = label.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).length; // matches tokens() granularity
+      if (nTokens > bestTokens) { bestTokens = nTokens; best = label; }
+    }
+  }
+  return best;
+}
+
+/** Transcribe each audio clip of a track (Azure STT), match to a structure label (fallback: cleaned
+ * transcription), and write the markers onto the STRUCTURE track for the whole project. */
+async function transcribeStructureFromClips(clips: TrackClip[], locale: string): Promise<void> {
+  if (!settings.azureKey || !settings.azureRegion) { toast("error", tr("host.stt.nokey")); return; }
+  const audio = clips.filter((c) => c.file);
+  if (!audio.length) { toast("error", tr("host.stt.noaudio")); return; }
+  const loc = locale || "it-IT";
+  const vocab = Array.from(new Set([...(settings.structureLabels ?? []), ...DEFAULT_STRUCTURE_LABELS]));
+  const sharedFile = new Set(audio.map((c) => c.file)).size < audio.length;
+  log(`transcribe: ${audio.length} audio clip(s), locale=${loc}, ${sharedFile ? "shared source file (region slices)" : "separate files"}`);
+  const results: { s: number; t: string }[] = [];
+  ttsBusy = { kind: "generate", pct: 0 };
+  broadcastState();
+  let i = 0;
+  for (const c of audio) {
+    const [a, b] = clipFileRegionSec(c);
+    const wav = nodePath.join(ttsCacheDir(), `stt-${i}.wav`);
+    const bLbl = Number.isFinite(b) ? b.toFixed(2) : "end";
+    if (!sliceWavToMono16k(c.file, a, b, wav)) {
+      log(`transcribe: "${c.t}" @${c.s.toFixed(1)}: could not read/slice the audio (${c.file})`);
+    } else {
+      const rec = await azureRecognize(settings.azureKey, settings.azureRegion, wav, loc);
+      if (!rec || !rec.display.trim()) {
+        log(`transcribe: "${c.t}" @${c.s.toFixed(1)} region [${a.toFixed(2)}s,${bLbl}]: no speech recognized (skipped)`);
+      } else {
+        const matched = matchLabelFromTranscription(rec.display, vocab);
+        const label = matched ?? cleanLabel(rec.display);
+        log(`transcribe: "${c.t}" @${c.s.toFixed(1)} → "${rec.display}" (conf ${rec.confidence.toFixed(2)}) → ${matched ? `matched "${matched}"` : `label "${label}"`}`);
+        if (label) results.push({ s: c.s, t: label });
+      }
+    }
+    i++;
+    ttsBusy = { kind: "generate", pct: Math.floor((i / audio.length) * 100) };
+    broadcastState();
+  }
+  ttsBusy = null;
+  broadcastState();
+  if (!results.length) { toast("error", tr("host.stt.none")); return; }
+  const items = withClipEnds(results.map((r) => ({ s: r.s, t: r.t })));
+  log(`transcribe: writing ${items.length} structure marker(s) to the STRUCTURE track`);
+  bridge.send(ADDR.cmdWriteStructure, [JSON.stringify(items)]);
 }
 
 /** Fetch the Azure voice catalog for the current key+region (on key/region change or manual refresh). */
@@ -728,9 +825,27 @@ function broadcastTransport(): void {
 // can see what happened during an export/connect without a console. Broadcast is debounced.
 let logs: string[] = [];
 let logBroadcastTimer: ReturnType<typeof setTimeout> | null = null;
-// True while we've asked the bridge to read a track's clips for "generate guide from track" and are
-// waiting for the /ablejam/trackclips reply (which then drives the TTS/guide pipeline).
-let awaitingTrackClips = false;
+// Set while we've asked the bridge to read a track's clips and are waiting for the /ablejam/trackclips
+// reply. The mode decides what to do with the clips: "guide" = generate the audio guide from them;
+// "stt" = transcribe each clip's audio (Azure STT) into STRUCTURE markers.
+let pendingTrackRead: null | { mode: "guide" } | { mode: "stt"; locale: string } = null;
+let trackReadTimer: ReturnType<typeof setTimeout> | null = null;
+/** Arm a pending track read, with a timeout so a never-arriving reply (bridge dropped/errored)
+ * doesn't leave the UI stuck on "Reading…". Returns false if a read is already in flight. */
+function armTrackRead(mode: NonNullable<typeof pendingTrackRead>): boolean {
+  if (pendingTrackRead) return false; // one at a time — avoids a reply misrouting to the wrong mode
+  pendingTrackRead = mode;
+  if (trackReadTimer) clearTimeout(trackReadTimer);
+  trackReadTimer = setTimeout(() => {
+    trackReadTimer = null;
+    if (pendingTrackRead) { pendingTrackRead = null; toast("error", tr("host.stt.timeout")); }
+  }, 10000);
+  return true;
+}
+function clearTrackRead(): void {
+  pendingTrackRead = null;
+  if (trackReadTimer) { clearTimeout(trackReadTimer); trackReadTimer = null; }
+}
 function log(msg: string): void {
   logs.push(`${new Date().toLocaleTimeString()}  ${msg}`);
   if (logs.length > 300) logs = logs.slice(-300);
@@ -1071,20 +1186,34 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
       break;
     }
     case ADDR.trackClips: {
-      // Reply to "generate guide from track": the named clips of the chosen track. Turn them into
-      // guide items and run the SAME TTS/guide pipeline as a normal export (whole project).
-      if (!awaitingTrackClips) break;
-      awaitingTrackClips = false;
-      let clips: { s: number; t: string }[] = [];
+      // Reply to a track read. "guide" → generate the audio guide from the clip names; "stt" →
+      // transcribe each clip's audio into STRUCTURE markers.
+      const pending = pendingTrackRead;
+      if (!pending) break;
+      clearTrackRead();
+      let clips: TrackClip[] = [];
       try {
-        const arr = JSON.parse(String(args[0] ?? "[]")) as Array<{ t?: unknown; s?: unknown }>;
-        clips = arr
-          .map((c) => ({ s: Number(c.s) || 0, t: String(c.t ?? "").trim() }))
-          .filter((c) => c.t.length > 0);
+        const arr = JSON.parse(String(args[0] ?? "[]")) as Array<Record<string, unknown>>;
+        clips = arr.map((c) => ({
+          t: String(c.t ?? "").trim(),
+          s: Number(c.s) || 0,
+          e: Number(c.e) || 0,
+          file: typeof c.file === "string" ? c.file : "",
+          warp: !!c.warp,
+          sm: Number(c.sm) || 0,
+          em: Number(c.em) || 0,
+          sr: Number(c.sr) || 0,
+          slen: Number(c.slen) || 0,
+          wm: Array.isArray(c.wm) ? (c.wm as Array<Record<string, unknown>>).map((m) => ({ b: Number(m.b) || 0, s: Number(m.s) || 0 })) : [],
+        })).filter((c) => c.t.length > 0);
       } catch { /* ignore malformed */ }
-      log(`trackClips: received ${clips.length} named clip(s) → generating guide audio (whole project)`);
-      if (!clips.length) { toast("error", tr("host.guide.notrackclips")); break; }
-      writeGuideClips(clips); // routes to TTS/folder by guideMode; song-bounded ends via withClipEnds
+      if (pending.mode === "guide") {
+        log(`trackClips: received ${clips.length} named clip(s) → generating guide audio (whole project)`);
+        if (!clips.length) { toast("error", tr("host.guide.notrackclips")); break; }
+        writeGuideClips(clips.map((c) => ({ s: c.s, t: c.t }))); // routes by guideMode; song-bounded ends via withClipEnds
+      } else {
+        void transcribeStructureFromClips(clips, pending.locale);
+      }
       break;
     }
     case ADDR.log:
@@ -1241,10 +1370,21 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
       // audio guide for the WHOLE project from them — no re-typing labels in the editor.
       if (!bridgeConnected) { toast("error", tr("host.structure.noableton")); break; }
       if (bridgeVersion > 0 && bridgeVersion < 60) { toast("error", tr("host.structure.oldbridge")); break; }
-      awaitingTrackClips = true;
+      if (!armTrackRead({ mode: "guide" })) { toast("info", tr("host.stt.busy")); break; }
       log(`generateGuideFromTrack: reading track="${c.track || "(structure)"}" from Ableton`);
       bridge.send(ADDR.cmdReadClips, [String(c.track ?? "")]);
       toast("info", tr("host.guide.reading"));
+      break;
+    }
+    case "transcribeStructureFromTrack": {
+      // Read an audio track's clips, transcribe each clip's audio (Azure STT), match to a structure
+      // label, and write the markers onto the STRUCTURE track (whole project).
+      if (!bridgeConnected) { toast("error", tr("host.structure.noableton")); break; }
+      if (bridgeVersion > 0 && bridgeVersion < 61) { toast("error", tr("host.structure.oldbridge")); break; }
+      if (!armTrackRead({ mode: "stt", locale: String(c.locale ?? "it-IT") })) { toast("info", tr("host.stt.busy")); break; }
+      log(`transcribeStructureFromTrack: reading track="${c.track || "(structure)"}" (locale=${c.locale || "it-IT"})`);
+      bridge.send(ADDR.cmdReadClips, [String(c.track ?? "")]);
+      toast("info", tr("host.stt.reading"));
       break;
     }
     case "setStructureLabels":
