@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.15.0",
+    notes: {
+      it: [
+        "🔊 Audio guida: nuovo metodo di creazione delle clip, molto più affidabile. Invece di caricare i file tramite il browser di Ableton (che è asincrono e faceva fallire il tutto), il bridge ora crea le clip audio direttamente dal file su disco (create_audio_clip di Live 12): immediato, senza browser, senza ri-scansione della libreria. È il fix che finalmente fa comparire gli annunci sulla traccia guida.",
+        "Copia log: il pulsante \"Copia\" ora funziona anche quando apri AbleJam da tablet/telefono via rete (prima falliva in silenzio e restava il testo vecchio negli appunti). In più il log è selezionabile a mano.",
+        "⚠ Richiede il bridge v59: si installa da solo all'avvio — poi esci COMPLETAMENTE da Ableton (Ctrl/Cmd+Q) e riaprilo; verifica \"v59\" in Impostazioni → Progetto Ableton. La traccia guida dev'essere AUDIO con qualche slot di sessione libero.",
+      ],
+      en: [
+        "🔊 Audio guide: a new, far more reliable way to create the clips. Instead of loading files through Ableton's browser (which is asynchronous and was making it fail), the bridge now creates the audio clips directly from the file on disk (Live 12's create_audio_clip): instant, no browser, no library rescan. This is the fix that finally makes the announcements appear on the guide track.",
+        "Copy logs: the \"Copy\" button now works even when you open AbleJam from a tablet/phone over the network (it used to fail silently and leave stale text on the clipboard). The log is also selectable by hand.",
+        "⚠ Requires bridge v59: it auto-installs on launch — then FULLY quit Ableton (Ctrl/Cmd+Q) and reopen; check \"v59\" in Settings → Ableton Project. The guide track must be AUDIO with some free session slots.",
+      ],
+    },
+  },
+  {
     version: "1.14.0",
     notes: {
       it: [

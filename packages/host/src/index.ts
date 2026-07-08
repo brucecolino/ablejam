@@ -12,7 +12,7 @@ import { verifyLicenseKey, isActivatedHere } from "./license";
 import { deviceId, deviceName } from "./deviceid";
 import { listBluetooth, openBluetoothSettings } from "./bluetooth";
 import { hasAudioInterface } from "./audio";
-import { defaultSpeechDir, listSpeechFiles, matchSpeechFile, installSpeechFiles } from "./speech";
+import { defaultSpeechDir, listSpeechFiles, matchSpeechFile, installSpeechFiles, speechFilePath } from "./speech";
 import { VOICE_CATALOG, voiceById, installedVoices, engineReady, engineCanRun, ensureEngine, ensureVoice, synthesize, padWavToSeconds, ttsCacheDir, type DlProgress } from "./tts";
 import { fetchAzureVoices, azureSynthesize, type AzureVoice } from "./azuretts";
 import nodePath from "node:path";
@@ -246,7 +246,10 @@ function writeGuideClips(items: { s: number; t: string; e?: number }[]): void {
   }
   if (!palette.length) { toast("error", tr("host.guide.nomatch")); return; }
   if (installSpeechFiles(paths) === 0) { toast("error", tr("host.guide.nolib")); return; }
-  bridge.send(ADDR.cmdWriteGuide, [JSON.stringify({ track: settings.guideTrack, items, palette })]);
+  // Send the absolute WAV path per entry so the bridge creates the clip via create_audio_clip
+  // (reads the file directly — no browser). Fall back to the source path if the UL copy isn't found.
+  const withPaths = palette.map((p, i) => ({ ...p, path: speechFilePath(nodePath.basename(paths[i]!)) || paths[i]! }));
+  bridge.send(ADDR.cmdWriteGuide, [JSON.stringify({ track: settings.guideTrack, items, palette: withPaths })]);
 }
 
 /** Synthesise one label with whichever TTS engine is selected (Piper offline or Azure premium). */
@@ -298,12 +301,15 @@ async function writeGuideClipsTts(items: { s: number; t: string; e?: number }[])
   broadcastState();
   if (!palette.length) { toast("error", tr(azure ? "host.tts.azuregenfail" : "host.tts.genfail")); return; }
   if (installSpeechFiles(paths) === 0) { toast("error", tr("host.guide.nolib")); return; }
+  // Send the absolute WAV path per entry so the bridge creates the clip via create_audio_clip (reads
+  // the file directly — no browser, no async race). Fall back to the source path if the UL copy isn't found.
+  const paletteWithPaths = palette.map((p, i) => ({ ...p, path: speechFilePath(nodePath.basename(paths[i]!)) || paths[i]! }));
   // Send each occurrence with its song-bounded end beat `e` so the bridge trims the padded clip to
   // fill exactly up to the next change (or the song end). TTS lands on the SPEECH track (auto-created).
   const outItems = ordered.map((it) => ({ s: it.s, t: it.t, e: it.e }));
   const track = settings.guideTrack || "SPEECH";
   log(`guide TTS: engine=${settings.ttsEngine}, track="${track}", generated ${palette.length}/${labels.length} announcements → sending ${outItems.length} clips to the bridge`);
-  bridge.send(ADDR.cmdWriteGuide, [JSON.stringify({ track, items: outItems, palette })]);
+  bridge.send(ADDR.cmdWriteGuide, [JSON.stringify({ track, items: outItems, palette: paletteWithPaths })]);
 }
 
 /** Fetch the Azure voice catalog for the current key+region (on key/region change or manual refresh). */
@@ -1058,7 +1064,7 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
       log(`guideWrite: created=${n}/${total} reason="${reason}"`);
       if (n > 0) toast("info", tr("host.guide.written", { n, total }));
       else if (reason === "notrack") toast("error", tr("host.guide.notrack"));
-      else if (reason === "nopalette") toast("error", tr("host.guide.nopalette"));
+      else if (reason === "nopalette" || reason === "error") toast("error", tr("host.guide.nopalette")); // both point to the Log
       break;
     }
     case ADDR.log:

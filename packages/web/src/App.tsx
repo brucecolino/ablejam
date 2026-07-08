@@ -13,6 +13,34 @@ type TFn = (key: string, params?: Record<string, string | number>) => string;
 
 declare const __APP_VERSION__: string; // injected by Vite from the desktop package version
 const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
+
+/** Copy text to the clipboard, robustly. navigator.clipboard is ONLY available in a secure
+ * context (https/localhost); over a plain-http LAN address (iPad/phone reaching the host) it's
+ * undefined and would silently fail — so fall back to a hidden textarea + execCommand. */
+function copyText(text: string): boolean {
+  try {
+    if (typeof navigator !== "undefined" && navigator.clipboard && window.isSecureContext) {
+      void navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch { /* fall through to the legacy path */ }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "-1000px";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length); // iOS Safari needs an explicit range
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
 const SITE_URL = "https://ablejam.com"; // also ablejam.it
 const SITE_LABEL = "ablejam.com";
 
@@ -257,7 +285,7 @@ function RemoteChip({ ip }: { ip: string }) {
   const url = ip ? `http://${ip}:${port}` : "";
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const copy = () => { if (!url) return; try { navigator.clipboard?.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1400); } catch { /* ignore */ } };
+  const copy = () => { if (!url) return; copyText(url); setCopied(true); setTimeout(() => setCopied(false), 1400); };
   const saveQr = () => {
     const canvas = document.querySelector(".conn-qr canvas") as HTMLCanvasElement | null;
     if (!canvas) return;
@@ -1704,7 +1732,13 @@ function SettingsPanel({ state, send, onClose, onOpenSetup, isMaster = true, sel
             <div className="settings-desc-small">{tr("logs.desc")}</div>
             <pre className="logs-view">{(state.logs ?? []).length ? (state.logs ?? []).join("\n") : tr("logs.empty")}</pre>
             <div style={{ display: "flex", gap: 8 }}>
-              <button className="settings-btn" style={{ marginTop: 0 }} onClick={() => { try { void navigator.clipboard.writeText((state.logs ?? []).join("\n")); } catch { /* ignore */ } }}>{tr("logs.copy")}</button>
+              <button className="settings-btn" style={{ marginTop: 0 }} onClick={() => {
+                const ok = copyText((state.logs ?? []).join("\n"));
+                if (!ok) { // clipboard blocked (http/LAN) → select the text so the user can copy manually
+                  const el = document.querySelector(".logs-view");
+                  if (el) { const r = document.createRange(); r.selectNodeContents(el); const s = window.getSelection(); s?.removeAllRanges(); s?.addRange(r); }
+                }
+              }}>{tr("logs.copy")}</button>
               <button className="settings-btn" style={{ marginTop: 0 }} onClick={() => send({ type: "command", command: "clearLogs" })}>{tr("logs.clear")}</button>
             </div>
           </section>

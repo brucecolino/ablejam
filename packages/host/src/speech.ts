@@ -85,6 +85,17 @@ export function userLibraryDirs(): string[] {
   return found;
 }
 
+/** Absolute path of an installed speech file, from the FIRST User Library that actually has it
+ * ("" if none). The bridge's ClipSlot.create_audio_clip references this path directly, so it must
+ * be a real file on disk — prefer the (permanent, app-managed) User Library copy. */
+export function speechFilePath(basename: string): string {
+  for (const ul of userLibraryDirs()) {
+    const p = path.join(ul, "AbleJam Speech", basename);
+    if (existsSync(p)) return p;
+  }
+  return "";
+}
+
 /** Copy the given speech files into "<User Library>/AbleJam Speech/" of EVERY User Library found
  * (skip up-to-date copies). Returns the number of libraries written to (0 = none found). */
 export function installSpeechFiles(paths: string[]): number {
