@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.16.0",
+    notes: {
+      it: [
+        "🎙️ Nuovo: genera l'audio guida direttamente da una traccia di Ableton. In Impostazioni → (audio guida) trovi \"Genera dalla traccia di Ableton\": scegli una traccia (di default la STRUCTURE, oppure un'altra a scelta), premi il pulsante e AbleJam legge i nomi delle clip e genera gli annunci audio per TUTTO il progetto — senza reinserire le etichette a mano.",
+        "⚠ Richiede il bridge v60: si installa da solo all'avvio — poi esci COMPLETAMENTE da Ableton (Ctrl/Cmd+Q) e riaprilo; verifica \"v60\" in Impostazioni → Progetto Ableton.",
+      ],
+      en: [
+        "🎙️ New: generate the audio guide straight from an Ableton track. In Settings → (audio guide) there's \"Generate from an Ableton track\": pick a track (STRUCTURE by default, or another of your choice), press the button, and AbleJam reads the clip names and generates the audio announcements for the WHOLE project — no re-typing labels.",
+        "⚠ Requires bridge v60: it auto-installs on launch — then FULLY quit Ableton (Ctrl/Cmd+Q) and reopen; check \"v60\" in Settings → Ableton Project.",
+      ],
+    },
+  },
+  {
     version: "1.15.0",
     notes: {
       it: [

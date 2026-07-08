@@ -14,7 +14,7 @@ from .osc import OSCServer
 HOST_IP = "127.0.0.1"
 HOST_PORT = 39062     # the AbleJam host listens here for state
 LISTEN_PORT = 39061   # we listen here for commands from the host
-BRIDGE_VERSION = 59   # bump on every change; shown in the UI to confirm reloads
+BRIDGE_VERSION = 60   # bump on every change; shown in the UI to confirm reloads
 
 
 class AbleJam(ControlSurface):
@@ -163,6 +163,7 @@ class AbleJam(ControlSurface):
         o.on("/ablejam/cmd/structureConfig", lambda a: self._structure_config(a))
         o.on("/ablejam/cmd/writeStructure", lambda a: self._write_structure(a[0] if a else "[]"))
         o.on("/ablejam/cmd/writeGuide", lambda a: self._write_guide(a[0] if a else "{}"))
+        o.on("/ablejam/cmd/readClips", lambda a: self._read_clips(a))
         o.on("/ablejam/cmd/renameLyrics", lambda a: self._rename_lyrics(a[0] if a else "[]"))
         o.on("/ablejam/cmd/writeLyrics", lambda a: self._write_lyrics_clips(a[0] if a else "[]"))
         o.on("/ablejam/cmd/colorize", lambda a: self._colorize(a[0] if a else "[]"))
@@ -912,6 +913,44 @@ class AbleJam(ControlSurface):
             return t
         except Exception:
             return None
+
+    def _read_clips(self, a):
+        # Read the named arrangement clips (name + start beat) of a track chosen by the host — the
+        # STRUCTURE track when the name is empty, else any track by exact name. Used to GENERATE the
+        # audio guide from an existing structure/marker track. Replies on /ablejam/trackclips.
+        name = ""
+        try:
+            name = str(a[0]).strip() if a and a[0] is not None else ""
+        except Exception:
+            name = ""
+        track = None
+        try:
+            want = name.lower()
+            if want:
+                for t in self._song.tracks:
+                    if (t.name or "").strip().lower() == want:
+                        track = t
+                        break
+            else:
+                track = self._find_structure_track()
+        except Exception:
+            track = None
+        out = []
+        if track is not None:
+            try:
+                for clip in track.arrangement_clips:
+                    try:
+                        nm = clip.name or ""
+                        if nm.strip():
+                            out.append({"t": nm, "s": float(clip.start_time), "e": float(clip.end_time)})
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        out.sort(key=lambda x: x["s"])
+        self._log("read clips: track=%r resolved=%r → %d named clip(s)" % (
+            name or "(structure)", (track.name if track is not None else None), len(out)))
+        self._osc.send("/ablejam/trackclips", [json.dumps(out)])
 
     def _send_structure(self):
         lines = []

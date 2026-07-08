@@ -728,6 +728,9 @@ function broadcastTransport(): void {
 // can see what happened during an export/connect without a console. Broadcast is debounced.
 let logs: string[] = [];
 let logBroadcastTimer: ReturnType<typeof setTimeout> | null = null;
+// True while we've asked the bridge to read a track's clips for "generate guide from track" and are
+// waiting for the /ablejam/trackclips reply (which then drives the TTS/guide pipeline).
+let awaitingTrackClips = false;
 function log(msg: string): void {
   logs.push(`${new Date().toLocaleTimeString()}  ${msg}`);
   if (logs.length > 300) logs = logs.slice(-300);
@@ -1067,6 +1070,23 @@ bridge.on("osc", (address: string, args: (number | string)[]) => {
       else if (reason === "nopalette" || reason === "error") toast("error", tr("host.guide.nopalette")); // both point to the Log
       break;
     }
+    case ADDR.trackClips: {
+      // Reply to "generate guide from track": the named clips of the chosen track. Turn them into
+      // guide items and run the SAME TTS/guide pipeline as a normal export (whole project).
+      if (!awaitingTrackClips) break;
+      awaitingTrackClips = false;
+      let clips: { s: number; t: string }[] = [];
+      try {
+        const arr = JSON.parse(String(args[0] ?? "[]")) as Array<{ t?: unknown; s?: unknown }>;
+        clips = arr
+          .map((c) => ({ s: Number(c.s) || 0, t: String(c.t ?? "").trim() }))
+          .filter((c) => c.t.length > 0);
+      } catch { /* ignore malformed */ }
+      log(`trackClips: received ${clips.length} named clip(s) → generating guide audio (whole project)`);
+      if (!clips.length) { toast("error", tr("host.guide.notrackclips")); break; }
+      writeGuideClips(clips); // routes to TTS/folder by guideMode; song-bounded ends via withClipEnds
+      break;
+    }
     case ADDR.log:
       log(`[bridge] ${String(args[0] ?? "")}`); // free-text diagnostic from the control surface
       break;
@@ -1214,6 +1234,17 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
       if (!items.length) { toast("error", tr("host.structure.nolabels")); break; }
       bridge.send(ADDR.cmdWriteStructure, [JSON.stringify(items)]); // each item carries its `e` (song-bounded end)
       if (settings.guideAudioEnabled && c.guide) writeGuideClips(items);
+      break;
+    }
+    case "generateGuideFromTrack": {
+      // Read a track's named clips from Ableton (STRUCTURE by default, or c.track) and generate the
+      // audio guide for the WHOLE project from them — no re-typing labels in the editor.
+      if (!bridgeConnected) { toast("error", tr("host.structure.noableton")); break; }
+      if (bridgeVersion > 0 && bridgeVersion < 60) { toast("error", tr("host.structure.oldbridge")); break; }
+      awaitingTrackClips = true;
+      log(`generateGuideFromTrack: reading track="${c.track || "(structure)"}" from Ableton`);
+      bridge.send(ADDR.cmdReadClips, [String(c.track ?? "")]);
+      toast("info", tr("host.guide.reading"));
       break;
     }
     case "setStructureLabels":

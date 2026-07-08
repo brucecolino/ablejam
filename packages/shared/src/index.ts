@@ -37,6 +37,7 @@ export const ADDR = {
   structure: "/ablejam/structure",
   structureWrite: "/ablejam/structurewrite",
   guideWrite: "/ablejam/guidewrite",
+  trackClips: "/ablejam/trackclips", // reply to cmdReadClips: a track's named arrangement clips
   midiStop: "/ablejam/midistop",
   transport: "/ablejam/transport",
   cmdPlay: "/ablejam/cmd/play",
@@ -50,6 +51,7 @@ export const ADDR = {
   cmdStructureConfig: "/ablejam/cmd/structureConfig",
   cmdWriteStructure: "/ablejam/cmd/writeStructure",
   cmdWriteGuide: "/ablejam/cmd/writeGuide",
+  cmdReadClips: "/ablejam/cmd/readClips", // read a track's named clips (name+beat) → trackClips reply
   cmdRenameLyrics: "/ablejam/cmd/renameLyrics",
   cmdWriteLyrics: "/ablejam/cmd/writeLyrics",
   cmdColorize: "/ablejam/cmd/colorize",
@@ -574,6 +576,7 @@ export type ClientCommand =
   | { type: "command"; command: "setStructure"; lines: LyricLine[] }
   | { type: "command"; command: "clearStructure" }
   | { type: "command"; command: "writeStructureClips"; lines: LyricLine[]; guide?: boolean; scope?: { start: number; end: number } }
+  | { type: "command"; command: "generateGuideFromTrack"; track?: string }
   | { type: "command"; command: "setStructureLabels"; labels: string[] }
   | { type: "command"; command: "setClientMaster"; clientId: string; master: boolean }
   | { type: "command"; command: "saveSetlist"; name: string }

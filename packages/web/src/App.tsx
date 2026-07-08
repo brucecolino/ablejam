@@ -364,6 +364,34 @@ function langName(l: string): string {
 // tune speed/expressiveness, preview ("Ascolta"), and save/recall presets. Generated announcements
 // then replace the folder-of-files on the SPEECH/guide track at export time.
 
+/** "Generate the audio guide from an Ableton track": pick a track (STRUCTURE by default), and the
+ * host reads its named clips and runs the TTS/guide pipeline for the whole project. No re-typing. */
+function GuideFromTrack({ state, send }: { state: AppState; send: Send }) {
+  const { tr } = useT();
+  const s = state.settings;
+  const options = state.tracks.length ? state.tracks : state.midiTracks;
+  const [track, setTrack] = useState<string>(s.structureTrack ?? "");
+  const busy = state.ttsBusy != null; // a generation is already running
+  return (
+    <div className="guide-fromtrack">
+      <div className="settings-section" style={{ marginTop: 6 }}>{tr("guide.fromTrack.title")}</div>
+      <div className="settings-desc-small">{tr("guide.fromTrack.desc")}</div>
+      <label className="setting">
+        <span className="setting-text"><span className="setting-label">{tr("guide.fromTrack.track")}</span></span>
+        <select className="setting-select" value={track} onChange={(e) => setTrack(e.target.value)}>
+          <option value="">{tr("guide.fromTrack.structureAuto")}</option>
+          {options.map((tk) => <option key={tk} value={tk}>{tk}</option>)}
+          {track && !options.includes(track) && <option value={track}>{track}</option>}
+        </select>
+      </label>
+      <button className="settings-btn" disabled={busy || !state.bridgeConnected}
+        onClick={() => send({ type: "command", command: "generateGuideFromTrack", track })}>
+        <ActionIcon name="play" /> {tr("guide.fromTrack.btn")}
+      </button>
+    </div>
+  );
+}
+
 function VoiceGenerator({ state, send }: { state: AppState; send: Send }) {
   const { tr } = useT();
   const s = state.settings;
@@ -1661,6 +1689,7 @@ function SettingsPanel({ state, send, onClose, onOpenSetup, isMaster = true, sel
                 )}
                 <div className="settings-desc-small">{tr("structure.palette.hint")}</div>
               </>)}
+              <GuideFromTrack state={state} send={send} />
             </>)}
             <button className="settings-btn" onClick={() => setShowStructEd(true)}><ActionIcon name="edit" /> {tr("structure.openEditor")}</button>
           </section>
