@@ -866,6 +866,41 @@ function SetlistView({ state, send, edit, setEdit, openPanel }: { state: AppStat
   const draggedBlock = drag != null && medleysLocked && inMedley(drag) ? medleyGroup(drag) : null;
   const isDragging = (k: number) => k === drag || (draggedBlock != null && k >= draggedBlock[0] && k <= draggedBlock[1]);
 
+  // Reorder logic shared by the pointer drag below. A locked medley moves as ONE block; the target
+  // snaps out of any medley it would land inside.
+  const doReorder = (from: number, to: number) => {
+    if (from === to) return;
+    if (medleysLocked && inMedley(from)) {
+      const [gs, ge] = medleyGroup(from);
+      let t = to;
+      while (t > 0 && linksInto(t - 1)) t--;
+      if (t < gs || t > ge) send({ type: "command", command: "moveBlock", from: gs, count: ge - gs + 1, to: t });
+    } else if (!(medleysLocked && to > 0 && linksInto(to - 1))) {
+      send({ type: "command", command: "reorder", from, to });
+    }
+  };
+  // POINTER-based reorder (HTML5 drag-and-drop does NOT fire on touch/iPad). Started from the grip;
+  // the row under the finger is found by its data-setrow, and dropped on release. Works for mouse too.
+  const ptrDrag = useRef(false);
+  const rowAtPoint = (x: number, y: number): number | null => {
+    const el = document.elementFromPoint(x, y)?.closest("[data-setrow]");
+    const v = el?.getAttribute("data-setrow");
+    return v == null ? null : Number(v);
+  };
+  useEffect(() => {
+    if (drag == null || !ptrDrag.current) return;
+    const onMove = (ev: PointerEvent) => { const t = rowAtPoint(ev.clientX, ev.clientY); if (t != null) setDragOver(t); };
+    const onUp = (ev: PointerEvent) => {
+      const from = drag, to = rowAtPoint(ev.clientX, ev.clientY);
+      ptrDrag.current = false; setDrag(null); setDragOver(null);
+      if (from != null && to != null) doReorder(from, to);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); window.removeEventListener("pointercancel", onUp); };
+  }, [drag]); // eslint-disable-line react-hooks/exhaustive-deps -- helpers close over the current render; drag change re-subscribes
+
   // Ctrl/Cmd+Z = undo, Ctrl+Y or Ctrl+Shift+Z = redo (ignored while typing in a field).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1021,43 +1056,12 @@ function SetlistView({ state, send, edit, setEdit, openPanel }: { state: AppStat
           return (
             <div
               key={i}
+              data-setrow={i}
               className={"row" + (isCur ? " current" : "") + (entry.active ? "" : " removed") + (isDragging(i) ? " dragging" : "") + (dragOver === i && !isDragging(i) ? " dragover" : "") + (linksInto(i) ? " linked-next" : "") + (linksInto(i - 1) ? " linked-prev" : "") + (medleysLocked && inMedley(i) ? " medley-locked" : "")}
-              draggable={edit}
-              onDragStart={(e) => {
-                setDrag(i);
-                e.dataTransfer.effectAllowed = "move";
-                // Locked medley: drag a ghost of the WHOLE block, so the preview shows it moving as one.
-                if (medleysLocked && inMedley(i)) {
-                  const [gs, ge] = medleyGroup(i);
-                  if (ge > gs) {
-                    const ghost = document.createElement("div");
-                    ghost.className = "drag-ghost";
-                    for (let k = gs; k <= ge; k++) { const e2 = setlist[k]; const s2 = e2 ? library[e2.libIndex] : undefined; const ln = document.createElement("div"); ln.textContent = s2?.title ?? "—"; ghost.appendChild(ln); }
-                    document.body.appendChild(ghost);
-                    e.dataTransfer.setDragImage(ghost, 14, 14);
-                    setTimeout(() => ghost.remove(), 0);
-                  }
-                }
-              }}
-              onDragOver={(e) => { if (edit && !(medleysLocked && i > 0 && linksInto(i - 1))) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOver(i); } }}
-              onDrop={() => {
-                if (drag != null && drag !== i) {
-                  if (medleysLocked && inMedley(drag)) {
-                    // a locked medley moves as ONE block; snap the target out of any medley it lands in
-                    const [gs, ge] = medleyGroup(drag);
-                    let to = i;
-                    while (to > 0 && linksInto(to - 1)) to--;
-                    if (to < gs || to > ge) send({ type: "command", command: "moveBlock", from: gs, count: ge - gs + 1, to });
-                  } else if (!(medleysLocked && i > 0 && linksInto(i - 1))) {
-                    send({ type: "command", command: "reorder", from: drag, to: i });
-                  }
-                }
-                setDrag(null); setDragOver(null);
-              }}
-              onDragEnd={() => { setDrag(null); setDragOver(null); }}
             >
               <span className="row-num">{entry.active ? rowNumbers.get(i) : ""}</span>
-              <span className="grip" title={tr("grip.title")}>⠿</span>
+              <span className="grip" title={tr("grip.title")}
+                onPointerDown={(e) => { e.preventDefault(); ptrDrag.current = true; setDrag(i); setDragOver(i); }}>⠿</span>
               <button className="rm" title={entry.active ? tr("row.remove") : tr("row.restore")} onClick={() => send({ type: "command", command: "setActive", index: i, active: !entry.active })}>
                 {entry.active ? "✕" : "＋"}
               </button>

@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.19.4",
+    notes: {
+      it: [
+        "iPad: ora puoi spostare i brani nella setlist! Tieni premuto sul \"grip\" (⠿) a sinistra della riga e trascina su/giù — prima il riordino usava un metodo che il touch non supporta e non funzionava. Vale anche col mouse. I medley bloccati si spostano come un blocco unico.",
+        "Nessun aggiornamento del bridge (resta v62).",
+      ],
+      en: [
+        "iPad: you can now reorder songs in the setlist! Press and hold the \"grip\" (⠿) at the left of a row and drag up/down — the old reorder used a method touch doesn't support and didn't work. Works with the mouse too. Locked medleys move as one block.",
+        "No bridge update (stays v62).",
+      ],
+    },
+  },
+  {
     version: "1.19.3",
     notes: {
       it: [

@@ -139,7 +139,9 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .row { display: flex; align-items: stretch; }
 .row.current { background: color-mix(in srgb, var(--playing) 14%, transparent); }
 .row.removed { opacity: 0.42; }
-.grip { display: flex; align-items: center; padding: 0 8px 0 12px; color: var(--text-muted); cursor: grab; user-select: none; }
+.grip { display: flex; align-items: center; padding: 0 8px 0 12px; color: var(--text-muted); cursor: grab; user-select: none; touch-action: none; -webkit-user-select: none; }
+/* Bigger touch target for the drag handle on iPad. */
+.rows.editing .grip { font-size: 18px; }
 /* A locked medley is one draggable block: a left accent + a translucent orange tint group its
    rows. The playing row keeps its green highlight (:not(.current)). */
 .row.medley-locked, .row.medley-grouped { box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
