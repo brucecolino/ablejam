@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.19.6",
+    notes: {
+      it: [
+        "Panic: ora suona UNA volta sola. La correzione precedente lo faceva partire 3 volte (\"pa pa paaaa\"): ora invia la nota una sola volta, ma abbastanza tardi da risultare comunque affidabile (dopo che la traccia si è ri-armata).",
+        "Play più affidabile: quando far partire un brano richiede di riposizionare la testina, ora si aspetta un istante che il salto atterri prima di avviare — così non capita più (raro) che parta il click ma non le sequenze. Il play normale dentro al brano resta immediato.",
+        "Nessun aggiornamento del bridge (resta v62).",
+      ],
+      en: [
+        "Panic: now sounds ONCE. The previous fix made it trigger 3 times (\"pa-pa-paaaa\"): it now sends the note a single time, but late enough to still land reliably (after the monitored track has re-armed).",
+        "More reliable play: when starting a song needs the playhead repositioned, it now waits a moment for the jump to land before starting — so the rare \"click but no sequences\" no longer happens. In-song play stays instant.",
+        "No bridge update (stays v62).",
+      ],
+    },
+  },
+  {
     version: "1.19.5",
     notes: {
       it: [

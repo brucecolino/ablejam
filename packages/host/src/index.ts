@@ -1436,14 +1436,18 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
       // has drifted OUTSIDE the shown song do we force it onto the song's start.
       const i = mgr.currentEntry;
       const s = mgr.songOf(i);
+      let jumped = false;
       if (s) {
         const end = s.endBeat ?? Number.POSITIVE_INFINITY;
         const inside = transport.time >= s.startBeat - 0.5 && transport.time < end - 0.05;
-        if (!inside) bridge.send(ADDR.cmdJumpToTime, [s.startBeat]);
+        if (!inside) { bridge.send(ADDR.cmdJumpToTime, [s.startBeat]); jumped = true; }
         mgr.setCurrentEntry(i); // re-arm the reconciliation guard
       }
-      bridge.send(ADDR.cmdPlay);
-      startClickIfSet();
+      // When we REPOSITIONED the playhead, give the jump a beat to land before starting the
+      // transport — otherwise play occasionally began in an empty spot (click, but no clips). The
+      // common in-song play is unchanged (no added latency).
+      if (jumped) setTimeout(() => { bridge.send(ADDR.cmdPlay); startClickIfSet(); }, 80);
+      else { bridge.send(ADDR.cmdPlay); startClickIfSet(); }
       break;
     }
     case "pause":
@@ -1452,14 +1456,12 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
       break;
     case "stop": stopToMedleyStart(); break; // medley -> first song; else current song. NEVER MIDI
     case "panic":
-      // PULL UP: stop first, then fire the note a moment LATER so the transport has settled. A
-      // single note was still missed ~half the time on some rigs (the monitored track hadn't
-      // re-armed after the stop) — firing it a FEW times, spaced out, makes it land reliably
-      // (re-triggering the same pull-up is harmless). The note is independent of the stop.
+      // PULL UP: stop first, then fire the note ONCE, but LATE enough (well past the transport
+      // settle) that the monitored track has always re-armed by then — so it lands reliably without
+      // re-triggering the sound (firing it 3× earlier made it audibly "pa-pa-paaaa"). The note is
+      // independent of the stop.
       stopToSongStart();
-      setTimeout(firePanicNote, 150);
-      setTimeout(firePanicNote, 350);
-      setTimeout(firePanicNote, 550);
+      setTimeout(firePanicNote, 420);
       break;
     case "seek": bridge.send(ADDR.cmdJumpToTime, [c.beat]); break; // click the bar to set a start point
     case "setShortcut": settings.shortcuts[c.action] = c.key; changed(); break;
