@@ -325,19 +325,6 @@ function cleanLabel(s: string): string {
   return s.replace(/[.,;:!?]+$/g, "").trim().replace(/\s+/g, " ");
 }
 
-/** Find the known structure label that the transcription CONTAINS (label tokens ⊆ transcription
- * tokens, via the existing token matcher), preferring the most specific (most words). null if none. */
-function matchLabelFromTranscription(transcription: string, vocab: string[]): string | null {
-  let best: string | null = null, bestTokens = 0;
-  for (const label of vocab) {
-    if (matchSpeechFile(label, [transcription])) { // label's tokens are all present in the transcription
-      const nTokens = label.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).length; // matches tokens() granularity
-      if (nTokens > bestTokens) { bestTokens = nTokens; best = label; }
-    }
-  }
-  return best;
-}
-
 const STT_TOL_SEC = 0.35; // marker-vs-STT skew tolerance (~a syllable)
 
 function normPath(p: string): string { return p.replace(/\\/g, "/").toLowerCase().replace(/\/+$/, ""); }
@@ -356,6 +343,30 @@ function clipForFileTime(clips: TrackClip[], t: number, eof: number): TrackClip 
   return near;
 }
 
+/** Normalize a token for matching: strip accents/punctuation, lowercase, alphanumeric only. */
+function norm(s: string): string { return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
+
+/** Find EVERY occurrence of a known label in a phrase's word stream (so one phrase like
+ * "entriamo tutti. ritornello." yields BOTH labels, each at its own word timestamp). Greedy,
+ * longest-label-first. `labelToks` = each vocab label pre-tokenized+normalized. */
+function labelsInWords(words: { text: string; offsetSec: number }[], labelToks: { label: string; toks: string[] }[]): { label: string; offsetSec: number }[] {
+  const w = words.map((x) => norm(x.text));
+  const out: { label: string; offsetSec: number }[] = [];
+  let i = 0;
+  while (i < words.length) {
+    let hit: { label: string; len: number } | null = null;
+    for (const { label, toks } of labelToks) { // labelToks sorted longest-first → most specific wins
+      if (i + toks.length > words.length) continue;
+      let ok = true;
+      for (let j = 0; j < toks.length; j++) { if (w[i + j] !== toks[j]) { ok = false; break; } }
+      if (ok) { hit = { label, len: toks.length }; break; }
+    }
+    if (hit) { out.push({ label: hit.label, offsetSec: words[i]!.offsetSec }); i += hit.len; }
+    else i++;
+  }
+  return out;
+}
+
 /** Transcribe a track's audio clips with Azure Fast Transcription (ONE call per SOURCE FILE — handles
  * MP3/WAV/FLAC and consolidated recordings). Places a STRUCTURE marker for EVERY recognized phrase at
  * its arrangement position (a single clip can hold several spoken labels), matched to a label. */
@@ -370,6 +381,12 @@ async function transcribeStructureFromClips(clips: TrackClip[], locale: string):
   // suffix): the clip name is usually what's spoken, so it sharply improves accuracy — incl. English.
   const nameHints = audio.map((c) => cleanLabel(c.t.replace(/\s*[-–]\s*speech\s*$/i, ""))).filter(Boolean);
   const phraseList = Array.from(new Set([...vocab, ...nameHints])).slice(0, 500);
+  // Labels to MATCH against (known sections + clip names), pre-tokenized, longest-first.
+  const matchVocab = Array.from(new Set([...vocab, ...nameHints]));
+  const labelToks = matchVocab
+    .map((l) => ({ label: l, toks: l.split(/\s+/).map(norm).filter(Boolean) }))
+    .filter((x) => x.toks.length > 0)
+    .sort((a, b) => b.toks.length - a.toks.length);
   const tempo = transport.tempo > 0 ? transport.tempo : 120; // file seconds → arrangement beats
   // Group clips by source file → one Fast Transcription call per distinct file.
   const byFile = new Map<string, { file: string; clips: TrackClip[] }>();
@@ -381,9 +398,10 @@ async function transcribeStructureFromClips(clips: TrackClip[], locale: string):
   const totalFiles = byFile.size;
   log(`transcribe: ${audio.length} clip(s) across ${totalFiles} file(s), lang=${locales.length ? locales.join(",") : "auto"}, ${phraseList.length} hints, tempo=${tempo}`);
   const results: { s: number; t: string }[] = [];
-  let done = 0, failed = 0;
+  let done = 0, failed = 0, totalPhrases = 0;
   ttsBusy = { kind: "generate", pct: 0 };
   broadcastState();
+  const beatOf = (clip: TrackClip, offsetSec: number) => clip.s + Math.max(0, offsetSec - Math.max(0, clip.fs)) * (tempo / 60);
   for (const { file, clips: fileClips } of byFile.values()) {
     ttsBusy = { kind: "generate", pct: Math.floor((done / totalFiles) * 100) }; // reading file (done+1)/total
     broadcastState();
@@ -396,16 +414,27 @@ async function transcribeStructureFromClips(clips: TrackClip[], locale: string):
     } else {
       phrases.sort((a, b) => a.offsetSec - b.offsetSec);
       const eof = phrases.reduce((m, p) => Math.max(m, p.offsetSec + p.durationSec), 0);
+      totalPhrases += phrases.length;
+      const words = phrases.reduce((n, p) => n + p.words.length, 0);
       let placed = 0;
       for (const p of phrases) {
-        const clip = clipForFileTime(fileClips, p.offsetSec, eof);
-        if (!clip) continue; // phrase falls outside every clip's region
-        const beat = clip.s + Math.max(0, p.offsetSec - Math.max(0, clip.fs)) * (tempo / 60);
-        const matched = matchLabelFromTranscription(p.text, vocab);
-        const label = matched ?? cleanLabel(p.text);
-        if (label) { results.push({ s: beat, t: label }); placed++; }
+        // Split each phrase into EVERY known label it contains (via word timestamps), so a phrase
+        // like "entriamo tutti. ritornello." yields two markers, each at its own moment.
+        const occ = p.words.length ? labelsInWords(p.words, labelToks) : [];
+        if (occ.length) {
+          for (const o of occ) {
+            const clip = clipForFileTime(fileClips, o.offsetSec, eof);
+            if (!clip) continue;
+            results.push({ s: beatOf(clip, o.offsetSec), t: o.label }); placed++;
+          }
+        } else {
+          // No known label in the phrase → one verbatim marker for the whole phrase.
+          const clip = clipForFileTime(fileClips, p.offsetSec, eof);
+          const label = cleanLabel(p.text);
+          if (clip && label) { results.push({ s: beatOf(clip, p.offsetSec), t: label }); placed++; }
+        }
       }
-      log(`transcribe: file "${nodePath.basename(file)}" → ${phrases.length} phrase(s) → ${placed} marker(s); e.g. ${phrases.slice(0, 4).map((p) => `"${p.text}"@${p.offsetSec.toFixed(1)}s`).join(", ")}`);
+      log(`transcribe: file "${nodePath.basename(file)}" → ${phrases.length} phrase(s), ${words} word(s) → ${placed} marker(s); e.g. ${phrases.slice(0, 3).map((p) => `"${p.text}"`).join(" | ")}`);
     }
     done++;
     ttsBusy = { kind: "generate", pct: Math.floor((done / totalFiles) * 100) };
@@ -417,8 +446,9 @@ async function transcribeStructureFromClips(clips: TrackClip[], locale: string):
   if (!results.length) { toast("error", tr("host.stt.none")); return; }
   results.sort((a, b) => a.s - b.s);
   const items = withClipEnds(results.map((r) => ({ s: r.s, t: r.t })));
-  log(`transcribe: writing ${items.length} structure marker(s) to the STRUCTURE track`);
+  log(`transcribe: ${totalPhrases} phrase(s) recognized → ${items.length} marker(s) written to STRUCTURE`);
   bridge.send(ADDR.cmdWriteStructure, [JSON.stringify(items)]);
+  toast("info", tr("host.stt.summary", { phrases: totalPhrases, markers: items.length }));
 }
 
 /** Fetch the Azure voice catalog for the current key+region (on key/region change or manual refresh). */

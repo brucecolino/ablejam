@@ -5,11 +5,13 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+export interface FastWord { text: string; offsetSec: number; durationSec: number }
 export interface FastPhrase {
   text: string;
   offsetSec: number;   // start of the phrase within the source file
   durationSec: number;
   confidence: number;  // 0..1
+  words: FastWord[];   // per-word timestamps (returned by default) — lets us split multi-label phrases
 }
 
 export interface FastResult { phrases: FastPhrase[]; error?: string }
@@ -69,6 +71,11 @@ export async function azureFastTranscribe(
       offsetSec: (Number(p.offsetMilliseconds) || 0) / 1000,
       durationSec: (Number(p.durationMilliseconds) || 0) / 1000,
       confidence: Number(p.confidence) || 0,
+      words: (Array.isArray(p.words) ? (p.words as Array<Record<string, unknown>>) : []).map((w) => ({
+        text: String(w.text ?? "").trim(),
+        offsetSec: (Number(w.offsetMilliseconds) || 0) / 1000,
+        durationSec: (Number(w.durationMilliseconds) || 0) / 1000,
+      })).filter((w) => w.text.length > 0),
     })).filter((p) => p.text.length > 0),
   };
 }

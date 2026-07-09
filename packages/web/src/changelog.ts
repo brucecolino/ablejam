@@ -10,6 +10,23 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.19.2",
+    notes: {
+      it: [
+        "Trascrizione struttura: ora estrae OGNI etichetta parlata dentro ciascuna frase (usando i tempi parola-per-parola). Se un annuncio contiene più sezioni (\"entriamo tutti… ritornello\") crea un marker per ciascuna, non più uno solo — così ne prende molte di più.",
+        "I nomi delle clip (es. WALK OFF) ora contano anche nel riconoscimento delle etichette, non solo come suggerimento.",
+        "A fine trascrizione compare un riepilogo: \"X frasi riconosciute → Y etichette\" — così vedi subito il risultato (e se il numero è basso capiamo se è il riconoscimento a mancare).",
+        "Nessun aggiornamento del bridge (resta v62).",
+      ],
+      en: [
+        "Structure transcription: now extracts EVERY spoken label inside each phrase (using word-by-word timings). If one announcement holds several sections (\"entriamo tutti… ritornello\") it creates a marker for each, not just one — so it captures many more.",
+        "Clip names (e.g. WALK OFF) now count in label recognition too, not only as a hint.",
+        "A summary appears when done: \"X phrases recognized → Y labels\" — so you see the result at a glance (and if the number is low we know recognition is the bottleneck).",
+        "No bridge update (stays v62).",
+      ],
+    },
+  },
+  {
     version: "1.19.1",
     notes: {
       it: [
