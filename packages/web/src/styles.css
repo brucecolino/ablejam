@@ -13,13 +13,18 @@
 }
 
 * { box-sizing: border-box; }
-html, body, #root { height: 100%; margin: 0; }
+/* Lock the PAGE so it can't scroll / rubber-band under the finger on iPad (Safari) — inner areas
+   keep their own overflow:auto. Fixes the "the app moves at the touch" report. Done with
+   overflow:hidden (NOT position:fixed, which collapsed the layout). */
+html, body, #root { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; }
 body {
   background: var(--bg);
   color: var(--text);
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+/* Inner scrollers must NOT chain their scroll to the (now fixed) page. */
+.body, .settings, .settings-grid, .setlist, .logs-view, .lib-list, .overlay { overscroll-behavior: contain; }
 button { font-family: inherit; }
 
 /* App-styled checkboxes — dark, rounded, amber when checked (no white native boxes), so the
@@ -549,7 +554,9 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .perf-time { font-size: 14px; opacity: 0.85; margin-top: 2px; }
 
 /* Performance transport (large, dedicated) */
-.perf-transport { display: flex; align-items: stretch; gap: 10px; padding: 12px; background: var(--elevated); border-top: 1px solid var(--border); }
+/* Safe-area padding keeps the buttons (esp. the corner PULL UP) off the iPad screen edge / home
+   indicator / Split-View handle. */
+.perf-transport { display: flex; align-items: stretch; gap: 10px; padding: 12px max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); background: var(--elevated); border-top: 1px solid var(--border); }
 .pt { flex: 1; height: 72px; font-size: 24px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 14px; cursor: pointer; }
 .pt:hover { border-color: var(--accent); }
 .pt { display: flex; align-items: center; justify-content: center; }
@@ -565,7 +572,7 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .song-progress-fill { height: 100%; background: var(--playing); transition: width 0.1s linear; }
 
 /* Transport (setlist) */
-.transport { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--elevated); border-top: 1px solid var(--border); }
+.transport { display: flex; align-items: center; gap: 12px; padding: 12px max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); background: var(--elevated); border-top: 1px solid var(--border); }
 .meta { flex: 0 1 320px; min-width: 0; overflow: hidden; text-align: center; }
 .meta-title { font-size: 23px; font-weight: 800; line-height: 1.2; display: flex; align-items: center; justify-content: center; gap: 7px; min-width: 0; }
 .meta-title .mt-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

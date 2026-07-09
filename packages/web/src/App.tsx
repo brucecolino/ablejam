@@ -276,6 +276,35 @@ function Clock() {
   return <span className="clock" title={now.toLocaleString()}>{hh}:{mm}</span>;
 }
 
+/** Top-bar fullscreen toggle — real estate matters on iPad in front of a crowd, and combined with
+ * the page-lock CSS it keeps the app from drifting under the finger. Hidden where the Fullscreen API
+ * isn't available (e.g. iPhone Safari). */
+function FullscreenButton() {
+  const { tr } = useT();
+  const [fs, setFs] = useState(typeof document !== "undefined" && !!document.fullscreenElement);
+  useEffect(() => {
+    const onChange = () => setFs(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+  if (typeof document === "undefined" || !document.documentElement.requestFullscreen) return null;
+  const toggle = () => {
+    try {
+      if (document.fullscreenElement) void document.exitFullscreen?.();
+      else void document.documentElement.requestFullscreen?.();
+    } catch { /* unsupported / blocked */ }
+  };
+  return (
+    <button className="gear" onClick={toggle} title={tr(fs ? "fullscreen.exit" : "fullscreen.enter")} aria-label={tr("fullscreen.enter")}>
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        {fs
+          ? <><path d="M9 4v3a2 2 0 0 1-2 2H4" /><path d="M15 4v3a2 2 0 0 0 2 2h3" /><path d="M9 20v-3a2 2 0 0 0-2-2H4" /><path d="M15 20v-3a2 2 0 0 1 2-2h3" /></>
+          : <><path d="M4 9V6a2 2 0 0 1 2-2h3" /><path d="M20 9V6a2 2 0 0 0-2-2h-3" /><path d="M4 15v3a2 2 0 0 0 2 2h3" /><path d="M20 15v3a2 2 0 0 1-2 2h-3" /></>}
+      </svg>
+    </button>
+  );
+}
+
 /** Top-bar "connect a device" indicator: an icon that's green when a tablet/phone CAN reach AbleJam
  * (the host has a LAN IP), red when offline. Clicking opens the connection card (QR + address)
  * directly — no Settings detour. Same size as the other status dots. */
@@ -781,6 +810,7 @@ export function App() {
             title={state.audioConnected ? tr("audio.dot.connected") : tr("audio.dot.disconnected")} />
           <Dot ok={bridgeConnected} label="Live"
             title={state.abletonVersion ? (state.abletonProject ? `${tr("live.project")}: ${state.abletonProject}\n` : "") + state.abletonVersion : undefined} />
+          <FullscreenButton />
           <button className="gear" onClick={() => setShowInfo(true)} title={tr("info.title")} aria-label={tr("info.title")}>
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><line x1="12" y1="11" x2="12" y2="16" /><line x1="12" y1="7.5" x2="12.01" y2="7.5" /></svg>
           </button>

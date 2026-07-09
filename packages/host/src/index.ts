@@ -1452,11 +1452,14 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
       break;
     case "stop": stopToMedleyStart(); break; // medley -> first song; else current song. NEVER MIDI
     case "panic":
-      // PULL UP: stop first, then fire the note a moment LATER so the transport has
-      // settled — a monitored track then reliably hears it every time (no more
-      // "once yes once no"). The note is independent of the stop.
+      // PULL UP: stop first, then fire the note a moment LATER so the transport has settled. A
+      // single note was still missed ~half the time on some rigs (the monitored track hadn't
+      // re-armed after the stop) — firing it a FEW times, spaced out, makes it land reliably
+      // (re-triggering the same pull-up is harmless). The note is independent of the stop.
       stopToSongStart();
       setTimeout(firePanicNote, 150);
+      setTimeout(firePanicNote, 350);
+      setTimeout(firePanicNote, 550);
       break;
     case "seek": bridge.send(ADDR.cmdJumpToTime, [c.beat]); break; // click the bar to set a start point
     case "setShortcut": settings.shortcuts[c.action] = c.key; changed(); break;

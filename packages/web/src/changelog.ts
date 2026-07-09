@@ -10,6 +10,25 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.19.3",
+    notes: {
+      it: [
+        "iPad: la pagina non si muove più al tatto — bloccato lo scroll/rimbalzo della pagina (le liste interne scorrono comunque).",
+        "Nuovo pulsante schermo intero in alto a destra (accanto agli ingranaggi): utile sul palco per guadagnare spazio e stabilità.",
+        "Panic più affidabile: la nota di \"pull up\" viene ora inviata più volte a brevissima distanza, così arriva anche quando prima veniva persa (basta che ne arrivi una).",
+        "Pulsanti transport (incluso PULL UP) staccati dal bordo/angolo dello schermo su iPad (rispetto delle safe-area), così non si sovrappongono più agli handle di sistema.",
+        "Nessun aggiornamento del bridge (resta v62).",
+      ],
+      en: [
+        "iPad: the page no longer moves at the touch — page scroll/rubber-band is locked (inner lists still scroll).",
+        "New fullscreen button top-right (next to the gears): handy on stage for more room and stability.",
+        "More reliable panic: the \"pull up\" note is now sent a few times in quick succession, so it lands even when it used to be missed (any one arriving is enough).",
+        "Transport buttons (incl. PULL UP) kept off the screen edge/corner on iPad (safe-area aware), so they no longer clash with system handles.",
+        "No bridge update (stays v62).",
+      ],
+    },
+  },
+  {
     version: "1.19.2",
     notes: {
       it: [
