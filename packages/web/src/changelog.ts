@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.19.5",
+    notes: {
+      it: [
+        "Spostamento brani più chiaro: mentre trascini compare una linea d'inserimento accesa (con pallino) tra i brani, che segue il dito/mouse in tempo reale e mostra esattamente dove atterrerà — utile soprattutto con i medley. Vale su PC e iPad.",
+        "Nessun aggiornamento del bridge (resta v62).",
+      ],
+      en: [
+        "Clearer reordering: while dragging, a glowing insertion line (with a dot) appears between songs, following the finger/mouse in real time and showing exactly where it will land — especially handy with medleys. Works on PC and iPad.",
+        "No bridge update (stays v62).",
+      ],
+    },
+  },
+  {
     version: "1.19.4",
     notes: {
       it: [
