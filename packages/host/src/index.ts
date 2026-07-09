@@ -14,7 +14,7 @@ import { listBluetooth, openBluetoothSettings } from "./bluetooth";
 import { hasAudioInterface } from "./audio";
 import { defaultSpeechDir, listSpeechFiles, matchSpeechFile, installSpeechFiles, speechFilePath } from "./speech";
 import { VOICE_CATALOG, voiceById, installedVoices, engineReady, engineCanRun, ensureEngine, ensureVoice, synthesize, padWavToSeconds, ttsCacheDir, type DlProgress } from "./tts";
-import { azureFastTranscribe, type FastPhrase } from "./azurestt";
+import { azureFastTranscribe, type FastWord } from "./azurestt";
 import { fetchAzureVoices, azureSynthesize, type AzureVoice } from "./azuretts";
 import nodePath from "node:path";
 import { existsSync, readFileSync } from "node:fs";
@@ -417,22 +417,36 @@ async function transcribeStructureFromClips(clips: TrackClip[], locale: string):
       totalPhrases += phrases.length;
       const words = phrases.reduce((n, p) => n + p.words.length, 0);
       let placed = 0;
-      for (const p of phrases) {
-        // Split each phrase into EVERY known label it contains (via word timestamps), so a phrase
-        // like "entriamo tutti. ritornello." yields two markers, each at its own moment.
-        const occ = p.words.length ? labelsInWords(p.words, labelToks) : [];
+      // Each spoken announcement is separated by a short SILENCE. Split the recognized words into
+      // groups by gaps → ONE marker per announcement (a clip holds several). Within a group, prefer
+      // the known label(s); else the group's verbatim text.
+      const placeGroup = (grp: FastWord[]) => {
+        if (!grp.length) return;
+        const at = grp[0]!.offsetSec;
+        const clip = clipForFileTime(fileClips, at, eof);
+        if (!clip) return;
+        const occ = labelsInWords(grp, labelToks);
         if (occ.length) {
-          for (const o of occ) {
-            const clip = clipForFileTime(fileClips, o.offsetSec, eof);
-            if (!clip) continue;
-            results.push({ s: beatOf(clip, o.offsetSec), t: o.label }); placed++;
-          }
+          for (const o of occ) { const c = clipForFileTime(fileClips, o.offsetSec, eof); if (c) { results.push({ s: beatOf(c, o.offsetSec), t: o.label }); placed++; } }
         } else {
-          // No known label in the phrase → one verbatim marker for the whole phrase.
+          const label = cleanLabel(grp.map((w) => w.text).join(" "));
+          if (label) { results.push({ s: beatOf(clip, at), t: label }); placed++; }
+        }
+      };
+      const GAP_SEC = 0.4; // a pause this long between recognized words = a separate announcement
+      for (const p of phrases) {
+        if (!p.words.length) { // no word timings → one marker for the phrase
           const clip = clipForFileTime(fileClips, p.offsetSec, eof);
           const label = cleanLabel(p.text);
           if (clip && label) { results.push({ s: beatOf(clip, p.offsetSec), t: label }); placed++; }
+          continue;
         }
+        let start = 0;
+        for (let k = 1; k < p.words.length; k++) {
+          const prev = p.words[k - 1]!, cur = p.words[k]!;
+          if (cur.offsetSec - (prev.offsetSec + Math.max(0, prev.durationSec)) >= GAP_SEC) { placeGroup(p.words.slice(start, k)); start = k; }
+        }
+        placeGroup(p.words.slice(start));
       }
       log(`transcribe: file "${nodePath.basename(file)}" → ${phrases.length} phrase(s), ${words} word(s) → ${placed} marker(s); e.g. ${phrases.slice(0, 3).map((p) => `"${p.text}"`).join(" | ")}`);
     }

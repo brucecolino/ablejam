@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.19.7",
+    notes: {
+      it: [
+        "Trascrizione struttura: ora divide il parlato in base alle PAUSE. Ogni clip audio contiene più annunci separati da un silenzio: crea un marker per ognuno, al suo istante — così ne prende quanti sono i segnali, non solo uno per clip/frase.",
+        "Il Log mostra ora anche quante PAROLE ha riconosciuto Azure per file: se quel numero è alto ma i marker pochi era un problema di divisione (risolto qui); se è basso è il riconoscimento vero e proprio (audio/lingua) e cambiamo strategia.",
+        "Nessun aggiornamento del bridge (resta v62).",
+      ],
+      en: [
+        "Structure transcription: now splits the speech by PAUSES. Each audio clip holds several announcements separated by silence: it creates a marker for each, at its moment — so it captures as many as there are signals, not just one per clip/phrase.",
+        "The Log now also shows how many WORDS Azure recognized per file: if that number is high but markers were few it was a splitting problem (fixed here); if it's low it's actual recognition (audio/language) and we change strategy.",
+        "No bridge update (stays v62).",
+      ],
+    },
+  },
+  {
     version: "1.19.6",
     notes: {
       it: [
