@@ -321,10 +321,13 @@ function FullscreenButton() {
 /** Top-bar "connect a device" indicator: an icon that's green when a tablet/phone CAN reach AbleJam
  * (the host has a LAN IP), red when offline. Clicking opens the connection card (QR + address)
  * directly — no Settings detour. Same size as the other status dots. */
-function RemoteChip({ ip }: { ip: string }) {
+function RemoteChip({ ip, ips = [] }: { ip: string; ips?: string[] }) {
   const { tr } = useT();
   const port = typeof location !== "undefined" ? (location.port || "3700") : "3700";
-  const url = ip ? `http://${ip}:${port}` : "";
+  const options = ips.length ? ips : (ip ? [ip] : []);
+  const [picked, setPicked] = useState<string | null>(null);
+  const active = picked && options.includes(picked) ? picked : ip; // user choice, else the active LAN IP
+  const url = active ? `http://${active}:${port}` : "";
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const copy = () => { if (!url) return; copyText(url); setCopied(true); setTimeout(() => setCopied(false), 1400); };
@@ -353,6 +356,16 @@ function RemoteChip({ ip }: { ip: string }) {
             <div className="conn-body">
               {url ? (
                 <>
+                  {options.length > 1 && (
+                    <div className="conn-ips">
+                      <span className="settings-desc-small">{tr("remote.pickIp")}</span>
+                      <div className="conn-ips-row">
+                        {options.map((o) => (
+                          <button key={o} className={"conn-ip" + (o === active ? " on" : "")} onClick={() => setPicked(o)}>{o}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="conn-url-row">
                     <div className="lan-url" style={{ flex: 1, minWidth: 0, margin: 0, fontSize: 14, letterSpacing: 0, wordBreak: "break-all" }}>{url}</div>
                     <button className={"act" + (copied ? " on" : "")} style={{ flex: "none" }} onClick={copy} title={copied ? tr("remote.copied") : tr("remote.copy")} aria-label={tr("remote.copy")}>
@@ -820,7 +833,7 @@ export function App() {
             onClick={() => { send({ type: "command", command: "refreshBluetooth" }); send({ type: "command", command: "openBluetoothSettings" }); }}>
             <BluetoothIcon /> {state.bluetooth.length}
           </button>
-          <RemoteChip ip={state.lanIp} />
+          <RemoteChip ip={state.lanIp} ips={state.lanIps} />
           <AudioDot ok={state.audioConnected}
             title={state.audioConnected ? tr("audio.dot.connected") : tr("audio.dot.disconnected")} />
           <Dot ok={bridgeConnected} label="Live"

@@ -426,6 +426,12 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .conn-modal { max-width: 360px; }
 .conn-body { display: flex; flex-direction: column; gap: 14px; padding: 4px 2px 2px; }
 .conn-url-row { display: flex; align-items: center; gap: 8px; }
+/* Multi-network IP picker (margins, not flex-gap, so it lays out on old iOS Safari too). */
+.conn-ips > span { display: block; margin-bottom: 6px; }
+.conn-ips-row { display: flex; flex-wrap: wrap; }
+.conn-ips-row > .conn-ip { margin: 0 6px 6px 0; }
+.conn-ip { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 13px; font-variant-numeric: tabular-nums; cursor: pointer; }
+.conn-ip.on { border-color: var(--accent); color: var(--accent); }
 .conn-qr { display: flex; justify-content: center; }
 .conn-qr canvas { background: #fff; padding: 12px; border-radius: 12px; box-shadow: 0 6px 24px -8px rgba(0,0,0,0.5); }
 .conn-save { align-self: center; }

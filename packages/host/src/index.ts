@@ -1,4 +1,5 @@
 import os from "node:os";
+import dgram from "node:dgram";
 import { pathToFileURL } from "node:url";
 import { BridgeLink } from "./bridge";
 import { Server, type ClientMeta } from "./server";
@@ -130,16 +131,49 @@ function watchOriginalForReimport(name: string, origPath: string): void {
   } catch { return; }
   editWatch = { watcher, clearTimer: () => { if (timer) clearTimeout(timer); } };
 }
-/** First non-internal IPv4 — the address a tablet on the same WiFi uses to reach us. */
-function detectLanIp(): string {
-  for (const list of Object.values(os.networkInterfaces())) {
+// Interfaces that are NOT the physical LAN a tablet uses — VPNs, virtual adapters, Apple's
+// AWDL/AirDrop link, container/hypervisor bridges. Handing out one of these gives the phones an
+// IP they can't reach (the reported bug: the QR showed 192.168.1.175 while the Mac's active WiFi
+// was 192.168.123.x, because os.networkInterfaces() returned the wrong interface first).
+const VIRTUAL_IF = /^(lo|utun|tun|tap|awdl|llw|bridge|vmnet|vboxnet|docker|veth|vEthernet|Hyper-V|ppp|ipsec|zt|tailscale|wg)/i;
+/** Every plausible LAN IPv4 (physical, non-virtual, non link-local), so the UI can offer a picker
+ * when a machine is on several networks. */
+function lanIpCandidates(): string[] {
+  const out: string[] = [];
+  for (const [name, list] of Object.entries(os.networkInterfaces())) {
+    if (VIRTUAL_IF.test(name)) continue;
     for (const ni of list ?? []) {
-      if (ni.family === "IPv4" && !ni.internal) return ni.address;
+      if (ni.family === "IPv4" && !ni.internal && !ni.address.startsWith("169.254.")) out.push(ni.address);
     }
   }
-  return "";
+  return out;
 }
-const lanIp = detectLanIp();
+/** The source address the OS would use to reach the default route — i.e. the ACTIVE network the
+ * phones share — found via a UDP socket that never sends a packet (works even with no internet, as
+ * long as there's a default route). Falls back to the first non-virtual candidate. */
+function detectActiveLanIp(): Promise<string> {
+  return new Promise((resolve) => {
+    const fallback = () => resolve(lanIpCandidates()[0] ?? "");
+    try {
+      const s = dgram.createSocket("udp4");
+      s.once("error", () => { try { s.close(); } catch { /* ignore */ } fallback(); });
+      s.connect(53, "8.8.8.8", () => {
+        let ip = "";
+        try { ip = s.address().address; } catch { /* ignore */ }
+        try { s.close(); } catch { /* ignore */ }
+        resolve(ip && ip !== "0.0.0.0" && !ip.startsWith("169.254.") ? ip : (lanIpCandidates()[0] ?? ""));
+      });
+    } catch { fallback(); }
+  });
+}
+let lanIp = lanIpCandidates()[0] ?? "";  // immediate best-guess; refined by detectActiveLanIp below
+let lanIps = lanIpCandidates();          // all candidates, active one moved to front once resolved
+void detectActiveLanIp().then((ip) => {
+  if (!ip) return;
+  lanIp = ip;
+  lanIps = [ip, ...lanIpCandidates().filter((x) => x !== ip)];
+  broadcastState();
+});
 let bridgeConnected = false;
 let startupClickDone = false; // one-shot guard for "click on at AbleJam startup"
 let stageMessage = ""; // operator cue shown on STAGE views
@@ -660,6 +694,7 @@ function snapshot(): AppState {
     midiTracks,
     midiOutPorts,
     lanIp,
+    lanIps,
     stopPoints,
     stopDiag,
     logs,

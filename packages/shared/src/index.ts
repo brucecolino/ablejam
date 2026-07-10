@@ -415,6 +415,9 @@ export interface AppState {
   midiOutPorts: string[];
   /** The host machine's LAN IP, so a tablet on the same WiFi can open AbleJam (""=unknown). */
   lanIp: string;
+  /** All plausible LAN IPs (active one first) — a machine on several networks lets the user pick
+   * the address that matches the phones' WiFi. */
+  lanIps: string[];
   /** Arrangement beats of the MIDI "stop" notes read from the STOP track (diagnostic). */
   stopPoints: number[];
   /** Raw STOP-clip reading values (clipStart/startMarker/note0/beat) — debug only. */
@@ -504,6 +507,7 @@ export const initialState: AppState = {
   midiTracks: [],
   midiOutPorts: [],
   lanIp: "",
+  lanIps: [],
   stopPoints: [],
   stopDiag: "",
   logs: [],

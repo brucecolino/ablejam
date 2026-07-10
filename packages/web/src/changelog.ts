@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.9",
+    notes: {
+      it: [
+        "RISOLTO (perché iPhone/iPad non entravano): quando il computer è su più reti, AbleJam poteva mostrare nel QR l'indirizzo SBAGLIATO — es. il QR diceva 192.168.1.175 mentre la WiFi vera era 192.168.123.x → i telefoni finivano su un indirizzo inesistente e vedevano la pagina bianca. Ora AbleJam rileva l'indirizzo della rete ATTIVA.",
+        "In più, se il computer ha più indirizzi, il pannello \"Connetti un dispositivo\" te li mostra tutti: scegli quello della TUA WiFi (quella dei telefoni) e il QR si aggiorna.",
+        "Nessun cambio del bridge (resta v63).",
+      ],
+      en: [
+        "FIXED (why iPhones/iPads couldn't connect): when the computer is on more than one network, AbleJam could show the WRONG address in the QR — e.g. the QR said 192.168.1.175 while the real WiFi was 192.168.123.x → phones hit a non-existent address and got a blank page. It now detects the ACTIVE network's address.",
+        "Also, if the computer has several addresses, the \"Connect a device\" panel lists them all: pick the one on YOUR WiFi (the phones' network) and the QR updates.",
+        "No bridge change (stays v63).",
+      ],
+    },
+  },
+  {
     version: "1.20.8",
     notes: {
       it: [
