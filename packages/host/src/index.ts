@@ -1383,7 +1383,8 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
       const already = settings.masterDevices.some((m) => m.id === target.deviceId);
       if (c.master) {
         if (already) break;
-        if (settings.masterDevices.length >= 2) { server.sendTo(client.opaqueId, { type: "toast", level: "error", message: tr("master.limit") }); break; }
+        // No cap on the number of Master devices — a whole band can control AbleJam. (`already`
+        // dedupes, so the list can't grow past the count of distinct authorized devices.)
         settings.masterDevices = [...settings.masterDevices, { id: target.deviceId, name: target.name }];
       } else {
         settings.masterDevices = settings.masterDevices.filter((m) => m.id !== target.deviceId);

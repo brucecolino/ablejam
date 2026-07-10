@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.10",
+    notes: {
+      it: [
+        "Master senza limite: puoi ora autorizzare QUANTI dispositivi vuoi a controllare AbleJam (prima erano massimo 2 oltre al PC). Tutta la band può comandare. In Impostazioni → Rete tocca Master/Visualizza su ogni dispositivo.",
+        "Nessun cambio del bridge (resta v63).",
+      ],
+      en: [
+        "Unlimited Masters: you can now authorize AS MANY devices as you want to control AbleJam (it was capped at 2 besides the PC). The whole band can drive it. In Settings → Network tap Master/View on each device.",
+        "No bridge change (stays v63).",
+      ],
+    },
+  },
+  {
     version: "1.20.9",
     notes: {
       it: [

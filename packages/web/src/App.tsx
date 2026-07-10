@@ -2059,7 +2059,6 @@ function SettingsPanel({ state, send, onClose, onOpenSetup, isMaster = true, sel
                   {clients.map((cl) => {
                     const isSelf = cl.id === selfId;
                     const canToggle = isMaster && !cl.isLocal; // masters assign roles; the host PC is fixed
-                    const atCap = !cl.isMaster && remoteMasters >= 2;
                     return (
                       <div key={cl.id} className={"dev-row" + (cl.isMaster ? " master" : "")}>
                         <span className="dev-ico">{cl.isLocal ? <DesktopIcon /> : <DeviceIcon />}</span>
@@ -2072,7 +2071,7 @@ function SettingsPanel({ state, send, onClose, onOpenSetup, isMaster = true, sel
                         ) : canToggle ? (
                           <div className="dev-toggle">
                             <button className={"dev-seg" + (!cl.isMaster ? " on" : "")} onClick={() => send({ type: "command", command: "setClientMaster", clientId: cl.id, master: false })}>{tr("devices.viewer.short")}</button>
-                            <button className={"dev-seg" + (cl.isMaster ? " on" : "")} disabled={atCap} title={atCap ? tr("master.limit") : undefined} onClick={() => send({ type: "command", command: "setClientMaster", clientId: cl.id, master: true })}>{tr("devices.master.short")}</button>
+                            <button className={"dev-seg" + (cl.isMaster ? " on" : "")} onClick={() => send({ type: "command", command: "setClientMaster", clientId: cl.id, master: true })}>{tr("devices.master.short")}</button>
                           </div>
                         ) : (
                           <span className={"dev-fixed" + (cl.isMaster ? " master" : "")}>{cl.isMaster ? tr("devices.master.short") : tr("devices.viewer.short")}</span>
