@@ -10,6 +10,23 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.7",
+    notes: {
+      it: [
+        "NUOVO — Esporta .txt: nella schermata Stampa c'è un pulsante \"⬇ Esporta .txt\" che salva la scaletta come file di testo PULITO (un brano per riga, i medley uniti da \" / \"). Questo file si può re-importare senza perdere abbinamenti, ed è condivisibile tra dispositivi.",
+        "Perché il PDF dava 0/0: il PDF della Stampa è un \"Salva come PDF\" del browser, pensato per la carta — il suo testo NON si recupera in modo affidabile quando lo re-importi (da qui lo 0/0). Usa l'export .txt per il giro completo salva→re-importa.",
+        "L'import ora ignora l'intestazione della stampa (\"35 voci · data\") e le etichette \"MEDLEY\" in coda, così i formati AbleJam si importano meglio.",
+        "Promemoria: per ritrovare una scaletta dopo aver chiuso il programma, il modo affidabile resta Salva + Apri/Recenti (le tue scalette sono già lì). Nessun cambio del bridge (resta v63).",
+      ],
+      en: [
+        "NEW — Export .txt: the Print screen now has an \"⬇ Export .txt\" button that saves the setlist as a CLEAN text file (one song per line, medleys joined with \" / \"). That file re-imports without losing matches and is shareable across devices.",
+        "Why the PDF gave 0/0: the Print PDF is a browser \"Save as PDF\", meant for paper — its text does NOT round-trip reliably when re-imported (hence 0/0). Use Export .txt for the full save→re-import loop.",
+        "Import now ignores the print header (\"35 songs · date\") and trailing \"MEDLEY\" tags, so AbleJam's own formats import better.",
+        "Reminder: to get a setlist back after closing the app, the reliable way is still Save + Open/Recent (your setlists are already there). No bridge change (stays v63).",
+      ],
+    },
+  },
+  {
     version: "1.20.6",
     notes: {
       it: [

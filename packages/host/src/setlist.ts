@@ -296,8 +296,12 @@ export class SetlistManager {
   private parseImportLine(raw: string): { hasSeq: boolean; key: string; parts: string[] } | null {
     let line = stripListMarker(raw).trim();
     if (!line) return null;
+    // Skip AbleJam's own print header ("35 voci · 08/07/2026" and friends) so a printed setlist
+    // re-imports cleanly instead of counting the header as a phantom title.
+    if (/^\d+\s+(voci|voce|entries|entry|songs?|morceaux|canci[oó]n(?:es)?)\b/i.test(line)) return null;
     const hasSeq = /\bstart\s*seq\b/i.test(line);
     line = line.replace(/\[[^\]]*\]/g, " ").trim(); // drop [START SEQ] etc.
+    line = line.replace(/\s+(?:medley|manuale|manual)\s*$/i, "").trim(); // drop a trailing print tag
     let key = "";
     const km = line.match(/\(([^)]*)\)\s*$/); // trailing (key)
     if (km) {

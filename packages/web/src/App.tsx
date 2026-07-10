@@ -2173,6 +2173,22 @@ function PrintView({ state, onClose }: { state: AppState; onClose: () => void })
   const [evt, setEvt] = useState(() => localStorage.getItem("ablejam.event") ?? "");
   useEffect(() => { localStorage.setItem("ablejam.band", band); }, [band]);
   useEffect(() => { localStorage.setItem("ablejam.event", evt); }, [evt]);
+  // A CLEAN, re-importable .txt of the setlist: one line per entry, medley parts joined with " / ",
+  // key in parens for single songs — no numbers/tags/header — so re-importing it matches titles
+  // reliably (unlike the printed PDF, whose text layer + numbering fight the import parser).
+  const exportTxt = () => {
+    const lines = items.map((it) =>
+      it.songs.map((s) => s.title).join(" / ")
+      + (it.songs.length === 1 && it.songs[0]!.key ? ` (${it.songs[0]!.key})` : ""),
+    );
+    const name = (band.trim() || tr("print.defaultTitle")).replace(/[^\w.-]+/g, "_") || "setlist";
+    const blob = new Blob([lines.join("\n") + "\n"], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `${name}.txt`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
   return (
     <div className="overlay print-overlay" onClick={onClose}>
       <div className="print-modal" onClick={(e) => e.stopPropagation()}>
@@ -2180,6 +2196,7 @@ function PrintView({ state, onClose }: { state: AppState; onClose: () => void })
           <input className="print-input" placeholder={tr("print.band")} value={band} onChange={(e) => setBand(e.target.value)} />
           <input className="print-input" placeholder={tr("print.event")} value={evt} onChange={(e) => setEvt(e.target.value)} />
           <span className="spacer" />
+          <button onClick={exportTxt} title={tr("print.exportTxt.hint")}>{tr("print.exportTxt")}</button>
           <button className="primary" onClick={() => window.print()}>{tr("print.print")}</button>
           <button onClick={onClose}>{tr("common.close")}</button>
         </div>
