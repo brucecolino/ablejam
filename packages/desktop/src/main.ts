@@ -10,7 +10,7 @@
 import { app, BrowserWindow, Menu, Tray, nativeImage, shell, dialog, ipcMain } from "electron";
 import path from "node:path";
 import net from "node:net";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, cpSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { installBridge, openDataFolder, lanUrl, autoUpdateBridge } from "./install";
 import { checkForUpdate, downloadAndInstall } from "./update";
@@ -129,13 +129,54 @@ const isDev = !app.isPackaged;
 // In dev __dirname is packages/desktop/dist; the repo root is three levels up.
 const resourcesRoot = isDev ? path.resolve(__dirname, "..", "..", "..") : process.resourcesPath;
 
+/** Count saved setlist .json files under a data dir (0 if the folder is missing). */
+function setlistCount(dataDir: string): number {
+  try { return readdirSync(path.join(dataDir, "setlists")).filter((f) => f.endsWith(".json")).length; }
+  catch { return 0; }
+}
+
+/** The user's data dir, PINNED to a name-INDEPENDENT location so it never moves across builds.
+ *
+ * Previously ABLEJAM_DATA_DIR = <app.getPath("userData")>/ablejam-data, and userData depends on
+ * app.getName(). That name has been both "@ablejam/desktop" (the package name, with a slash → a
+ * nested folder) and "AbleJam" (the electron-builder productName) across builds, so an update
+ * could silently point the app at a DIFFERENT folder — orphaning every saved setlist ("Setlist
+ * non trovata" on recall). We now derive from app.getPath("appData") (the OS roaming dir, which
+ * does NOT depend on the app name) so the location is stable forever, and on first run we migrate
+ * the data from whatever legacy location still holds it. */
+function resolveDataDir(): string {
+  const canonical = path.join(app.getPath("appData"), "AbleJam", "ablejam-data");
+  try {
+    if (setlistCount(canonical) === 0) {
+      const legacy = [
+        path.join(app.getPath("userData"), "ablejam-data"),                       // previous name-dependent path
+        path.join(app.getPath("appData"), "@ablejam", "desktop", "ablejam-data"), // known slash-based old path
+      ].filter((p) => path.resolve(p) !== path.resolve(canonical) && existsSync(p));
+      const best = legacy.map((p) => ({ p, n: setlistCount(p) })).sort((a, b) => b.n - a.n)[0];
+      if (best && best.n > 0) {
+        mkdirSync(canonical, { recursive: true });
+        // Copy the user's data (not the re-downloadable piper voice cache). force:false keeps any
+        // file already in the canonical dir, so re-running is a no-op.
+        for (const item of ["setlists", "imports", "lyrics", "structure", "recents.json", "session.json"]) {
+          const src = path.join(best.p, item);
+          if (existsSync(src)) {
+            try { cpSync(src, path.join(canonical, item), { recursive: true, force: false, errorOnExist: false }); }
+            catch { /* skip a single unreadable item */ }
+          }
+        }
+      }
+    }
+  } catch { /* migration is best-effort — never block startup over it */ }
+  return canonical;
+}
+
 function configureHostEnv(): void {
   if (isDev) {
     // Dev parity with `pnpm start`: reuse the repo's existing .ablejam-data + packages/web/dist
     // by leaving the overrides UNSET (the host falls back to its repo-relative paths).
     return;
   }
-  process.env.ABLEJAM_DATA_DIR = path.join(app.getPath("userData"), "ablejam-data");
+  process.env.ABLEJAM_DATA_DIR = resolveDataDir();
   process.env.ABLEJAM_WEB_DIST = path.join(process.resourcesPath, "web");
   process.env.ABLEJAM_SPEECH_DIR = path.join(process.resourcesPath, "speech"); // default guide audio
 }

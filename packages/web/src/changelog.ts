@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.4",
+    notes: {
+      it: [
+        "RISOLTO (importante): il richiamo delle scalette salvate. La cartella dati poteva cambiare posizione tra un aggiornamento e l'altro, orfanando le scalette salvate (errore \"Setlist non trovata\"). Ora la cartella è agganciata a una posizione stabile e le tue scalette esistenti vengono migrate automaticamente al primo avvio. Puoi editare, salvare, chiudere e richiamare senza perdere nulla.",
+        "NUOVO: dai un nome al dispositivo. In Impostazioni → Rete puoi assegnare un nome a questo dispositivo (es. \"iPad di Simon\"): compare nella lista dispositivi accanto a \"iPad · Safari\".",
+        "Nessun aggiornamento del bridge (resta v63).",
+      ],
+      en: [
+        "FIXED (important): recalling saved setlists. The data folder could change location between updates, orphaning your saved setlists (\"Setlist not found\"). It's now pinned to a stable location and your existing setlists are migrated automatically on first launch. You can edit, save, close and recall without losing anything.",
+        "NEW: name your device. In Settings → Network you can give this device a name (e.g. \"Simon's iPad\"): it shows in the device list next to \"iPad · Safari\".",
+        "No bridge update (stays v63).",
+      ],
+    },
+  },
+  {
     version: "1.20.3",
     notes: {
       it: [

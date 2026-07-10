@@ -1,6 +1,6 @@
 {
   "name": "@ablejam/desktop",
-  "version": "1.20.3",
+  "version": "1.20.4",
   "private": true,
   "description": "AbleJam desktop window (Electron) — boots the host in-process and shows the UI.",
   "main": "dist/main.cjs",

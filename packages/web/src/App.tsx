@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type C
 import { createPortal } from "react-dom";
 import { translate, bestMatch, LICENSING_ENABLED, DEFAULT_STRUCTURE_LABELS, type AppState, type ClientCommand, type ImportResult, type Lang, type LyricLine, type PluginRule, type Section, type Settings, type SetlistEntry, type ShortcutMap, type Song, type VoicePreset } from "@ablejam/shared";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
-import { useAbleJam, type Toast, type Beat } from "./ws";
+import { useAbleJam, getDeviceName, type Toast, type Beat } from "./ws";
 import { formatDuration, formatClock, colorOf } from "./format";
 import { entriesSince, notesFor, WHATS_NEW_TITLE, WHATS_NEW_CTA, type ChangelogEntry } from "./changelog";
 
@@ -694,7 +694,7 @@ function initialView(): View {
 }
 
 export function App() {
-  const { state, toasts, importResult, clearImportResult, send, beat, isMaster, selfId } = useAbleJam();
+  const { state, toasts, importResult, clearImportResult, send, beat, isMaster, selfId, setDeviceName } = useAbleJam();
   const [view, setView] = useState<View>(initialView);
   useEffect(() => { try { localStorage.setItem("ablejam.view", view); } catch { /* ignore */ } }, [view]);
   const [edit, setEdit] = useState(false);
@@ -841,7 +841,7 @@ export function App() {
 
       {panel === "import" && <ImportPanel send={send} importResult={importResult} onClose={() => { setPanel("none"); clearImportResult(); }} />}
       {panel === "print" && <PrintView state={state} onClose={() => setPanel("none")} />}
-      {showSettings && <SettingsPanel state={state} send={send} onClose={() => setShowSettings(false)} onOpenSetup={() => { setShowSettings(false); setShowSetup(true); }} isMaster={isMaster} selfId={selfId} />}
+      {showSettings && <SettingsPanel state={state} send={send} onClose={() => setShowSettings(false)} onOpenSetup={() => { setShowSettings(false); setShowSetup(true); }} isMaster={isMaster} selfId={selfId} setDeviceName={setDeviceName} />}
       {showSetup && <SetupWizard state={state} onClose={closeSetup} />}
       {showInfo && <InfoPanel onClose={() => setShowInfo(false)} />}
       {whatsNew && <WhatsNewModal entries={whatsNew} onClose={() => setWhatsNew(null)} />}
@@ -1571,7 +1571,7 @@ const SETTINGS_CATS: { id: SettingsCat; labelKey: string }[] = [
   { id: "updates", labelKey: "set.cat.updates" }, // always last
 ];
 
-function SettingsPanel({ state, send, onClose, onOpenSetup, isMaster = true, selfId = "" }: { state: AppState; send: Send; onClose: () => void; onOpenSetup?: () => void; isMaster?: boolean; selfId?: string }) {
+function SettingsPanel({ state, send, onClose, onOpenSetup, isMaster = true, selfId = "", setDeviceName }: { state: AppState; send: Send; onClose: () => void; onOpenSetup?: () => void; isMaster?: boolean; selfId?: string; setDeviceName?: (name: string) => void }) {
   const { tr } = useT();
   const s = state.settings;
   const productParts = tr("settings.product").split("APICE"); // APICE rendered as a styled brand span
@@ -1996,6 +1996,18 @@ function SettingsPanel({ state, send, onClose, onOpenSetup, isMaster = true, sel
           <section className="settings-card" style={catStyle("network")}>
             <div className="settings-section">{tr("settings.section.devices")}</div>
             <div className="settings-desc-small">{tr("devices.desc")}</div>
+            <label className="dev-name-field">
+              <span>{tr("devices.myName")}</span>
+              <input
+                className="setting-select"
+                type="text"
+                maxLength={40}
+                defaultValue={getDeviceName()}
+                placeholder={tr("devices.myName.ph")}
+                onBlur={(e) => setDeviceName?.(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur(); }}
+              />
+            </label>
             {(() => {
               const clients = state.clients ?? [];
               const remoteMasters = clients.filter((c) => !c.isLocal && c.isMaster).length;

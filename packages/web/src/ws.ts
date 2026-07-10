@@ -24,17 +24,27 @@ function deviceId(): string {
     return "no-storage";
   }
 }
-/** A friendly label for the device list, derived from the user agent (e.g. "iPad · Safari"). */
+/** User-given device name (e.g. "iPad di Simon"), persisted per browser. Empty = derived type. */
+const DEVICE_NAME_KEY = "ablejam.deviceName";
+export function getDeviceName(): string {
+  try { return (localStorage.getItem(DEVICE_NAME_KEY) || "").trim().slice(0, 40); } catch { return ""; }
+}
+function storeDeviceName(name: string): void {
+  try { localStorage.setItem(DEVICE_NAME_KEY, name.trim().slice(0, 40)); } catch { /* no storage */ }
+}
+/** A friendly label for the device list. Uses the user-set name when present, else the device type
+ * from the user agent, always suffixed with the browser — e.g. "iPad di Simon · Safari" (named) or
+ * "iPad · Safari" (default). */
 function deviceName(): string {
+  let dev = "Dispositivo", br = "";
   try {
     const ua = navigator.userAgent;
-    const dev = /iPad/i.test(ua) ? "iPad" : /iPhone/i.test(ua) ? "iPhone" : /Android/i.test(ua) ? "Android"
+    dev = /iPad/i.test(ua) ? "iPad" : /iPhone/i.test(ua) ? "iPhone" : /Android/i.test(ua) ? "Android"
       : /Macintosh/i.test(ua) ? "Mac" : /Windows/i.test(ua) ? "PC Windows" : "Dispositivo";
-    const br = /Electron/i.test(ua) ? "AbleJam" : /CriOS|Chrome/i.test(ua) ? "Chrome" : /Firefox|FxiOS/i.test(ua) ? "Firefox" : /Safari/i.test(ua) ? "Safari" : "";
-    return br ? `${dev} · ${br}` : dev;
-  } catch {
-    return "Dispositivo";
-  }
+    br = /Electron/i.test(ua) ? "AbleJam" : /CriOS|Chrome/i.test(ua) ? "Chrome" : /Firefox|FxiOS/i.test(ua) ? "Firefox" : /Safari/i.test(ua) ? "Safari" : "";
+  } catch { /* keep defaults */ }
+  const base = getDeviceName() || dev;
+  return br ? `${base} · ${br}` : base;
 }
 
 export function useAbleJam() {
@@ -106,5 +116,17 @@ export function useAbleJam() {
     if (s && s.readyState === WebSocket.OPEN) s.send(JSON.stringify(cmd));
   }, []);
 
-  return { state, connected, isMaster, selfId, toasts, importResult, clearImportResult: () => setImportResult(null), send, beat };
+  // Rename THIS device: persist the name and re-send the hello so the host updates its device
+  // list live (same deviceId → the entry is renamed, not duplicated). Applied on the next
+  // connect too, via deviceName() reading the stored value.
+  const setDeviceName = useCallback((name: string) => {
+    storeDeviceName(name);
+    const s = ref.current;
+    if (s && s.readyState === WebSocket.OPEN) {
+      const hello: HelloMessage = { type: "hello", deviceId: deviceId(), deviceName: deviceName() };
+      s.send(JSON.stringify(hello));
+    }
+  }, []);
+
+  return { state, connected, isMaster, selfId, toasts, importResult, clearImportResult: () => setImportResult(null), send, beat, setDeviceName };
 }

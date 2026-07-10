@@ -383,6 +383,10 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
  * real enforcement — this only makes the role visible and prevents accidental taps. */
 /* Connected devices list (Master/Viewer management). */
 .dev-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+/* "Name this device" field (margin, not flex-gap, so it also lays out on old iOS Safari). */
+.dev-name-field { display: flex; align-items: center; margin: 8px 0 12px; }
+.dev-name-field > span { color: var(--text-muted); font-size: 13px; margin-right: 10px; white-space: nowrap; }
+.dev-name-field > input { flex: 1; min-width: 0; }
 .dev-row { display: flex; align-items: center; gap: 11px; padding: 9px 11px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
 .dev-row.master { border-color: color-mix(in srgb, var(--playing) 45%, transparent); }
 .dev-ico { flex: none; color: var(--text-muted); display: inline-flex; }
