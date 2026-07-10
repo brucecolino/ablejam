@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.0",
+    notes: {
+      it: [
+        "Durata dei brani = durata reale delle clip. Prima la durata (in scaletta e in Performance) era la distanza tra i due marker; ora riflette dove finiscono davvero le clip del brano su Ableton, che può essere più corta O più lunga di quella distanza. Anche il tempo rimanente segue la fine reale del contenuto.",
+        "L'ultimo brano del progetto (che non ha un marker successivo) ora mostra finalmente la sua durata, letta dalle clip.",
+        "AGGIORNAMENTO DEL BRIDGE (v63): chiudi COMPLETAMENTE Ableton e riavvialo dopo l'update, così Live ricarica il ponte AbleJam. In Impostazioni → Progetto Ableton deve comparire v63.",
+      ],
+      en: [
+        "Song duration = real clip length. Before, the duration (in the setlist and in Performance) was the distance between the two markers; now it reflects where the song's clips actually end in Ableton, which can be shorter OR longer than that gap. The remaining time also follows the real content end.",
+        "The last song of the project (which has no following marker) now finally shows its duration, read from the clips.",
+        "BRIDGE UPDATE (v63): FULLY quit Ableton and relaunch it after updating, so Live reloads the AbleJam bridge. Settings → Ableton Project should show v63.",
+      ],
+    },
+  },
+  {
     version: "1.19.7",
     notes: {
       it: [

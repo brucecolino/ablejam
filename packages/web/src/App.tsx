@@ -951,7 +951,8 @@ function SetlistView({ state, send, edit, setEdit, openPanel }: { state: AppStat
 
   const remainingSec = (() => {
     const s = songOf(state, setlist[currentEntryIndex]);
-    return s && s.endBeat != null ? beatsToSec(s.endBeat - transport.time, transport.tempo) : null;
+    const endB = s ? (s.contentEndBeat ?? s.endBeat) : null; // real content end when known
+    return endB != null ? beatsToSec(endB - transport.time, transport.tempo) : null;
   })();
 
   const saveAs = () => {
@@ -2237,7 +2238,8 @@ function PerformanceView({ state, send }: { state: AppState; send: Send }) {
   const nextSong = songOf(state, setlist[nextIdx]);
   const nextKey = nextSong ? (nextSong.key || setlist[nextIdx]?.key || "") : "";
   const accent = curEntry?.color ?? colorOf(curSong?.color) ?? "var(--playing)";
-  const remainingSec = curSong && curSong.endBeat != null ? beatsToSec(curSong.endBeat - transport.time, transport.tempo) : null;
+  const remEndB = curSong ? (curSong.contentEndBeat ?? curSong.endBeat) : null;
+  const remainingSec = remEndB != null ? beatsToSec(remEndB - transport.time, transport.tempo) : null;
   // This song flows into the next (medley) — from the Ableton marker "/" OR a manual link, so
   // the medley UI shows regardless of how the setlist was loaded.
   const curContinues = !!(curSong?.continuesNext || curEntry?.linkedNext);

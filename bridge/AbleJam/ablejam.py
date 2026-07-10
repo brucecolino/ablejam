@@ -14,7 +14,7 @@ from .osc import OSCServer
 HOST_IP = "127.0.0.1"
 HOST_PORT = 39062     # the AbleJam host listens here for state
 LISTEN_PORT = 39061   # we listen here for commands from the host
-BRIDGE_VERSION = 62   # bump on every change; shown in the UI to confirm reloads
+BRIDGE_VERSION = 63   # bump on every change; shown in the UI to confirm reloads
 
 
 class AbleJam(ControlSurface):
@@ -598,8 +598,59 @@ class AbleJam(ControlSurface):
             self._request_seek(beats)     # enforce vs the stop-rewind while stopped
 
     # ---- outgoing state ----
+    def _song_content_ends(self, cues):
+        # Real end (in beats) of each song = the furthest arrangement-clip end among
+        # clips that START inside that song's marker range. Songs often run past the
+        # next marker's distance OR fall short of it, so the marker-to-marker gap is a
+        # poor duration; the actual clip content is the truth. Returns a list aligned
+        # with `cues` (same length); None where a song has no clips.
+        n = len(cues)
+        if n == 0:
+            return []
+        starts = [c.time for c in cues]
+        ends = [None] * n
+
+        def place(t):
+            # index of the last cue whose time <= t (the song this clip belongs to)
+            idx = -1
+            for i in range(n):
+                if starts[i] <= t + 1e-6:
+                    idx = i
+                else:
+                    break
+            return idx
+
+        try:
+            for track in self._song.tracks:
+                try:
+                    clips = track.arrangement_clips
+                except Exception:
+                    continue
+                for clip in clips:
+                    try:
+                        st = clip.start_time
+                        en = clip.end_time
+                    except Exception:
+                        continue
+                    i = place(st)
+                    if i < 0:
+                        continue
+                    if ends[i] is None or en > ends[i]:
+                        ends[i] = en
+        except Exception:
+            return [None] * n
+        return ends
+
     def _send_setlist(self):
-        songs = [{"name": c.name, "time": c.time} for c in self._cues_sorted()]
+        cues = self._cues_sorted()
+        ends = self._song_content_ends(cues)
+        songs = []
+        for i, c in enumerate(cues):
+            song = {"name": c.name, "time": c.time}
+            ce = ends[i] if i < len(ends) else None
+            if ce is not None and ce > c.time + 1e-6:
+                song["contentEnd"] = ce
+            songs.append(song)
         self._osc.send("/ablejam/setlist", [json.dumps(songs)])
 
     def _send_tracks(self):

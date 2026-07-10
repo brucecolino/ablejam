@@ -91,6 +91,9 @@ export interface Song {
   key: string;
   startBeat: number;
   endBeat: number | null;
+  /** Beat where the actual content (last clip) ends — for DURATION/remaining display. null = unknown
+   * (falls back to endBeat). Kept separate from endBeat so navigation/stop stay marker-based. */
+  contentEndBeat: number | null;
   durationSec: number | null;
   color: string | null;
   description: string | null;
@@ -613,22 +616,35 @@ export type ClientCommand =
 export interface RawCue {
   name: string;
   time: number;
+  /** Beat where this song's actual CONTENT ends (last arrangement clip in its range), from the
+   * bridge. Lets the duration reflect the real song length, not just the marker-to-marker gap. */
+  contentEnd?: number;
 }
 
 /** Build the song library from raw locators. */
 export function buildSetlist(cues: RawCue[], tempo: number): Song[] {
   const sorted = [...cues]
     .sort((a, b) => a.time - b.time)
-    .map((c) => ({ time: c.time, p: parseLocator(c.name) }));
+    .map((c) => ({ time: c.time, contentEnd: c.contentEnd, p: parseLocator(c.name) }));
 
   const songs: Song[] = [];
   let cur: Song | null = null;
 
-  for (const { time, p } of sorted) {
-    if (p.ignored) continue;
+  // The bridge reports contentEnd per RAW cue (max clip end up to the NEXT cue). A song spans
+  // several cues (its section/stop markers), so we fold every in-song cue's contentEnd into the
+  // song — otherwise a song with sections would stop counting at its first section marker.
+  const fold = (song: Song | null, ce: number | undefined) => {
+    if (!song || ce == null) return;
+    if (ce <= song.startBeat + 1e-6) return;
+    song.contentEndBeat = song.contentEndBeat == null ? ce : Math.max(song.contentEndBeat, ce);
+  };
+
+  for (const { time, contentEnd, p } of sorted) {
+    if (p.ignored) { fold(cur, contentEnd); continue; }
     if (p.marker === "songEnd" || p.marker === "stop") {
       if (cur && cur.endBeat == null) cur.endBeat = time;
       if (cur && p.marker === "stop") cur.stopAfter = true;
+      fold(cur, contentEnd);
       continue;
     }
     if (p.section) {
@@ -642,6 +658,7 @@ export function buildSetlist(cues: RawCue[], tempo: number): Song[] {
           flags: p.flags,
           transitionTarget: p.transitionTarget,
         });
+        fold(cur, contentEnd);
       }
       continue;
     }
@@ -652,6 +669,7 @@ export function buildSetlist(cues: RawCue[], tempo: number): Song[] {
       key: p.key ?? "",
       startBeat: time,
       endBeat: null,
+      contentEndBeat: contentEnd != null && contentEnd > time + 1e-6 ? contentEnd : null,
       durationSec: p.durationSec,
       color: p.color,
       description: p.description,
@@ -670,8 +688,11 @@ export function buildSetlist(cues: RawCue[], tempo: number): Song[] {
       const next = songs[i + 1];
       if (next) s.endBeat = next.startBeat;
     }
-    if (s.durationSec == null && s.endBeat != null && tempo > 0) {
-      s.durationSec = ((s.endBeat - s.startBeat) * 60) / tempo;
+    // Duration reflects the real CONTENT end (last clip) when the bridge reports it — a song that
+    // ends before OR rings past its next locator shows its true length, not the marker-to-marker gap.
+    if (s.durationSec == null && tempo > 0) {
+      const durEnd = s.contentEndBeat != null ? s.contentEndBeat : s.endBeat;
+      if (durEnd != null) s.durationSec = ((durEnd - s.startBeat) * 60) / tempo;
     }
   }
 
