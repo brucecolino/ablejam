@@ -1,4 +1,4 @@
-import { type SetlistEntry, type Song, bestMatch, stripListMarker, schemeHex } from "@ablejam/shared";
+import { type SetlistEntry, type Song, bestMatch, normalizeTitle, stripListMarker, schemeHex } from "@ablejam/shared";
 
 /**
  * Owns the performance setlist: an ordered list of entries referencing songs in
@@ -401,18 +401,33 @@ export class SetlistManager {
    * titles to successive library occurrences (a song reused across medleys), not all to
    * the first. Unreferenced library songs are appended as removed. */
   restoreFromSession(items: { title: string; active: boolean; linkedNext: boolean; key: string; color?: string }[]): { matched: number; total: number } {
+    // Key the library by NORMALIZED title (case/space/punctuation/accent-insensitive) so a marker
+    // lightly re-typed in Ableton still matches — the old exact-string match returned 0 on the
+    // smallest drift. Duplicate titles map to successive library occurrences via the per-title queue.
     const queues = new Map<string, number[]>();
     this.library.forEach((s, i) => {
-      const arr = queues.get(s.title);
+      const k = normalizeTitle(s.title);
+      const arr = queues.get(k);
       if (arr) arr.push(i);
-      else queues.set(s.title, [i]);
+      else queues.set(k, [i]);
     });
+    const libTitles = this.library.map((s) => s.title);
     const used = new Set<number>();
     const entries: SetlistEntry[] = [];
     for (const it of items) {
-      const arr = queues.get(it.title);
-      if (!arr || arr.length === 0) continue;
-      const li = arr.shift()!;
+      let li = -1;
+      const arr = queues.get(normalizeTitle(it.title));
+      if (arr) {
+        while (arr.length && used.has(arr[0]!)) arr.shift(); // drop any occurrence already taken
+        if (arr.length) li = arr.shift()!;
+      }
+      if (li < 0) {
+        // No normalized match — fall back to a fuzzy match (a bigger rename), high threshold to
+        // avoid loose false positives, skipping songs already used by another entry.
+        const m = bestMatch(it.title, libTitles, 0.72);
+        if (m && !used.has(m.index)) li = m.index;
+      }
+      if (li < 0) continue;
       entries.push({ libIndex: li, active: !!it.active, linkedNext: !!it.linkedNext, key: it.key ?? "", color: it.color });
       used.add(li);
     }

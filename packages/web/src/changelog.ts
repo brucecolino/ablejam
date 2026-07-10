@@ -10,6 +10,23 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.5",
+    notes: {
+      it: [
+        "RISOLTO (critico): richiamando una scaletta salvata dava \"0 corrispondenze\" e mostrava tutto il progetto invece della tua scaletta. Causa: se la richiamavi PRIMA che Ableton avesse caricato i marker, l'abbinamento girava su una libreria vuota → 0, e la scaletta andava persa. Ora il richiamo ASPETTA i marker e applica la tua scaletta appena arrivano.",
+        "L'abbinamento ora tollera anche piccole differenze nei nomi dei marker (maiuscole/minuscole, spazi, accenti, refusi): niente più \"0 corrispondenze\" per un titolo ritoccato.",
+        "I brani NON presenti nella scaletta richiamata non vengono mostrati nella vista live (restano nascosti; li rivedi solo in modifica se attivi \"mostra rimossi\", per riaggiungerli).",
+        "Nessun aggiornamento del bridge (resta v63).",
+      ],
+      en: [
+        "FIXED (critical): recalling a saved setlist gave \"0 matches\" and showed the whole project instead of your setlist. Cause: if you recalled it BEFORE Ableton had loaded the markers, matching ran against an empty library → 0, and the setlist was then lost. The recall now WAITS for the markers and applies your setlist as soon as they arrive.",
+        "Matching now also tolerates small differences in marker names (case, spaces, accents, typos): no more \"0 matches\" for a lightly re-typed title.",
+        "Songs NOT in the recalled setlist are not shown in the live view (they stay hidden; you only see them in edit mode if you turn on \"show removed\", to re-add them).",
+        "No bridge update (stays v63).",
+      ],
+    },
+  },
+  {
     version: "1.20.4",
     notes: {
       it: [

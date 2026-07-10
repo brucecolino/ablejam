@@ -68,7 +68,7 @@ let pendingRestoreItems: SavedItem[] | null =
   Array.isArray(restoredSession?.items) && restoredSession.items.length > 0
     ? (restoredSession.items as SavedItem[])
     : null;
-const pendingRestoreAuto = restoredSession?.auto ?? true;
+let pendingRestoreAuto = restoredSession?.auto ?? true;
 let currentSetlistName = restoredSession?.name ?? ""; // loaded/saved/imported setlist name
 /** Open a file in the OS default program (e.g. a .docx opens in Word). */
 function openInDefaultApp(file: string): void {
@@ -1556,17 +1556,25 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
       break;
     case "loadSetlist": {
       const items = loadSetlist(c.name);
-      if (items) {
+      if (!items) { toast("error", tr("host.setlist.notFound", { name: c.name })); break; }
+      currentSetlistName = c.name;
+      bumpRecent(c.name);
+      if (mgr.library.length === 0) {
+        // The Ableton project's markers haven't arrived yet (bridge still connecting, or AbleJam
+        // opened before Live). Matching now would drop EVERY song ("0 matched") and the recall
+        // would then be silently lost — the next library build re-maps the live in-memory setlist,
+        // not this file. Instead stash it: buildLibrary() applies it the moment the markers arrive.
+        pendingRestoreItems = items;
+        pendingRestoreAuto = false; // a loaded setlist carries its own medleys
+        toast("info", tr("host.setlist.loadedWaiting", { name: c.name }));
+        broadcastState();
+      } else {
         const r = mgr.restoreFromSession(items);
         mgr.medleysAreAuto = false; // a loaded setlist carries its own medleys
         ensureColoredIfSet(); // colour it on load if "colour on import" is on and it has no colours
-        bumpRecent(c.name);
-        currentSetlistName = c.name;
-        toast("info", tr("host.setlist.loaded", { name: c.name, matched: r.matched, total: r.total }));
+        toast(r.matched > 0 ? "info" : "error", tr("host.setlist.loaded", { name: c.name, matched: r.matched, total: r.total }));
         changed();
         server.broadcastMessage({ type: "importResult", result: { matched: r.matched, total: r.total, unmatched: [] } });
-      } else {
-        toast("error", tr("host.setlist.notFound", { name: c.name }));
       }
       break;
     }
