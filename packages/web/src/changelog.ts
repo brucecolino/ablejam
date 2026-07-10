@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.2",
+    notes: {
+      it: [
+        "Compatibilità con iPad/dispositivi più vecchi: prima, aprendo l'indirizzo (o il QR) su un iPad datato, la pagina restava NERA perché il codice usava istruzioni troppo recenti che quel Safari non capiva. Ora l'app viene compilata in una forma compatibile: dovrebbe caricarsi su iPad da iOS 12 in su.",
+        "Nessun aggiornamento del bridge (resta v63). Se il tuo iPad è ancora più vecchio (iOS 11 o meno) e resta nero, dimmi la versione di iOS e aggiungo i supporti mancanti.",
+      ],
+      en: [
+        "Compatibility with older iPads/devices: before, opening the address (or QR) on an old iPad left the page BLACK because the code used too-recent syntax that Safari couldn't parse. The app is now compiled in a compatible form: it should load on iPads from iOS 12 upward.",
+        "No bridge update (stays v63). If your iPad is even older (iOS 11 or below) and still black, tell me the iOS version and I'll add the missing shims.",
+      ],
+    },
+  },
+  {
     version: "1.20.1",
     notes: {
       it: [
