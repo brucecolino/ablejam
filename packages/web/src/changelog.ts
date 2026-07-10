@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.1",
+    notes: {
+      it: [
+        "Risolto: attivando lo schermo intero e poi uscendo, la finestra restava NERA (dovevi chiuderla dalla barra per rivedere il desktop). Ora lo schermo intero usa la modalità nativa della finestra, che entra ed esce in modo pulito.",
+        "Puoi attivare/uscire dallo schermo intero anche con il tasto F11.",
+        "Nessun aggiornamento del bridge (resta v63).",
+      ],
+      en: [
+        "Fixed: turning on fullscreen and then exiting left the window BLACK (you had to close it from the taskbar to see the desktop again). Fullscreen now uses the native window mode, which enters and exits cleanly.",
+        "You can also toggle fullscreen with the F11 key.",
+        "No bridge update (stays v63).",
+      ],
+    },
+  },
+  {
     version: "1.20.0",
     notes: {
       it: [

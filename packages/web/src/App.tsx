@@ -277,25 +277,38 @@ function Clock() {
 }
 
 /** Top-bar fullscreen toggle — real estate matters on iPad in front of a crowd, and combined with
- * the page-lock CSS it keeps the app from drifting under the finger. Hidden where the Fullscreen API
- * isn't available (e.g. iPhone Safari). */
+ * the page-lock CSS it keeps the app from drifting under the finger. In the Electron desktop app it
+ * drives the NATIVE window fullscreen over IPC — the DOM Fullscreen API leaves the window painted
+ * black on exit under Electron/Windows. In a browser/iPad it falls back to the HTML Fullscreen API;
+ * hidden where neither is available (e.g. iPhone Safari). */
 function FullscreenButton() {
   const { tr } = useT();
-  const [fs, setFs] = useState(typeof document !== "undefined" && !!document.fullscreenElement);
+  const bridge = getBridge();
+  const native = !!bridge?.toggleFullscreen;
+  const [fs, setFs] = useState(false);
   useEffect(() => {
+    if (native && bridge) {
+      let alive = true;
+      void bridge.isFullscreen?.().then((v) => { if (alive) setFs(!!v); });
+      const off = bridge.onFullscreenChange?.((v) => setFs(v));
+      return () => { alive = false; off?.(); };
+    }
     const onChange = () => setFs(!!document.fullscreenElement);
+    setFs(typeof document !== "undefined" && !!document.fullscreenElement);
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
-  }, []);
-  if (typeof document === "undefined" || !document.documentElement.requestFullscreen) return null;
+  }, [native, bridge]);
+  const htmlOk = typeof document !== "undefined" && !!document.documentElement.requestFullscreen;
+  if (!native && !htmlOk) return null;
   const toggle = () => {
     try {
+      if (native && bridge?.toggleFullscreen) { void bridge.toggleFullscreen(); return; }
       if (document.fullscreenElement) void document.exitFullscreen?.();
       else void document.documentElement.requestFullscreen?.();
     } catch { /* unsupported / blocked */ }
   };
   return (
-    <button className="gear" onClick={toggle} title={tr(fs ? "fullscreen.exit" : "fullscreen.enter")} aria-label={tr("fullscreen.enter")}>
+    <button className="gear" onClick={toggle} title={tr(fs ? "fullscreen.exit" : "fullscreen.enter")} aria-label={tr(fs ? "fullscreen.exit" : "fullscreen.enter")}>
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         {fs
           ? <><path d="M9 4v3a2 2 0 0 1-2 2H4" /><path d="M15 4v3a2 2 0 0 0 2 2h3" /><path d="M9 20v-3a2 2 0 0 0-2-2H4" /><path d="M15 20v-3a2 2 0 0 1 2-2h3" /></>
@@ -1235,6 +1248,9 @@ interface AbleJamBridge {
   version: () => Promise<string>;
   installBridge?: () => Promise<void>;
   setCloseToTray?: (v: boolean) => void;
+  toggleFullscreen?: () => Promise<boolean>;
+  isFullscreen?: () => Promise<boolean>;
+  onFullscreenChange?: (cb: (v: boolean) => void) => () => void;
   checkUpdate?: () => Promise<UpdateCheck>;
   installUpdate?: () => Promise<{ ok: boolean; error?: string }>;
   onUpdateProgress?: (cb: (p: UpdateProgress) => void) => () => void;

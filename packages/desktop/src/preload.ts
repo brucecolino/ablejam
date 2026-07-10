@@ -11,6 +11,15 @@ contextBridge.exposeInMainWorld("ablejam", {
   installBridge: (): Promise<void> => ipcRenderer.invoke("ablejam:install-bridge"),
   // Tell the main process whether closing the window should keep AbleJam running in the background.
   setCloseToTray: (v: boolean): Promise<void> => ipcRenderer.invoke("ablejam:set-close-to-tray", v),
+  // NATIVE window fullscreen (Electron). The DOM Fullscreen API leaves the window painted black on
+  // exit under Electron/Windows, so the renderer drives the real BrowserWindow instead.
+  toggleFullscreen: (): Promise<boolean> => ipcRenderer.invoke("ablejam:toggle-fullscreen"),
+  isFullscreen: (): Promise<boolean> => ipcRenderer.invoke("ablejam:is-fullscreen"),
+  onFullscreenChange: (cb: (v: boolean) => void): (() => void) => {
+    const listener = (_e: unknown, v: boolean): void => cb(!!v);
+    ipcRenderer.on("ablejam:fullscreen-changed", listener);
+    return () => ipcRenderer.removeListener("ablejam:fullscreen-changed", listener);
+  },
   checkUpdate: (): Promise<unknown> => ipcRenderer.invoke("ablejam:update-check"),
   installUpdate: (): Promise<unknown> => ipcRenderer.invoke("ablejam:update-install"),
   onUpdateProgress: (cb: (p: unknown) => void): (() => void) => {

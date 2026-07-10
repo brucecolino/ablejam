@@ -234,6 +234,19 @@ function createMainWindow(): void {
   });
   mainWin.on("closed", () => { mainWin = null; });
 
+  // Keep the renderer's fullscreen button in sync with the REAL window state (F11, native events).
+  mainWin.on("enter-full-screen", () => mainWin?.webContents.send("ablejam:fullscreen-changed", true));
+  mainWin.on("leave-full-screen", () => mainWin?.webContents.send("ablejam:fullscreen-changed", false));
+  // F11 toggles fullscreen natively (Escape never traps the user — the on-screen button + tray remain).
+  // `!isAutoRepeat` so HOLDING F11 doesn't rapid-fire the toggle (flicker / transient black frames);
+  // preventDefault so F11 is reserved for fullscreen and never also fires a bound transport shortcut.
+  mainWin.webContents.on("before-input-event", (e, input) => {
+    if (input.type === "keyDown" && !input.isAutoRepeat && input.key === "F11" && mainWin) {
+      e.preventDefault();
+      mainWin.setFullScreen(!mainWin.isFullScreen());
+    }
+  });
+
   void mainWin.loadURL(`http://127.0.0.1:${HOST_PORT}`);
 }
 
@@ -299,6 +312,13 @@ async function boot(): Promise<void> {
   ipcMain.handle("ablejam:update-check", () => checkForUpdate());
   ipcMain.handle("ablejam:update-install", (event) => downloadAndInstall((p) => event.sender.send("ablejam:update-progress", p)));
   ipcMain.handle("ablejam:set-close-to-tray", (_e, v: boolean) => { closeToTray = !!v; }); // web mirrors the setting here
+  ipcMain.handle("ablejam:toggle-fullscreen", () => {
+    if (!mainWin) return false;
+    const next = !mainWin.isFullScreen();
+    mainWin.setFullScreen(next);
+    return next;
+  });
+  ipcMain.handle("ablejam:is-fullscreen", () => !!mainWin?.isFullScreen());
 
   // Dynamic import of the ESM host bundle from this CJS main (computed specifier keeps it a
   // native import(), so Node loads the .mjs correctly).
