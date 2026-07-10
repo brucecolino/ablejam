@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.6",
+    notes: {
+      it: [
+        "RISOLTO (critico): un aggiornamento recente (1.20.4) cambiava la posizione della cartella dati e su alcune configurazioni la faceva puntare a una cartella VUOTA → AbleJam partiva senza licenza, bloccato in DEMO (nessun marker reale di Ableton, \"ripristina\" non faceva nulla, l'import trovava 0/0). Ora l'app usa di nuovo la tua cartella dati esistente (con licenza e scalette): niente viene spostato o perso.",
+        "Nessun aggiornamento del bridge (resta v63). Dopo l'update dovresti rivedere i tuoi marker reali e la licenza attiva.",
+      ],
+      en: [
+        "FIXED (critical): a recent update (1.20.4) changed where the app looked for its data folder and on some setups pointed it at an EMPTY folder → AbleJam started unlicensed, locked to the DEMO (no real Ableton markers, \"restore\" did nothing, import matched 0/0). The app now uses your existing data folder again (with your license and setlists): nothing is moved or lost.",
+        "No bridge update (stays v63). After updating you should see your real markers and active license again.",
+      ],
+    },
+  },
+  {
     version: "1.20.5",
     notes: {
       it: [

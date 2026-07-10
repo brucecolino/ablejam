@@ -10,7 +10,7 @@
 import { app, BrowserWindow, Menu, Tray, nativeImage, shell, dialog, ipcMain } from "electron";
 import path from "node:path";
 import net from "node:net";
-import { existsSync, mkdirSync, readdirSync, cpSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { installBridge, openDataFolder, lanUrl, autoUpdateBridge } from "./install";
 import { checkForUpdate, downloadAndInstall } from "./update";
@@ -129,45 +129,33 @@ const isDev = !app.isPackaged;
 // In dev __dirname is packages/desktop/dist; the repo root is three levels up.
 const resourcesRoot = isDev ? path.resolve(__dirname, "..", "..", "..") : process.resourcesPath;
 
-/** Count saved setlist .json files under a data dir (0 if the folder is missing). */
-function setlistCount(dataDir: string): number {
-  try { return readdirSync(path.join(dataDir, "setlists")).filter((f) => f.endsWith(".json")).length; }
-  catch { return 0; }
+/** True if a data dir already holds the user's data (its session.json carries the settings +
+ * LICENSE, or it has saved setlists). */
+function hasUserData(dataDir: string): boolean {
+  try {
+    if (existsSync(path.join(dataDir, "session.json"))) return true;
+    return readdirSync(path.join(dataDir, "setlists")).some((f) => f.endsWith(".json"));
+  } catch { return false; }
 }
 
-/** The user's data dir, PINNED to a name-INDEPENDENT location so it never moves across builds.
+/** Resolve the data dir to wherever the user's data ACTUALLY is, without moving anything.
  *
- * Previously ABLEJAM_DATA_DIR = <app.getPath("userData")>/ablejam-data, and userData depends on
- * app.getName(). That name has been both "@ablejam/desktop" (the package name, with a slash → a
- * nested folder) and "AbleJam" (the electron-builder productName) across builds, so an update
- * could silently point the app at a DIFFERENT folder — orphaning every saved setlist ("Setlist
- * non trovata" on recall). We now derive from app.getPath("appData") (the OS roaming dir, which
- * does NOT depend on the app name) so the location is stable forever, and on first run we migrate
- * the data from whatever legacy location still holds it. */
+ * The historical default is <app.getPath("userData")>/ablejam-data, but userData depends on
+ * app.getName(), which has been both "@ablejam/desktop" (package name, slash → nested folder) and
+ * "AbleJam" (electron-builder productName) across builds. If the default is empty but a known
+ * alternate location still holds the data (setlists + the licence in session.json), USE that folder
+ * in place — never copy/relocate (a bad copy once left the app pointed at an empty, unlicensed
+ * folder → locked to the demo). This keeps every existing install on its real data. */
 function resolveDataDir(): string {
-  const canonical = path.join(app.getPath("appData"), "AbleJam", "ablejam-data");
-  try {
-    if (setlistCount(canonical) === 0) {
-      const legacy = [
-        path.join(app.getPath("userData"), "ablejam-data"),                       // previous name-dependent path
-        path.join(app.getPath("appData"), "@ablejam", "desktop", "ablejam-data"), // known slash-based old path
-      ].filter((p) => path.resolve(p) !== path.resolve(canonical) && existsSync(p));
-      const best = legacy.map((p) => ({ p, n: setlistCount(p) })).sort((a, b) => b.n - a.n)[0];
-      if (best && best.n > 0) {
-        mkdirSync(canonical, { recursive: true });
-        // Copy the user's data (not the re-downloadable piper voice cache). force:false keeps any
-        // file already in the canonical dir, so re-running is a no-op.
-        for (const item of ["setlists", "imports", "lyrics", "structure", "recents.json", "session.json"]) {
-          const src = path.join(best.p, item);
-          if (existsSync(src)) {
-            try { cpSync(src, path.join(canonical, item), { recursive: true, force: false, errorOnExist: false }); }
-            catch { /* skip a single unreadable item */ }
-          }
-        }
-      }
-    }
-  } catch { /* migration is best-effort — never block startup over it */ }
-  return canonical;
+  const primary = path.join(app.getPath("userData"), "ablejam-data");
+  if (hasUserData(primary)) return primary; // the normal case — this is where installs already write
+  for (const alt of [
+    path.join(app.getPath("appData"), "@ablejam", "desktop", "ablejam-data"),
+    path.join(app.getPath("appData"), "AbleJam", "ablejam-data"),
+  ]) {
+    if (path.resolve(alt) !== path.resolve(primary) && hasUserData(alt)) return alt;
+  }
+  return primary; // fresh install — nothing anywhere yet
 }
 
 function configureHostEnv(): void {
