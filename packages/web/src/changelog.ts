@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.8",
+    notes: {
+      it: [
+        "RISOLTO — \"Salva con nome\" non faceva nulla (specie su Mac): usava la finestrella del browser (window.prompt) che l'app desktop (Electron) NON supporta → nessun salvataggio. Ora apre un dialogo INTERNO all'app per dare il nome e salvare. Vale anche per Cmd/Ctrl+S.",
+        "Promemoria import: per re-importare una scaletta usa \"⬇ Esporta .txt\" (schermata Stampa) e importa QUEL file. Il PDF di stampa è solo per la carta e non si re-importa (il suo testo non si recupera). In alternativa, il modo più semplice per ritrovare una scaletta è Salva + Apri/Recenti, senza file.",
+        "Nessun cambio del bridge (resta v63).",
+      ],
+      en: [
+        "FIXED — \"Save as\" did nothing (especially on Mac): it used the browser prompt (window.prompt), which the desktop app (Electron) does NOT support → no save happened. It now opens an IN-APP dialog to name and save the setlist. Same for Cmd/Ctrl+S.",
+        "Import reminder: to re-import a setlist use \"⬇ Export .txt\" (Print screen) and import THAT file. The print PDF is paper-only and doesn't re-import (its text can't be recovered). Easiest of all: Save + Open/Recent, no file needed.",
+        "No bridge change (stays v63).",
+      ],
+    },
+  },
+  {
     version: "1.20.7",
     notes: {
       it: [

@@ -777,8 +777,10 @@ export function App() {
         e.preventDefault();
         if (!masterRef.current) return; // viewer: read-only
         const st = stateRef.current;
-        const name = st.currentSetlistName || window.prompt(translate(st.settings.language, "save.prompt")) || "";
-        if (name) sendRef.current({ type: "command", command: "saveSetlist", name });
+        // Save over the current name if there is one; otherwise open the in-app "save as" modal
+        // (window.prompt is a no-op in the Electron desktop app).
+        if (st.currentSetlistName) sendRef.current({ type: "command", command: "saveSetlist", name: st.currentSetlistName });
+        else window.dispatchEvent(new CustomEvent("ablejam:save-as"));
       }
     };
     window.addEventListener("keydown", onSave);
@@ -860,6 +862,14 @@ function SetlistView({ state, send, edit, setEdit, openPanel }: { state: AppStat
   const [showRemoved, setShowRemoved] = useState(false);
   const [medleysLocked, setMedleysLocked] = useState(true); // medley order is locked by default
   const [lyricsFor, setLyricsFor] = useState<number | null>(null); // entry index whose lyrics we're editing
+  // "Save as" NAME dialog — an in-app modal, NOT window.prompt (Electron doesn't implement prompt()
+  // → "Salva con nome" silently did nothing in the desktop app). null = closed.
+  const [saveAsName, setSaveAsName] = useState<string | null>(null);
+  useEffect(() => {
+    const open = () => setSaveAsName(state.currentSetlistName || "");
+    window.addEventListener("ablejam:save-as", open);
+    return () => window.removeEventListener("ablejam:save-as", open);
+  }, [state.currentSetlistName]);
   const songHasLyrics = (i: number) => {
     const e = setlist[i]; const sg = e ? library[e.libIndex] : undefined;
     if (!sg) return false;
@@ -968,9 +978,11 @@ function SetlistView({ state, send, edit, setEdit, openPanel }: { state: AppStat
     return endB != null ? beatsToSec(endB - transport.time, transport.tempo) : null;
   })();
 
-  const saveAs = () => {
-    const name = window.prompt(tr("save.prompt"), state.currentSetlistName || "");
+  const saveAs = () => setSaveAsName(state.currentSetlistName || "");
+  const doSaveAs = () => {
+    const name = (saveAsName ?? "").trim();
     if (name) send({ type: "command", command: "saveSetlist", name });
+    setSaveAsName(null);
   };
   const saveOver = () => {
     if (state.currentSetlistName) send({ type: "command", command: "saveSetlist", name: state.currentSetlistName });
@@ -1105,6 +1117,23 @@ function SetlistView({ state, send, edit, setEdit, openPanel }: { state: AppStat
       </div>
 
       {lyricsFor != null && <LyricsEditor state={state} send={send} entryIndex={lyricsFor} onClose={() => setLyricsFor(null)} />}
+      {saveAsName !== null && (
+        <div className="overlay" onClick={() => setSaveAsName(null)}>
+          <div className="modal name-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="settings-section">{tr("save.as")}</div>
+            <input
+              className="setting-select" autoFocus type="text" maxLength={80}
+              value={saveAsName} placeholder={tr("save.prompt")}
+              onChange={(e) => setSaveAsName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") doSaveAs(); else if (e.key === "Escape") setSaveAsName(null); }}
+            />
+            <div className="modal-actions">
+              <button className="primary" onClick={doSaveAs} disabled={!(saveAsName ?? "").trim()}>{tr("save.as")}</button>
+              <button onClick={() => setSaveAsName(null)}>{tr("common.close")}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
