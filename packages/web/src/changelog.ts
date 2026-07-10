@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.3",
+    notes: {
+      it: [
+        "Vista Performance corretta sugli iPad più vecchi: prima il titolo era minuscolo, la barra di avanzamento spariva e tutto sembrava accalcato. Erano funzioni CSS moderne (dimensioni con clamp(), larghezze con min(), spaziature flex gap, inset, color-mix) che il vecchio Safari non applica: ora ognuna ha un fallback compatibile, quindi la schermata si vede correttamente su ogni dispositivo.",
+        "Corretti anche gli sfondi dei modali, l'evidenziazione del brano in esecuzione in scaletta, i segni di sezione sulla barra e il padding della barra trasporto sui dispositivi datati.",
+        "Nessun aggiornamento del bridge (resta v63).",
+      ],
+      en: [
+        "Performance view fixed on older iPads: the title was tiny, the progress bar vanished and everything looked cramped. These were modern CSS features (clamp() sizes, min() widths, flex gap spacing, inset, color-mix) that old Safari doesn't apply: each now has a compatible fallback, so the screen renders correctly on any device.",
+        "Also fixed the modal backdrops, the playing-song highlight in the setlist, the section marks on the bar, and the transport-bar padding on older devices.",
+        "No bridge update (stays v63).",
+      ],
+    },
+  },
+  {
     version: "1.20.2",
     notes: {
       it: [

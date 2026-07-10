@@ -63,8 +63,8 @@ input[type="checkbox"]:focus-visible { outline: 2px solid color-mix(in srgb, var
 .tab.on { color: var(--accent); background: var(--surface); border-color: var(--border); }
 .status { display: flex; flex: 1; gap: 8px; justify-content: flex-end; align-items: center; }
 /* "Live": RED when Ableton/bridge is disconnected, GREEN when connected. */
-.dot { font-size: 11px; font-weight: 700; color: #e2503b; border: 1px solid color-mix(in srgb, #e2503b 50%, transparent); border-radius: 999px; padding: 2px 10px; }
-.dot.ok { color: var(--playing); border-color: color-mix(in srgb, var(--playing) 50%, transparent); font-weight: 600; }
+.dot { font-size: 11px; font-weight: 700; color: #e2503b; border: 1px solid rgba(226, 80, 59, 0.5); border: 1px solid color-mix(in srgb, #e2503b 50%, transparent); border-radius: 999px; padding: 2px 10px; }
+.dot.ok { color: var(--playing); border-color: rgba(52, 199, 123, 0.5); border-color: color-mix(in srgb, var(--playing) 50%, transparent); font-weight: 600; }
 .audio-dot { padding: 3px 8px; }
 .audio-dot svg { display: block; }
 .toggle { font-size: 11px; font-weight: 600; color: var(--text-muted); background: transparent; border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
@@ -81,7 +81,7 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .act { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; background: transparent; border: 1px solid var(--border); color: var(--text); border-radius: 8px; cursor: pointer; }
 .act:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .act:disabled { opacity: 0.32; cursor: default; }
-.act.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.act.on { background: rgba(255, 122, 26, 0.16); background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); border-color: rgba(255, 122, 26, 0.5); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
 .recents { position: relative; }
 .recents > summary { list-style: none; }
 .recents > summary::-webkit-details-marker { display: none; }
@@ -114,7 +114,7 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .recents-menu .recents-clear:hover { color: #e2503b; }
 .empty { color: var(--text-muted); text-align: center; margin-top: 40px; padding: 0 24px; }
 .row { border-bottom: 1px solid var(--border); }
-.row.current { background: color-mix(in srgb, var(--playing) 14%, transparent); }
+.row.current { background: rgba(52, 199, 123, 0.14); background: color-mix(in srgb, var(--playing) 14%, transparent); }
 .row.nosong .title { color: var(--text-muted); font-style: italic; }
 .row-main { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; background: transparent; border: 0; color: var(--text); text-align: left; font-size: 16px; padding: 12px 16px; cursor: pointer; }
 .row-main:hover { background: var(--surface); }
@@ -137,7 +137,7 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 
 /* Editor rows */
 .row { display: flex; align-items: stretch; }
-.row.current { background: color-mix(in srgb, var(--playing) 14%, transparent); }
+.row.current { background: rgba(52, 199, 123, 0.14); background: color-mix(in srgb, var(--playing) 14%, transparent); }
 .row.removed { opacity: 0.42; }
 .grip { display: flex; align-items: center; padding: 0 8px 0 12px; color: var(--text-muted); cursor: grab; user-select: none; touch-action: none; -webkit-user-select: none; }
 /* Bigger touch target for the drag handle on iPad. */
@@ -152,7 +152,7 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .cp { position: relative; align-self: center; flex: none; display: flex; align-items: center; padding-left: 4px; padding-right: 14px; }
 .cp-swatch { width: 22px; height: 22px; padding: 0; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
 .cp-swatch:hover { border-color: var(--accent); }
-.cp-backdrop { position: fixed; inset: 0; z-index: 30; }
+.cp-backdrop { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 30; }
 .cp-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 31; background: var(--elevated); border: 1px solid var(--border); border-radius: 10px; padding: 9px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55); }
 .cp-grid { display: grid; grid-template-columns: repeat(8, 20px); gap: 5px; }
 .cp-cell { width: 20px; height: 20px; border-radius: 5px; border: 1px solid rgba(255, 255, 255, 0.18); cursor: pointer; padding: 0; }
@@ -177,8 +177,8 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .tools button:hover { border-color: var(--accent); }
 
 /* Modal / panels */
-.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 20; }
-.modal { width: min(560px, 100%); background: var(--elevated); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+.overlay { position: fixed; top: 0; right: 0; bottom: 0; left: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 20; }
+.modal { width: 560px; max-width: 100%; background: var(--elevated); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
 .modal h3 { margin: 0 0 8px; }
 .hint { color: var(--text-muted); font-size: 13px; margin: 0 0 12px; }
 .import-text { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 10px; font-family: inherit; font-size: 14px; resize: vertical; }
@@ -266,16 +266,16 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 
 /* Key + medley indicators */
 .key { color: var(--text-muted); font-weight: 400; font-size: 0.9em; }
-.row.current .key { color: color-mix(in srgb, var(--playing) 70%, white); }
+.row.current .key { color: #75d6a0; color: color-mix(in srgb, var(--playing) 70%, white); }
 .medley-mark { color: var(--accent); font-size: 0.78em; line-height: 1; vertical-align: middle; padding: 0 6px; align-self: center; }
-.perf-key { font-size: clamp(20px, 3vw, 30px); color: var(--text-muted); font-weight: 700; margin-top: -4px; }
+.perf-key { font-size: 26px; font-size: clamp(20px, 3vw, 30px); color: var(--text-muted); font-weight: 700; margin-top: -4px; }
 .perf-medley { font-size: 14px; font-weight: 700; letter-spacing: 0.04em; }
 .perf-medley.cont { color: var(--accent); }
 .medley-bar { position: relative; }
 .medley-tick { position: absolute; top: 0; bottom: 0; width: 10px; margin-left: -5px; cursor: pointer; z-index: 2; }
 .medley-tick::before { content: ""; position: absolute; left: 4px; top: 0; bottom: 0; width: 2px; background: rgba(255, 255, 255, 0.85); }
 .medley-tick:hover::before { background: var(--accent); width: 3px; }
-.medley-list { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 10px; max-width: min(900px, 92%); }
+.medley-list { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 10px; max-width: 900px; }
 .medley-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 999px; padding: 5px 12px; cursor: pointer; font-size: 14px; }
 .medley-chip:hover { border-color: var(--accent); }
 .medley-chip.on { border-color: var(--accent); background: rgba(255, 122, 26, 0.14); }
@@ -288,7 +288,7 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 /* Fixed size: the window must NOT resize when you switch category tabs — only the card grid
    scrolls inside it. height adapts to the screen (so it never overflows a small laptop) but is
    constant across tabs. */
-.settings-modal { width: min(940px, 96vw); height: min(90vh, 760px); display: flex; flex-direction: column; overflow: hidden; background: var(--surface); }
+.settings-modal { width: 940px; max-width: 96vw; height: 760px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; background: var(--surface); }
 .settings-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex: none; }
 .settings-head h3 { margin: 0; }
 .settings-close { background: transparent; border: 0; color: var(--text-muted); font-size: 18px; cursor: pointer; padding: 4px 8px; line-height: 1; }
@@ -311,7 +311,7 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .settings-card .settings-section:first-child { margin-top: 10px; }
 .settings-version { text-align: center; color: var(--text-muted); font-size: 12px; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--border); }
 /* Info / guide panel */
-.info-modal { width: min(720px, 96vw); max-height: 92vh; display: flex; flex-direction: column; }
+.info-modal { width: 720px; max-width: 96vw; max-height: 92vh; display: flex; flex-direction: column; }
 .info-body { overflow-y: auto; padding: 2px 2px 6px; }
 .info-section { margin-bottom: 18px; }
 .info-section h4 { color: var(--accent); font-size: 15px; margin: 2px 0 6px; }
@@ -372,7 +372,7 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .gf-label { color: var(--playing); font-weight: 700; white-space: nowrap; }
 .gf-label.none { color: #d66; font-weight: 600; }
 /* First-run setup wizard. */
-.setup-modal { width: min(520px, 96vw); background: var(--surface); }
+.setup-modal { width: 520px; max-width: 96vw; background: var(--surface); }
 .setup-step { background: var(--elevated); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px 12px; margin-top: 10px; }
 .setup-step-head { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 14px; margin-bottom: 4px; }
 .setup-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); font-size: 12px; font-weight: 800; }
@@ -428,13 +428,13 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 /* The connect-device modal holds little — keep it a centered <=360px card even on phones, where
    the generic @media(max-width:600px) rule blows every modal up to full-screen. Full-width made
    the description text run to one line and overflow. Higher specificity beats that media rule. */
-.overlay .conn-modal { width: min(360px, calc(100% - 28px)); max-width: 360px; height: auto; max-height: 90vh; align-self: center; }
+.overlay .conn-modal { width: 360px; max-width: 360px; height: auto; max-height: 90vh; align-self: center; }
 .shortcut-btn { min-width: 120px; padding: 7px 12px; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
 .shortcut-btn:hover { border-color: var(--accent); }
 .shortcut-btn.listening { border-color: var(--accent); color: var(--accent); }
 
 /* Print setlist */
-.print-modal { background: #fff; color: #111; width: min(820px, 94%); max-height: 92vh; overflow: auto; margin: 4vh auto; border-radius: 10px; }
+.print-modal { background: #fff; color: #111; width: 820px; max-width: 94%; max-height: 92vh; overflow: auto; margin: 4vh auto; border-radius: 10px; }
 .print-toolbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid #ddd; }
 .print-toolbar .hint { font-size: 12px; color: #777; }
 .print-toolbar .spacer { flex: 1; }
@@ -478,18 +478,18 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .perf { position: relative; flex: 1; display: flex; flex-direction: column; min-height: 0; }
 /* Top-anchored so the progress bar + info never move vertically. The title group lives
    in a FIXED-HEIGHT box (centered within), so a long/short title can't shift the bar. */
-.perf-hero { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; text-align: center; gap: clamp(12px, 2.5vh, 28px); padding: clamp(16px, 3vh, 40px) 24px; overflow-y: auto; }
-.perf-head { width: 100%; height: clamp(200px, 38vh, 420px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; overflow: hidden; }
+.perf-hero { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; text-align: center; gap: clamp(12px, 2.5vh, 28px); padding: 28px 24px; padding: clamp(16px, 3vh, 40px) 24px; overflow-y: auto; }
+.perf-head { width: 100%; height: 34vh; height: clamp(200px, 38vh, 420px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; overflow: hidden; }
 .perf-body { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 16px; }
 /* Short screens (tablet/iPad in landscape — the remote-control case): shrink the fixed
    title box so the bar + info always stay visible without scrolling, still at a stable Y. */
 @media (max-height: 800px) {
   .perf-hero { padding: 12px 20px; gap: 12px; }
-  .perf-head { height: clamp(150px, 30vh, 300px); }
+  .perf-head { height: 28vh; height: clamp(150px, 30vh, 300px); }
 }
 .perf-wait { color: var(--text-muted); font-size: 20px; }
 .perf-pos { color: var(--text-muted); font-weight: 700; letter-spacing: 0.15em; font-variant-numeric: tabular-nums; }
-.perf-title { font-size: clamp(36px, 5vw, 72px); font-weight: 800; text-transform: uppercase; line-height: 0.98; word-break: break-word; }
+.perf-title { font-size: 52px; font-size: clamp(36px, 5vw, 72px); font-weight: 800; text-transform: uppercase; line-height: 0.98; word-break: break-word; }
 .perf-desc { color: var(--text-muted); font-size: 18px; margin-top: -4px; }
 .pills { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .pill { background: var(--pill-bg); color: var(--pill-text); border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 18px; font-variant-numeric: tabular-nums; }
@@ -499,30 +499,30 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .click-btn:hover { border-color: var(--accent); }
 .click-btn .ck-label { font-size: 11px; color: var(--text-muted); }
 .click-btn .ck-state { font-size: 16px; }
-.click-btn.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.click-btn.on { background: rgba(255, 122, 26, 0.16); background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); border-color: rgba(255, 122, 26, 0.5); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
 .click-btn.on .ck-label { color: var(--accent); }
 .click-btn.on:hover { background: color-mix(in srgb, var(--accent) 26%, transparent); border-color: var(--accent); }
 .click-pill { font-family: inherit; cursor: pointer; border: 1px solid transparent; font-weight: 800; letter-spacing: 1px; }
 .click-pill:hover { border-color: var(--accent); }
-.click-pill.on { background: color-mix(in srgb, var(--accent) 34%, transparent); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.click-pill.on { background: rgba(255, 122, 26, 0.34); background: color-mix(in srgb, var(--accent) 34%, transparent); color: var(--accent); border-color: rgba(255, 122, 26, 0.5); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
 
 /* Metronome visual overlay on the CLICK button (setting clickIndicator: blink | bars). */
 .click-btn, .click-pill { position: relative; overflow: hidden; }
 .click-btn .ck-label, .click-btn .ck-state, .click-pill .ck-txt { position: relative; z-index: 1; }
 /* Stage transport reuses the SAME Performance CLICK pill, sized & centered to the transport row. */
 .stage-transport .click-pill { display: inline-flex; align-items: center; justify-content: center; text-align: center; padding: 4px 8px; line-height: 1.1; }
-.ck-blink { position: absolute; inset: 0; background: var(--accent); border-radius: inherit; pointer-events: none; z-index: 0; opacity: 0; animation: ck-flash 0.36s ease-out forwards; }
+.ck-blink { position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: var(--accent); border-radius: inherit; pointer-events: none; z-index: 0; opacity: 0; animation: ck-flash 0.36s ease-out forwards; }
 .ck-blink.strong { animation-name: ck-flash-strong; }
 @keyframes ck-flash { from { opacity: 0.22; } to { opacity: 0; } }
 @keyframes ck-flash-strong { from { opacity: 0.52; } to { opacity: 0; } }
-.ck-bars { position: absolute; inset: 0; display: flex; gap: 3px; padding: 4px; border-radius: inherit; pointer-events: none; z-index: 0; }
+.ck-bars { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; gap: 3px; padding: 4px; border-radius: inherit; pointer-events: none; z-index: 0; }
 .ck-bar { flex: 1; border-radius: 3px; background: var(--accent); opacity: 0; transition: opacity 0.08s linear; }
 .ck-bar.dim { opacity: 0.28; }
 .ck-bar.on { opacity: 0.62; }
 .perf-sections { display: flex; gap: 14px; align-items: baseline; font-size: 22px; }
 .perf-sections .now { font-weight: 700; }
 .perf-sections .then { color: var(--text-muted); }
-.progress { width: min(900px, 92%); height: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+.progress { width: 92%; max-width: 900px; height: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
 .progress.seekable { cursor: pointer; position: relative; }
 .progress.seekable:hover { border-color: var(--accent); }
 /* touch-action: none lets the pointer-scrub own the gesture (otherwise iPad scrolls instead of seeking). */
@@ -530,15 +530,16 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 /* Ghost cursor shown under the finger/mouse while scrubbing — instant feedback, no 10 Hz wait. */
 .scrub-cursor { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; background: var(--text); border-radius: 2px; z-index: 4; box-shadow: 0 0 6px rgba(255, 255, 255, 0.7); pointer-events: none; }
 /* Song-structure section marks on the progress bars (label in the tooltip). */
-.sect-tick { position: absolute; top: 3px; bottom: 3px; width: 2px; margin-left: -1px; background: color-mix(in srgb, var(--text) 45%, transparent); border-radius: 1px; z-index: 1; pointer-events: none; }
+.sect-tick { position: absolute; top: 3px; bottom: 3px; width: 2px; margin-left: -1px; background: rgba(242, 242, 243, 0.45); background: color-mix(in srgb, var(--text) 45%, transparent); border-radius: 1px; z-index: 1; pointer-events: none; }
 /* Section name labels above the progress bar (always visible, click to jump). Each fills its
    region up to the next change, so the names read like a timeline. */
-.sect-labels { position: relative; width: min(900px, 92%); height: 19px; margin-bottom: 4px; }
+.sect-labels { position: relative; width: 92%; max-width: 900px; height: 19px; margin-bottom: 4px; }
 /* Section labels = white, UPPERCASE, small (normal weight). Song markers (in a medley) = orange,
    UPPERCASE, bold — so you can tell a section change from a new song at a glance. */
 .sect-label { position: absolute; top: 0; height: 19px; line-height: 18px; padding: 0 6px; box-sizing: border-box;
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.02em; font-weight: 500;
   color: var(--text); background: transparent; border: 0;
+  border-left: 2px solid rgba(242, 242, 243, 0.32);
   border-left: 2px solid color-mix(in srgb, var(--text) 32%, transparent);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; cursor: pointer; }
 .sect-label:hover { background: color-mix(in srgb, var(--accent) 15%, transparent); }
@@ -554,15 +555,55 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .progress-fill { height: 100%; transition: width 0.1s linear; }
 .next { margin-top: 8px; }
 .next-label { color: var(--text-muted); font-weight: 700; font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; }
-.next-title { font-size: clamp(24px, 4vw, 40px); color: var(--text-muted); display: flex; align-items: center; justify-content: center; gap: 0.25em; flex-wrap: wrap; }
+.next-title { font-size: 32px; font-size: clamp(24px, 4vw, 40px); color: var(--text-muted); display: flex; align-items: center; justify-content: center; gap: 0.25em; flex-wrap: wrap; }
 .next-title .next-key { font-size: 0.68em; color: inherit; font-weight: 700; }
 .perf-foot { color: var(--text-muted); font-variant-numeric: tabular-nums; text-align: center; }
 .perf-time { font-size: 14px; opacity: 0.85; margin-top: 2px; }
 
+/* Flexbox `gap` fallback for OLD iOS Safari (<14.1), which ignores `gap` on FLEX containers → the
+   UI collapses together ("cluttered"). We re-create the spacing with margins, scoped to EXACTLY the
+   affected engines: `-webkit-touch-callout` is WebKit/iOS-only (so desktop Chrome/Firefox — which
+   support flex-gap even in versions that predate `inset` — are excluded, avoiding double spacing),
+   and `not (inset)` excludes modern Safari 14.1+ (which shipped `inset` together with flex-gap).
+   Modern browsers keep native `gap` and skip this block entirely. */
+@supports (-webkit-touch-callout: none) and (not (inset: 0px)) {
+  /* row (horizontal) flex containers */
+  .topbar > * + * { margin-left: 12px; }
+  .brand > * + * { margin-left: 9px; }
+  .tabs > * + * { margin-left: 4px; }
+  .status > * + * { margin-left: 8px; }
+  .list-actions > *:not(.list-title) + * { margin-left: 8px; }
+  .list-title > * + * { margin-left: 18px; }
+  .row-main > * + * { margin-left: 12px; }
+  .meta-title > * + * { margin-left: 7px; }
+  .controls > * + * { margin-left: 8px; }
+  .pills > * + * { margin-left: 10px; }
+  .perf-sections > * + * { margin-left: 14px; }
+  .next-title > * + * { margin-left: 0.25em; }
+  .perf-tools > * + * { margin-left: 8px; }
+  .perf-tool-btn > * + * { margin-left: 7px; }
+  .medley-list > * + * { margin-left: 6px; }
+  .medley-chip > * + * { margin-left: 6px; }
+  .cue-bar > * + * { margin-left: 8px; }
+  .perf-transport > * + * { margin-left: 10px; }
+  .transport > * + * { margin-left: 12px; }
+  .stage-transport > * + * { margin-left: 10px; }
+  .stage-ly-head > * + * { margin-left: calc(1.4vw * var(--stage-scale, 1)); }
+  /* column (vertical) flex containers */
+  .row-text > * + * { margin-top: 2px; }
+  .click-btn > * + * { margin-top: 3px; }
+  .perf-head > * + * { margin-top: 12px; }
+  .perf-body > * + * { margin-top: 16px; }
+  .perf-hero > * + * { margin-top: 22px; }
+  .stage > * + * { margin-top: calc(2vh * var(--stage-scale, 1)); }
+  .stage-main > * + * { margin-top: calc(1.6vh * var(--stage-scale, 1)); }
+  .stage-lyrics > * + * { margin-top: calc(1vh * var(--stage-scale, 1)); }
+}
+
 /* Performance transport (large, dedicated) */
 /* Safe-area padding keeps the buttons (esp. the corner PULL UP) off the iPad screen edge / home
    indicator / Split-View handle. */
-.perf-transport { display: flex; align-items: stretch; gap: 10px; padding: 12px max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); background: var(--elevated); border-top: 1px solid var(--border); }
+.perf-transport { display: flex; align-items: stretch; gap: 10px; padding: 12px; padding: 12px max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); background: var(--elevated); border-top: 1px solid var(--border); }
 .pt { flex: 1; height: 72px; font-size: 24px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 14px; cursor: pointer; }
 .pt:hover { border-color: var(--accent); }
 .pt { display: flex; align-items: center; justify-content: center; }
@@ -578,7 +619,7 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .song-progress-fill { height: 100%; background: var(--playing); transition: width 0.1s linear; }
 
 /* Transport (setlist) */
-.transport { display: flex; align-items: center; gap: 12px; padding: 12px max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); background: var(--elevated); border-top: 1px solid var(--border); }
+.transport { display: flex; align-items: center; gap: 12px; padding: 12px; padding: 12px max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); background: var(--elevated); border-top: 1px solid var(--border); }
 .meta { flex: 0 1 320px; min-width: 0; overflow: hidden; text-align: center; }
 .meta-title { font-size: 23px; font-weight: 800; line-height: 1.2; display: flex; align-items: center; justify-content: center; gap: 7px; min-width: 0; }
 .meta-title .mt-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -606,7 +647,7 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 /* Mirror only the CONTENT for teleprompters — never the controls. */
 .stage.mirror .stage-main, .stage.mirror .stage-msg, .stage.mirror .stage-lyrics-wrap, .stage.mirror .stage-bar { transform: scaleX(-1); }
 /* Reference bar on the stage: line ticks + playhead across the current song. */
-.stage-bar { position: relative; flex: none; align-self: stretch; margin: 1.8vh 4vw 0.4vh; height: 30px; background: color-mix(in srgb, var(--text) 8%, transparent); border-radius: 8px; }
+.stage-bar { position: relative; flex: none; align-self: stretch; margin: 1.8vh 4vw 0.4vh; height: 30px; background: rgba(242, 242, 243, 0.08); background: color-mix(in srgb, var(--text) 8%, transparent); border-radius: 8px; }
 .sb-tick { position: absolute; top: 4px; bottom: 4px; width: 2px; background: var(--text-muted); transform: translateX(-1px); cursor: ew-resize; }
 .sb-tick::before { content: ""; position: absolute; left: -5px; right: -5px; top: -4px; bottom: -4px; }
 .sb-tick:hover { background: var(--text); }
@@ -841,7 +882,7 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 
   /* Performance: a touch smaller so the hero + bar fit a phone screen. */
   .perf-hero { padding: 14px 16px; gap: 12px; }
-  .perf-head { height: clamp(120px, 26vh, 240px); }
+  .perf-head { height: 22vh; height: clamp(120px, 26vh, 240px); }
   .pill { font-size: 15px; padding: 7px 12px; }
 
   /* Overlays become full-screen sheets so dense panels are usable on a phone. */
@@ -873,9 +914,9 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 
   /* iPhone safe areas (notch / home indicator) — viewport-fit=cover lets content go
      under them, so pad the top bar and the docked transport out of the way. */
-  .topbar { padding-top: max(8px, env(safe-area-inset-top)); }
-  .transport, .perf-transport, .stage-transport { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
-  .stage { padding-bottom: max(3vh, env(safe-area-inset-bottom)); }
+  .topbar { padding-top: 8px; padding-top: max(8px, env(safe-area-inset-top)); }
+  .transport, .perf-transport, .stage-transport { padding-bottom: 10px; padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+  .stage { padding-bottom: 3vh; padding-bottom: max(3vh, env(safe-area-inset-bottom)); }
 }
 
 /* macOS desktop app: the window's traffic-light buttons (hiddenInset title bar) overlay the
