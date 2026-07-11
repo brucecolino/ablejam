@@ -1625,7 +1625,15 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
     case "importFile":
       extractText(c.filename, c.dataBase64)
         .then((text) => {
-          const r = mgr.applyTitles(textToTitles(text), !settings.splitMedleysOnImport);
+          const titles = textToTitles(text);
+          if (titles.length === 0) {
+            // No readable text in the file — almost always a printed/graphic PDF with no text layer
+            // (AbleJam's own print PDF, or a designed poster). Tell the user the real fix.
+            toast("error", tr("host.import.noText", { file: c.filename }));
+            server.broadcastMessage({ type: "importResult", result: { matched: 0, total: 0, unmatched: [] } });
+            return;
+          }
+          const r = mgr.applyTitles(titles, !settings.splitMedleysOnImport);
           if (r.matched) {
             if (settings.colorOnImport) mgr.autoColor(settings.setlistColorScheme || "rainbow");
             rememberImport(c.filename);

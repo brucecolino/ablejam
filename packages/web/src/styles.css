@@ -217,6 +217,7 @@ button, .pt, .tab, .ctl, [role="button"] { touch-action: manipulation; -webkit-t
 .ir-list { margin: 6px 0 0; padding-left: 18px; max-height: 160px; overflow-y: auto; }
 .ir-list li { font-size: 14px; color: #f6c177; }
 .ir-ok { color: var(--playing); margin-top: 6px; }
+.ir-empty { color: #e2a13b; font-weight: 600; line-height: 1.4; }
 
 /* Toasts */
 .toasts { position: fixed; bottom: 84px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 30; }

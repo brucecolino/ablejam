@@ -299,6 +299,7 @@ export class SetlistManager {
     // Skip AbleJam's own print header ("35 voci · 08/07/2026" and friends) so a printed setlist
     // re-imports cleanly instead of counting the header as a phantom title.
     if (/^\d+\s+(voci|voce|entries|entry|songs?|morceaux|canci[oó]n(?:es)?)\b/i.test(line)) return null;
+    if (/^setlist(\s*\d.*)?$/i.test(line)) return null; // AbleJam export header ("SETLIST" / "SETLIST35 · date")
     const hasSeq = /\bstart\s*seq\b/i.test(line);
     line = line.replace(/\[[^\]]*\]/g, " ").trim(); // drop [START SEQ] etc.
     line = line.replace(/\s+(?:medley|manuale|manual)\s*$/i, "").trim(); // drop a trailing print tag

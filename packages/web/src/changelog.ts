@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.12",
+    notes: {
+      it: [
+        "NUOVO — Esporta PDF re-importabile: nella schermata Stampa ora c'è \"⬇ Esporta PDF\" che genera un PDF con TESTO VERO, quindi lo puoi re-importare in AbleJam. Il vecchio \"Stampa → Salva come PDF\" del browser spesso trasforma il testo in immagine (contorni) e dava 0/0: quello resta solo per la carta. Ora AbleJam accetta sia .txt sia PDF per le scalette, e ciò che esporti lo puoi ricaricare.",
+        "Import più chiaro: se un file non ha testo leggibile (es. un PDF stampato/immagine) ora te lo dice e ti indirizza a \"Esporta .txt/PDF\" o a incollare i titoli, invece del fuorviante \"0/0 tutti collocati 🎉\".",
+        "Nessun cambio del bridge (resta v64).",
+      ],
+      en: [
+        "NEW — re-importable Export PDF: the Print screen now has \"⬇ Export PDF\" that generates a PDF with REAL text, so you can re-import it into AbleJam. The old browser \"Print → Save as PDF\" often turns the text into an image (outlines) and gave 0/0: that stays paper-only. AbleJam now accepts BOTH .txt and PDF for setlists, and what you export you can load back.",
+        "Clearer import: if a file has no readable text (e.g. a printed/graphic PDF) it now tells you and points to \"Export .txt/PDF\" or pasting the titles, instead of the misleading \"0/0 all placed 🎉\".",
+        "No bridge change (stays v64).",
+      ],
+    },
+  },
+  {
     version: "1.20.11",
     notes: {
       it: [
