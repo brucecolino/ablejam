@@ -1506,12 +1506,12 @@ server.onCommand = (c: ClientCommand, client: ClientMeta) => {
       break;
     case "stop": stopToMedleyStart(); break; // medley -> first song; else current song. NEVER MIDI
     case "panic":
-      // PULL UP: stop first, then fire the note ONCE, but LATE enough (well past the transport
-      // settle) that the monitored track has always re-armed by then — so it lands reliably without
-      // re-triggering the sound (firing it 3× earlier made it audibly "pa-pa-paaaa"). The note is
-      // independent of the stop.
+      // PULL UP: fire the alert note IMMEDIATELY, BEFORE the stop, so it's instant on the PC AND a
+      // remote iPad. Firing while the transport is still PLAYING means the monitored track is armed,
+      // so the note lands the first time — no waiting ~0.4s for a post-stop re-arm (the old delay),
+      // and still a SINGLE fire (no "pa-pa-paaaa"). Then stop + park at the current song's start.
+      firePanicNote();
       stopToSongStart();
-      setTimeout(firePanicNote, 420);
       break;
     case "seek": bridge.send(ADDR.cmdJumpToTime, [c.beat]); break; // click the bar to set a start point
     case "setShortcut": settings.shortcuts[c.action] = c.key; changed(); break;

@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.14",
+    notes: {
+      it: [
+        "Panic (PULL UP) immediato: la nota d'allerta parte NELL'ISTANTE in cui premi — prima dello stop — quindi è istantaneo sia dal PC sia da remoto dall'iPad (prima c'era ~0,4s di ritardo). Resta un colpo singolo e affidabile: si spara mentre la traccia è ancora in riproduzione (armata), così atterra sempre al primo colpo.",
+        "Nessun cambio del bridge (resta v64).",
+      ],
+      en: [
+        "Panic (PULL UP) is now immediate: the alert note fires the INSTANT you press it — before the stop — so it's instant on the PC and remotely from the iPad (there was a ~0.4s delay before). Still a single, reliable fire: it goes out while the track is still playing (armed), so it lands the first time.",
+        "No bridge change (stays v64).",
+      ],
+    },
+  },
+  {
     version: "1.20.13",
     notes: {
       it: [
