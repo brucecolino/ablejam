@@ -1298,6 +1298,7 @@ interface AbleJamBridge {
   version: () => Promise<string>;
   installBridge?: () => Promise<void>;
   setCloseToTray?: (v: boolean) => void;
+  printPreview?: () => Promise<{ ok: boolean; error?: string }>;
   toggleFullscreen?: () => Promise<boolean>;
   isFullscreen?: () => Promise<boolean>;
   onFullscreenChange?: (cb: (v: boolean) => void) => () => void;
@@ -2274,6 +2275,9 @@ function PrintView({ state, onClose }: { state: AppState; onClose: () => void })
           <span className="spacer" />
           <button onClick={exportTxt} title={tr("print.exportTxt.hint")}>{tr("print.exportTxt")}</button>
           <button onClick={() => { void exportPdf(); }} title={tr("print.exportPdf.hint")}>{tr("print.exportPdf")}</button>
+          {getBridge()?.printPreview && (
+            <button onClick={() => { void getBridge()!.printPreview!(); }} title={tr("print.preview.hint")}>{tr("print.preview")}</button>
+          )}
           <button className="primary" onClick={() => window.print()}>{tr("print.print")}</button>
           <button onClick={onClose}>{tr("common.close")}</button>
         </div>

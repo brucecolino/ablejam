@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld("ablejam", {
   setCloseToTray: (v: boolean): Promise<void> => ipcRenderer.invoke("ablejam:set-close-to-tray", v),
   // NATIVE window fullscreen (Electron). The DOM Fullscreen API leaves the window painted black on
   // exit under Electron/Windows, so the renderer drives the real BrowserWindow instead.
+  // Render the current print page to a real PDF and open it — a reliable WYSIWYG print preview.
+  printPreview: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke("ablejam:print-preview"),
   toggleFullscreen: (): Promise<boolean> => ipcRenderer.invoke("ablejam:toggle-fullscreen"),
   isFullscreen: (): Promise<boolean> => ipcRenderer.invoke("ablejam:is-fullscreen"),
   onFullscreenChange: (cb: (v: boolean) => void): (() => void) => {

@@ -10,7 +10,7 @@
 import { app, BrowserWindow, Menu, Tray, nativeImage, shell, dialog, ipcMain } from "electron";
 import path from "node:path";
 import net from "node:net";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { installBridge, openDataFolder, lanUrl, autoUpdateBridge } from "./install";
 import { checkForUpdate, downloadAndInstall } from "./update";
@@ -348,6 +348,22 @@ async function boot(): Promise<void> {
     return next;
   });
   ipcMain.handle("ablejam:is-fullscreen", () => !!mainWin?.isFullScreen());
+  // WYSIWYG print preview: render the CURRENT page with the PRINT stylesheet to a real PDF and open
+  // it in the OS PDF viewer. Reliable, unlike the Windows "Microsoft Print to PDF" dialog, whose
+  // preview pane often shows "Anteprima non disponibile". The print modal's @media print rules
+  // isolate the setlist page, so the PDF is exactly what "Stampa" would produce.
+  ipcMain.handle("ablejam:print-preview", async () => {
+    if (!mainWin) return { ok: false };
+    try {
+      const data = await mainWin.webContents.printToPDF({ printBackground: true, pageSize: "A4", margins: { top: 0, bottom: 0, left: 0, right: 0 } });
+      const p = path.join(app.getPath("temp"), "AbleJam-setlist-preview.pdf");
+      writeFileSync(p, data);
+      const err = await shell.openPath(p); // "" on success
+      return { ok: !err, error: err || undefined };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message };
+    }
+  });
 
   // Dynamic import of the ESM host bundle from this CJS main (computed specifier keeps it a
   // native import(), so Node loads the .mjs correctly).

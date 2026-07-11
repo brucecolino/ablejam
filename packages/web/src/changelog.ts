@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.13",
+    notes: {
+      it: [
+        "NUOVO — \"👁 Anteprima\" nella schermata Stampa (app desktop): apre un PDF ESATTO di come stamperà, nel tuo lettore PDF. Affidabile, al contrario del dialogo di Windows che spesso mostra \"Anteprima non disponibile\". Da lì puoi anche stampare davvero.",
+        "Nota: se il dialogo di Windows diceva \"Anteprima non disponibile\", la stampa usciva comunque corretta — era solo l'anteprima di Windows a mancare, non AbleJam.",
+        "Nessun cambio del bridge (resta v64).",
+      ],
+      en: [
+        "NEW — \"👁 Preview\" in the Print screen (desktop app): opens an EXACT PDF of how it will print, in your PDF viewer. Reliable, unlike the Windows dialog that often shows \"Preview not available\". You can also print from there.",
+        "Note: when the Windows dialog said \"Preview not available\", the print still came out correct — only Windows' own preview was missing, not AbleJam.",
+        "No bridge change (stays v64).",
+      ],
+    },
+  },
+  {
     version: "1.20.12",
     notes: {
       it: [
