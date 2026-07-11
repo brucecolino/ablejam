@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.11",
+    notes: {
+      it: [
+        "RISOLTO: far partire la riproduzione da un punto A METÀ brano sulla barra Performance (non un inizio di brano) faceva partire solo il metronomo, senza le sequenze. Ora il seek+play sulla barra aggancia correttamente l'arrangiamento da qualsiasi punto (parte dall'inizio del brano, muto, e salta al punto esatto).",
+        "AGGIORNAMENTO DEL BRIDGE (v64): chiudi COMPLETAMENTE Ableton e riavvialo dopo l'update. In Impostazioni → Progetto Ableton deve comparire v64.",
+      ],
+      en: [
+        "FIXED: starting playback from a MID-SONG point on the Performance bar (not a song start) played only the metronome, without the sequences. The bar seek+play now correctly engages the arrangement from any point (it starts from the song start, muted, then jumps to the exact spot).",
+        "BRIDGE UPDATE (v64): FULLY quit Ableton and relaunch it after updating. Settings → Ableton Project should show v64.",
+      ],
+    },
+  },
+  {
     version: "1.20.10",
     notes: {
       it: [

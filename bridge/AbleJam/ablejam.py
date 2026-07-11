@@ -14,7 +14,7 @@ from .osc import OSCServer
 HOST_IP = "127.0.0.1"
 HOST_PORT = 39062     # the AbleJam host listens here for state
 LISTEN_PORT = 39061   # we listen here for commands from the host
-BRIDGE_VERSION = 63   # bump on every change; shown in the UI to confirm reloads
+BRIDGE_VERSION = 64   # bump on every change; shown in the UI to confirm reloads
 
 
 class AbleJam(ControlSurface):
@@ -298,6 +298,23 @@ class AbleJam(ControlSurface):
         self._muted_for_play = False
         self._saved_master_vol = None
 
+    def _cue_at_or_before(self, beat):
+        # The latest locator at or before `beat` — i.e. the SONG the target falls in. Lets a
+        # non-locator seek start playback from that song's start (which reliably engages the
+        # arrangement) before snapping to the exact target.
+        if beat is None:
+            return None
+        best = None
+        bestt = -1.0
+        try:
+            for cp in self._song.cue_points:
+                if cp.time <= beat + 1e-4 and cp.time > bestt:
+                    bestt = cp.time
+                    best = cp
+        except Exception:
+            return None
+        return best
+
     def _cue_near(self, beat, tol=0.05):
         # The nearest locator (cue point) within `tol` beats of `beat`, if any. Song starts
         # ARE locators; a small tolerance absorbs the float32 round-trip of the OSC beat.
@@ -350,11 +367,27 @@ class AbleJam(ControlSurface):
             except Exception:
                 pass
             return
-        # Fallback: already playing (relocate live) OR target not on a locator (pause-resume
-        # mid-song / rehearsal seek). The only lever is current_song_time, which rolls ~1
-        # buffer from the stale marker -> hide it with the master mute while snapping.
+        # STOPPED + target NOT on a locator (bar seek to a mid-song point, then Play): calling
+        # continue_playing() from a parked non-locator position left Live playing only the
+        # metronome, WITHOUT the arrangement clips. start_playing() reliably ENGAGES the
+        # arrangement but starts from a locator, so seat playback on the song-start locator AT OR
+        # BEFORE the target, then let the snap below drive the playhead to the exact spot — muted,
+        # so the brief roll from the song start to the target is inaudible.
         if target is not None and not s.is_playing:
             self._mute_master()
+            base = self._cue_at_or_before(target)
+            try:
+                if base is not None:
+                    base.jump()
+                s.start_playing()
+            except Exception:
+                try:
+                    s.continue_playing()
+                except Exception:
+                    pass
+            self._arm_play_target(target)
+            return
+        # Already playing (relocate live) OR Play with no target: continue from the current position.
         try:
             s.continue_playing()
         except Exception:
