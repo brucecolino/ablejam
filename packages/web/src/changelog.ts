@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.15",
+    notes: {
+      it: [
+        "Panic: risolto il campione tagliato. In 1.20.14 la nota partiva prima dello stop e restava \"legata\" al transport, così lo stop la troncava dopo ~½s (il campione da 5s suonava mezzo secondo). Ora la nota parte SUBITO DOPO lo stop (a transport fermo) → il campione suona INTERO. Il ritardo è ridotto a 250ms (da 420ms): più reattivo di prima, e sempre un colpo singolo.",
+        "Nota tecnica: un minimo di attesa è inevitabile — la nota deve partire a transport già fermo, altrimenti lo stop la taglia. Se vuoi ancora più immediato o più margine, si può regolare il valore: fammi sapere come suona dal vivo.",
+        "Nessun cambio del bridge (resta v64).",
+      ],
+      en: [
+        "Panic: fixed the cut-off sample. In 1.20.14 the note fired before the stop and stayed \"tied\" to the transport, so the stop truncated it after ~½s (the 5s sample played half a second). The note now fires JUST AFTER the stop (transport already stopped) → the sample plays in FULL. The delay is down to 250ms (from 420ms): snappier than before, still a single fire.",
+        "Technical note: a small wait is unavoidable — the note must fire once the transport is stopped, else the stop cuts it. If you want it even snappier or safer, the value is tunable: tell me how it sounds live.",
+        "No bridge change (stays v64).",
+      ],
+    },
+  },
+  {
     version: "1.20.14",
     notes: {
       it: [
