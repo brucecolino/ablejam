@@ -918,23 +918,71 @@ function SetlistView({ state, send, edit, setEdit, openPanel }: { state: AppStat
   // POINTER-based reorder (HTML5 drag-and-drop does NOT fire on touch/iPad). Started from the grip;
   // the row under the finger is found by its data-setrow, and dropped on release. Works for mouse too.
   const ptrDrag = useRef(false);
+  const rowsRef = useRef<HTMLDivElement | null>(null); // the scrolling list — auto-scrolled while dragging
+  const dragPos = useRef<{ x: number; y: number } | null>(null); // last pointer position (for the scroll loop)
+  const lastOver = useRef<number | null>(null); // last valid target, so a release off a row still drops
+  /** The row under (x,y) — or the NEAREST row when the pointer sits above/below the list, so a drop
+   * at the very top (or bottom) always lands instead of being ignored. */
   const rowAtPoint = (x: number, y: number): number | null => {
     const el = document.elementFromPoint(x, y)?.closest("[data-setrow]");
     const v = el?.getAttribute("data-setrow");
-    return v == null ? null : Number(v);
+    if (v != null) return Number(v);
+    const rows = rowsRef.current?.querySelectorAll<HTMLElement>("[data-setrow]");
+    if (!rows || rows.length === 0) return null;
+    let best: number | null = null;
+    let bestD = Infinity;
+    rows.forEach((r) => {
+      const b = r.getBoundingClientRect();
+      const d = y < b.top ? b.top - y : y > b.bottom ? y - b.bottom : 0;
+      if (d < bestD) { bestD = d; best = Number(r.getAttribute("data-setrow")); }
+    });
+    return best;
   };
   useEffect(() => {
     if (drag == null || !ptrDrag.current) return;
-    const onMove = (ev: PointerEvent) => { const t = rowAtPoint(ev.clientX, ev.clientY); if (t != null) setDragOver(t); };
+    // AUTO-SCROLL: holding the drag near the top/bottom edge of the list scrolls it, so a song can be
+    // carried to the very start of a long setlist (before it, the list stayed put and the move was
+    // impossible). Speed ramps up the deeper into the edge zone you are.
+    const EDGE = 64;   // px from the edge where scrolling starts
+    const SPEED = 18;  // px per frame at the very edge
+    let raf = 0;
+    const step = () => {
+      const box = rowsRef.current;
+      const p = dragPos.current;
+      if (box && p) {
+        const r = box.getBoundingClientRect();
+        const dy = p.y < r.top + EDGE ? -SPEED * Math.min(1, (r.top + EDGE - p.y) / EDGE)
+          : p.y > r.bottom - EDGE ? SPEED * Math.min(1, (p.y - (r.bottom - EDGE)) / EDGE)
+            : 0;
+        if (dy !== 0) {
+          const before = box.scrollTop;
+          box.scrollTop = before + dy;
+          // The rows slid under a still finger — re-target so the insertion line keeps up.
+          if (box.scrollTop !== before) {
+            const t = rowAtPoint(p.x, p.y);
+            if (t != null) { lastOver.current = t; setDragOver(t); }
+          }
+        }
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    const onMove = (ev: PointerEvent) => {
+      dragPos.current = { x: ev.clientX, y: ev.clientY };
+      const t = rowAtPoint(ev.clientX, ev.clientY);
+      if (t != null) { lastOver.current = t; setDragOver(t); }
+    };
     const onUp = (ev: PointerEvent) => {
-      const from = drag, to = rowAtPoint(ev.clientX, ev.clientY);
-      ptrDrag.current = false; setDrag(null); setDragOver(null);
+      const from = drag, to = rowAtPoint(ev.clientX, ev.clientY) ?? lastOver.current;
+      cancelAnimationFrame(raf);
+      ptrDrag.current = false; dragPos.current = null; lastOver.current = null;
+      setDrag(null); setDragOver(null);
       if (from != null && to != null) doReorder(from, to);
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
-    return () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); window.removeEventListener("pointercancel", onUp); };
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); window.removeEventListener("pointercancel", onUp); };
   }, [drag]); // eslint-disable-line react-hooks/exhaustive-deps -- helpers close over the current render; drag change re-subscribes
 
   // Ctrl/Cmd+Z = undo, Ctrl+Y or Ctrl+Shift+Z = redo (ignored while typing in a field).
@@ -1054,7 +1102,7 @@ function SetlistView({ state, send, edit, setEdit, openPanel }: { state: AppStat
         <span className="count">{tr(trackCount < activeCount ? "count.songsTracks" : "count.songs", { n: activeCount, t: trackCount, clock: formatClock(totalSec) })}</span>
       </div>
 
-      <div className={"rows" + (edit ? " editing" : "")}>
+      <div className={"rows" + (edit ? " editing" : "")} ref={rowsRef}>
         {library.length === 0 && <p className="empty">{tr("empty.noSongs")}</p>}
         {setlist.map((entry, i) => {
           const song = library[entry.libIndex];
@@ -1100,7 +1148,7 @@ function SetlistView({ state, send, edit, setEdit, openPanel }: { state: AppStat
             >
               <span className="row-num">{entry.active ? rowNumbers.get(i) : ""}</span>
               <span className="grip" title={tr("grip.title")}
-                onPointerDown={(e) => { e.preventDefault(); ptrDrag.current = true; setDrag(i); setDragOver(i); }}>⠿</span>
+                onPointerDown={(e) => { e.preventDefault(); ptrDrag.current = true; dragPos.current = { x: e.clientX, y: e.clientY }; lastOver.current = i; setDrag(i); setDragOver(i); }}>⠿</span>
               <button className="rm" title={entry.active ? tr("row.remove") : tr("row.restore")} onClick={() => send({ type: "command", command: "setActive", index: i, active: !entry.active })}>
                 {entry.active ? "✕" : "＋"}
               </button>

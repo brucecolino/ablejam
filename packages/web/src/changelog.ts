@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.16",
+    notes: {
+      it: [
+        "RISOLTO — riordino scaletta: trascinando un brano verso l'alto la lista non scorreva, quindi era impossibile portarlo in cima (specie sopra i medley). Ora, tenendo il brano vicino al bordo SUPERIORE (o inferiore) della lista, questa scorre da sola — più ti avvicini al bordo, più veloce — così puoi posizionarlo comodamente all'inizio di una scaletta lunga.",
+        "Puoi anche rilasciare SOPRA (o sotto) la lista: il brano si posiziona alla prima (o all'ultima) posizione, invece di annullare lo spostamento come faceva prima.",
+        "Vale su PC, Mac e iPad. Nessun cambio del bridge (resta v64).",
+      ],
+      en: [
+        "FIXED — setlist reordering: dragging a song upward didn't scroll the list, making it impossible to drop it at the very top (especially above medleys). Now holding the song near the TOP (or bottom) edge auto-scrolls the list — faster the closer you get to the edge — so you can comfortably place it at the start of a long setlist.",
+        "You can also release ABOVE (or below) the list: the song lands in first (or last) position, instead of cancelling the move as before.",
+        "Works on PC, Mac and iPad. No bridge change (stays v64).",
+      ],
+    },
+  },
+  {
     version: "1.20.15",
     notes: {
       it: [
