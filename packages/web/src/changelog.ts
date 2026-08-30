@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.17",
+    notes: {
+      it: [
+        "RISOLTO — riordino: lo scorrimento automatico funzionava verso l'alto ma NON verso il basso, quindi era impossibile portare un brano in fondo. Il bordo inferiore della lista finiva sotto l'area visibile, così la zona che attiva lo scorrimento era irraggiungibile col puntatore: ora le zone sono limitate a ciò che è realmente sullo schermo.",
+        "Inoltre, tenendo il brano contro il bordo quando la lista è già a fine corsa, la destinazione diventa l'ULTIMA riga (o la PRIMA, in cima): così il brano si può sempre piazzare all'inizio o alla fine.",
+        "Vale su PC, Mac e iPad. Nessun cambio del bridge (resta v64).",
+      ],
+      en: [
+        "FIXED — reordering: auto-scroll worked upward but NOT downward, making it impossible to move a song to the end. The list's bottom edge sat below the visible area, so the zone that triggers scrolling was out of the pointer's reach: the zones are now clamped to what's actually on screen.",
+        "Also, holding the song against an edge once the list has scrolled as far as it goes now targets the LAST row (or the FIRST, at the top), so a song can always be dropped at the very start or the very end.",
+        "Works on PC, Mac and iPad. No bridge change (stays v64).",
+      ],
+    },
+  },
+  {
     version: "1.20.16",
     notes: {
       it: [

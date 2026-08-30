@@ -946,21 +946,40 @@ function SetlistView({ state, send, edit, setEdit, openPanel }: { state: AppStat
     const EDGE = 64;   // px from the edge where scrolling starts
     const SPEED = 18;  // px per frame at the very edge
     let raf = 0;
+    // The element that ACTUALLY scrolls: usually .rows, but walk up in case a layout puts the
+    // overflow on an ancestor — otherwise we'd be scrolling something that can't move.
+    let box: HTMLElement | null = rowsRef.current;
+    for (let el: HTMLElement | null = rowsRef.current; el; el = el.parentElement) {
+      const oy = getComputedStyle(el).overflowY;
+      if ((oy === "auto" || oy === "scroll") && el.scrollHeight > el.clientHeight + 1) { box = el; break; }
+    }
     const step = () => {
-      const box = rowsRef.current;
       const p = dragPos.current;
       if (box && p) {
         const r = box.getBoundingClientRect();
-        const dy = p.y < r.top + EDGE ? -SPEED * Math.min(1, (r.top + EDGE - p.y) / EDGE)
-          : p.y > r.bottom - EDGE ? SPEED * Math.min(1, (p.y - (r.bottom - EDGE)) / EDGE)
+        // Clamp the edge zones to what's actually ON SCREEN. The list's bottom can sit below the
+        // viewport (or under the transport bar), which put the bottom zone out of the pointer's
+        // reach — scrolling worked upward but never downward, so a song couldn't be moved to the end.
+        const top = Math.max(r.top, 0);
+        const bottom = Math.min(r.bottom, window.innerHeight || r.bottom);
+        const dy = p.y < top + EDGE ? -SPEED * Math.min(1, (top + EDGE - p.y) / EDGE)
+          : p.y > bottom - EDGE ? SPEED * Math.min(1, (p.y - (bottom - EDGE)) / EDGE)
             : 0;
         if (dy !== 0) {
           const before = box.scrollTop;
           box.scrollTop = before + dy;
-          // The rows slid under a still finger — re-target so the insertion line keeps up.
           if (box.scrollTop !== before) {
+            // The rows slid under a still finger — re-target so the insertion line keeps up.
             const t = rowAtPoint(p.x, p.y);
             if (t != null) { lastOver.current = t; setDragOver(t); }
+          } else {
+            // Already at an end and still held against that edge: target the FIRST (or LAST) row, so
+            // a song can always be dropped at the very start / very end even when the outermost rows
+            // sit outside the visible area.
+            const list = rowsRef.current?.querySelectorAll<HTMLElement>("[data-setrow]");
+            const el = list && list.length > 0 ? (dy < 0 ? list[0] : list[list.length - 1]) : null;
+            const v = el?.getAttribute("data-setrow");
+            if (v != null) { lastOver.current = Number(v); setDragOver(Number(v)); }
           }
         }
       }
