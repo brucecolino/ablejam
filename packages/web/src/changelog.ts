@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.18",
+    notes: {
+      it: [
+        "RISOLTO — QR \"Connetti un dispositivo\" vuoto o con l'indirizzo sbagliato su PC Windows con Hyper-V/WSL2: AbleJam scartava la scheda di rete chiamata \"vEthernet (…)\", che su quei PC è in realtà la rete LAN vera. Risultato: nessun indirizzo da proporre al telefono. Ora quella scheda viene tenuta (resta escluso solo lo switch interno \"Default Switch\" di Hyper-V), quindi il QR mostra l'indirizzo corretto.",
+        "Su Mac nulla cambia: Wi-Fi ed Ethernet restano riconosciute, mentre VPN (utun), AirDrop (awdl) e bridge restano giustamente escluse.",
+        "Nessun cambio del bridge (resta v64).",
+      ],
+      en: [
+        "FIXED — empty or wrong \"Connect a device\" QR on Windows PCs with Hyper-V/WSL2: AbleJam discarded the adapter named \"vEthernet (…)\", which on those machines IS the real LAN — leaving no address to offer the phone. That adapter is now kept (only Hyper-V's internal \"Default Switch\" stays excluded), so the QR shows the right address.",
+        "Nothing changes on Mac: Wi-Fi and Ethernet are still detected, while VPN (utun), AirDrop (awdl) and bridges remain correctly excluded.",
+        "No bridge change (stays v64).",
+      ],
+    },
+  },
+  {
     version: "1.20.17",
     notes: {
       it: [

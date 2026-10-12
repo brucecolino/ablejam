@@ -131,17 +131,21 @@ function watchOriginalForReimport(name: string, origPath: string): void {
   } catch { return; }
   editWatch = { watcher, clearTimer: () => { if (timer) clearTimeout(timer); } };
 }
-// Interfaces that are NOT the physical LAN a tablet uses — VPNs, virtual adapters, Apple's
-// AWDL/AirDrop link, container/hypervisor bridges. Handing out one of these gives the phones an
-// IP they can't reach (the reported bug: the QR showed 192.168.1.175 while the Mac's active WiFi
-// was 192.168.123.x, because os.networkInterfaces() returned the wrong interface first).
-const VIRTUAL_IF = /^(lo|utun|tun|tap|awdl|llw|bridge|vmnet|vboxnet|docker|veth|vEthernet|Hyper-V|ppp|ipsec|zt|tailscale|wg)/i;
+// Interfaces that are NOT the physical LAN a tablet uses — VPNs, container/hypervisor links,
+// Apple's AWDL/AirDrop. Handing out one of these gives the phones an IP they can't reach (the QR
+// once showed 192.168.1.175 while the Mac's active WiFi was 192.168.123.x).
+// CAREFUL: Windows names a Hyper-V/WSL2 EXTERNAL switch "vEthernet (…)", and that IS the real LAN
+// — a blanket `veth` prefix wrongly discarded it, leaving a Hyper-V PC with NO candidate at all and
+// an empty QR. Only a bare veth/veth0 (Linux pair) and the internal "Default Switch" are dropped.
+const VIRTUAL_IF = /^(lo\d*$|utun|tun\d|tap\d|awdl|llw|bridge\d|vmnet|vboxnet|docker|veth\d*$|ppp|ipsec|zt|tailscale|wg\d)/i;
+/** Adapters that are virtual by NAME rather than prefix (Hyper-V's internal switch). */
+const VIRTUAL_NAME = /default switch|loopback pseudo|bluetooth/i;
 /** Every plausible LAN IPv4 (physical, non-virtual, non link-local), so the UI can offer a picker
  * when a machine is on several networks. */
 function lanIpCandidates(): string[] {
   const out: string[] = [];
   for (const [name, list] of Object.entries(os.networkInterfaces())) {
-    if (VIRTUAL_IF.test(name)) continue;
+    if (VIRTUAL_IF.test(name) || VIRTUAL_NAME.test(name)) continue;
     for (const ni of list ?? []) {
       if (ni.family === "IPv4" && !ni.internal && !ni.address.startsWith("169.254.")) out.push(ni.address);
     }
