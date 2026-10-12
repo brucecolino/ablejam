@@ -10,6 +10,21 @@ export interface ChangelogEntry {
 // Newest first. Keep the top entry's version in sync with the desktop package version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.19",
+    notes: {
+      it: [
+        "RISOLTO — il QR / l'indirizzo di \"Connetti un dispositivo\" non si aggiornava mai: AbleJam leggeva l'indirizzo di rete UNA SOLA VOLTA all'avvio. Se poi il computer cambiava rete (portatile portato in un'altra sala, Wi-Fi riconnesso, nuovo indirizzo dal router), il QR continuava a mostrare il vecchio indirizzo — e il telefono non caricava nulla. Peggio: anche l'elenco degli indirizzi del selettore era bloccato, quindi quello giusto non era nemmeno selezionabile.",
+        "Ora l'indirizzo viene ricontrollato ogni 8 secondi: QR, link e selettore seguono il computer sulla rete nuova da soli, senza riavviare AbleJam.",
+        "Identico su Mac e Windows. Nessun cambio del bridge (resta v64).",
+      ],
+      en: [
+        "FIXED — the \"Connect a device\" address/QR never updated: AbleJam read the network address ONCE at startup. If the machine then changed network (laptop carried to another room, WiFi reconnect, a new address from the router), the QR kept showing the old address and the phone loaded nothing. Worse, the picker's address list was frozen too, so the correct address wasn't even selectable.",
+        "The address is now re-checked every 8 seconds: QR, link and picker follow the machine onto the new network on their own, with no AbleJam restart.",
+        "Identical on Mac and Windows. No bridge change (stays v64).",
+      ],
+    },
+  },
+  {
     version: "1.20.18",
     notes: {
       it: [

@@ -170,14 +170,25 @@ function detectActiveLanIp(): Promise<string> {
     } catch { fallback(); }
   });
 }
-let lanIp = lanIpCandidates()[0] ?? "";  // immediate best-guess; refined by detectActiveLanIp below
+let lanIp = lanIpCandidates()[0] ?? "";  // immediate best-guess; refined by refreshLanIp() below
 let lanIps = lanIpCandidates();          // all candidates, active one moved to front once resolved
-void detectActiveLanIp().then((ip) => {
-  if (!ip) return;
-  lanIp = ip;
-  lanIps = [ip, ...lanIpCandidates().filter((x) => x !== ip)];
+/** Re-reads the machine's addresses and pushes them out when they CHANGED. The LAN address is NOT a
+ * constant: a laptop carried to another venue, a DHCP renewal or a WiFi reconnect all hand out a new
+ * one. Detecting it only at launch meant the QR kept pointing at the address AbleJam saw when it
+ * opened — the phones then load nothing, and the IP picker couldn't help either because ITS list was
+ * frozen at launch too, so the real address was nowhere to be chosen. Cheap and identical on macOS
+ * and Windows: one interface read plus a UDP socket that never sends a packet. */
+async function refreshLanIp(): Promise<void> {
+  const ip = await detectActiveLanIp();
+  const next = ip ? [ip, ...lanIpCandidates().filter((x) => x !== ip)] : lanIpCandidates();
+  const first = next[0];
+  if (!first) return; // no network at all -> keep the last known address rather than blanking the QR
+  if (first === lanIp && next.join(",") === lanIps.join(",")) return;
+  lanIp = first;
+  lanIps = next;
+  console.log(`[host] indirizzo LAN -> http://${lanIp}:${PORTS.http}${next.length > 1 ? `  (anche: ${next.slice(1).join(", ")})` : ""}`);
   broadcastState();
-});
+}
 let bridgeConnected = false;
 let startupClickDone = false; // one-shot guard for "click on at AbleJam startup"
 let stageMessage = ""; // operator cue shown on STAGE views
@@ -1721,6 +1732,7 @@ let scanId: ReturnType<typeof setInterval> | undefined;
 let btId: ReturnType<typeof setInterval> | undefined;
 let audioId: ReturnType<typeof setInterval> | undefined;
 let abletonId: ReturnType<typeof setInterval> | undefined;
+let lanIpId: ReturnType<typeof setInterval> | undefined;
 let lyricsWatcher: FSWatcher | undefined;
 
 export function startHost(): { ready: Promise<void>; close: () => Promise<void> } {
@@ -1757,13 +1769,15 @@ export function startHost(): { ready: Promise<void>; close: () => Promise<void> 
   audioId = setInterval(refreshAudio, 5000); // watch the audio interface so a disconnect alerts fast
   refreshAbleton();
   abletonId = setInterval(refreshAbleton, 3000); // fast enough that the unsaved "*" clears right after a save
+  void refreshLanIp();
+  lanIpId = setInterval(() => void refreshLanIp(), 8000); // the QR must follow the machine onto a new network
   applyDemo(); // enforce licensing (unlicensed -> locked to demo) + restore the demo toggle across restarts
   console.log("[host] AbleJam host started — waiting for the bridge (Ableton or mock)...");
 
   return { ready, close };
 }
 
-/** Release everything startHost() acquired: the 4 timers, the lyrics + edit watchers, the
+/** Release everything startHost() acquired: the 5 timers, the lyrics + edit watchers, the
  * cached MIDI out port, the UDP socket (39062) and the http+ws listener (3700). Called by
  * the Electron wrapper before quit so a relaunch never hits a held port. */
 async function close(): Promise<void> {
@@ -1771,6 +1785,7 @@ async function close(): Promise<void> {
   if (btId) { clearInterval(btId); btId = undefined; }
   if (audioId) { clearInterval(audioId); audioId = undefined; }
   if (abletonId) { clearInterval(abletonId); abletonId = undefined; }
+  if (lanIpId) { clearInterval(lanIpId); lanIpId = undefined; }
   try { lyricsWatcher?.close(); } catch { /* ignore */ }
   lyricsWatcher = undefined;
   stopEditWatch();
